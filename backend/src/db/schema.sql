@@ -11,13 +11,18 @@ CREATE TABLE IF NOT EXISTS usuarios (
 );
 
 CREATE TABLE IF NOT EXISTS clientes (
-  id         SERIAL PRIMARY KEY,
-  usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
-  nombre     VARCHAR(120) NOT NULL,
-  telefono   VARCHAR(40),
-  direccion  VARCHAR(200),
-  notas      TEXT,
-  creado_en  TIMESTAMP DEFAULT NOW()
+  id           SERIAL PRIMARY KEY,
+  usuario_id   INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  nombre       VARCHAR(120) NOT NULL,
+  apellido     VARCHAR(120) NOT NULL,
+  dni          VARCHAR(20),
+  telefono     VARCHAR(40),
+  barrio       VARCHAR(120),
+  calle        VARCHAR(120),
+  altura       VARCHAR(20),
+  descripcion  TEXT,
+  activo       BOOLEAN NOT NULL DEFAULT true,
+  creado_en    TIMESTAMP DEFAULT NOW()
 );
 
 -- Epica 2: viajes
