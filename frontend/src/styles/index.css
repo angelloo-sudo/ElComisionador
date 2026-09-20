@@ -24,13 +24,23 @@ body {
 .content { padding: 2rem 1.5rem; max-width: 960px; margin: 0 auto; }
 
 .perfil { max-width: 620px; }
-.perfil-form { margin: 1.5rem 0; }
-.perfil-form label { display: block; font-weight: 600; margin-bottom: 0.5rem; }
-.perfil-form div { display: flex; gap: 0.75rem; }
-.perfil-form input { padding: 0.6rem; border: 1px solid #b9c2bd; border-radius: 4px; }
-.perfil-form button { border: 0; border-radius: 4px; padding: 0.6rem 1rem; background: #123a2b; color: #fff; cursor: pointer; }
-.perfil-estado { color: #a02020; }
-.perfil-datos { display: grid; gap: 0.75rem; margin: 1.5rem 0; padding: 1rem; background: #fff; border-radius: 6px; }
+.perfil-form { display: grid; gap: 1rem; margin: 1.5rem 0; }
+.perfil-form label { display: grid; gap: 0.4rem; font-weight: 600; }
+.perfil-form label span { font-size: 0.85rem; font-weight: 400; color: #56615b; }
+.perfil-form input { width: 100%; padding: 0.6rem; border: 1px solid #b9c2bd; border-radius: 4px; font: inherit; }
+.perfil-form button, .perfil-datos button { border: 0; border-radius: 4px; padding: 0.6rem 1rem; background: #123a2b; color: #fff; cursor: pointer; }
+.perfil-form button:disabled { opacity: 0.65; cursor: wait; }
+.perfil-estado { padding: 0.75rem; border-radius: 4px; }
+.perfil-estado.error { color: #8a1717; background: #fbe8e8; }
+.perfil-estado.exito { color: #145c36; background: #e6f5eb; }
+.perfil-datos { display: grid; gap: 1rem; margin: 1.5rem 0; padding: 1.25rem; background: #fff; border-radius: 6px; }
 .perfil-datos div { display: grid; gap: 0.2rem; }
-.perfil-datos dt { font-size: 0.9rem; color: #56615b; }
-.perfil-datos dd { margin: 0; font-weight: 600; }
+.perfil-datos span { font-size: 0.9rem; color: #56615b; }
+.perfil-datos strong { font-weight: 600; }
+.perfil-acciones { display: flex; gap: 0.75rem; }
+.perfil-cancelar { background: #56615b !important; }
+
+@media (max-width: 560px) {
+  .nav { flex-wrap: wrap; }
+  .perfil-acciones { flex-direction: column; }
+}

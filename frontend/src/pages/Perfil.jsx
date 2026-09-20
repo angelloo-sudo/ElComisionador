@@ -1,71 +1,116 @@
-import { useState } from 'react'
-import { api } from '../api/client.js'
+import { useEffect, useState } from 'react'
+import { api, guardarSesion } from '../api/client.js'
 
-const usuarioGuardado = localStorage.getItem('usuarioId') ?? ''
+const formularioInicial = { nombre: '', email: '', password: '', confirmarPassword: '' }
+
+function mensajeDeError(error, fallback) {
+  try {
+    return JSON.parse(error.message).mensaje ?? fallback
+  } catch {
+    return fallback
+  }
+}
 
 export default function Perfil() {
-  const [usuarioId, setUsuarioId] = useState(usuarioGuardado)
+  const [form, setForm] = useState(formularioInicial)
   const [perfil, setPerfil] = useState(null)
-  const [estado, setEstado] = useState('')
+  const [estado, setEstado] = useState({ tipo: '', texto: '' })
+  const [editando, setEditando] = useState(false)
+  const [cargando, setCargando] = useState(true)
 
-  async function consultarPerfil(event) {
+  useEffect(() => {
+    async function cargarPerfil() {
+      try {
+        const datos = await api.get('/auth/perfil')
+        setPerfil(datos)
+        setForm({ nombre: datos.nombre, email: datos.email, password: '', confirmarPassword: '' })
+      } catch (error) {
+        setEstado({ tipo: 'error', texto: mensajeDeError(error, 'No se pudo cargar tu perfil.') })
+      } finally {
+        setCargando(false)
+      }
+    }
+
+    cargarPerfil()
+  }, [])
+
+  function handleChange(event) {
+    setForm((actual) => ({ ...actual, [event.target.name]: event.target.value }))
+  }
+
+  function validarFormulario() {
+    if (!form.nombre.trim() || form.nombre.trim().length > 120) {
+      return 'El nombre es obligatorio y debe tener hasta 120 caracteres.'
+    }
+    if (form.email.trim().length > 120 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      return 'Ingresá un email válido de hasta 120 caracteres.'
+    }
+    if (form.password && form.password.length < 6) {
+      return 'La nueva contraseña debe tener al menos 6 caracteres.'
+    }
+    if (form.password !== form.confirmarPassword) {
+      return 'Las contraseñas no coinciden.'
+    }
+    return ''
+  }
+
+  async function guardarCambios(event) {
     event.preventDefault()
-    const id = usuarioId.trim()
-
-    if (!/^\d+$/.test(id) || Number(id) <= 0) {
-      setPerfil(null)
-      setEstado('Ingresá un ID de usuario válido.')
+    const errorValidacion = validarFormulario()
+    if (errorValidacion) {
+      setEstado({ tipo: 'error', texto: errorValidacion })
       return
     }
 
-    setEstado('Consultando...')
-    setPerfil(null)
-
+    setEstado({ tipo: '', texto: '' })
+    setCargando(true)
     try {
-      const datos = await api.get(`/auth/perfil/${id}`)
-      localStorage.setItem('usuarioId', id)
-      setPerfil(datos)
-      setEstado('')
+      const respuesta = await api.put('/auth/perfil', {
+        nombre: form.nombre.trim(),
+        email: form.email.trim(),
+        password: form.password,
+      })
+      guardarSesion(respuesta)
+      setPerfil(respuesta.usuario)
+      setForm({ nombre: respuesta.usuario.nombre, email: respuesta.usuario.email, password: '', confirmarPassword: '' })
+      setEditando(false)
+      setEstado({ tipo: 'exito', texto: 'Tu perfil se actualizó correctamente.' })
     } catch (error) {
-      let mensaje = 'No se pudo obtener la información del perfil.'
-      try {
-        mensaje = JSON.parse(error.message).mensaje ?? mensaje
-      } catch {
-        // La API puede devolver un mensaje de texto plano.
-      }
-      setEstado(mensaje)
+      setEstado({ tipo: 'error', texto: mensajeDeError(error, 'No se pudo actualizar tu perfil.') })
+    } finally {
+      setCargando(false)
     }
   }
+
+  if (cargando && !perfil) return <section className="perfil"><p>Cargando perfil...</p></section>
 
   return (
     <section className="perfil">
       <h1>Mi perfil</h1>
-      <p>Consultá los datos registrados de tu cuenta.</p>
+      <p>Revisá y actualizá los datos de tu cuenta.</p>
 
-      <form className="perfil-form" onSubmit={consultarPerfil}>
-        <label htmlFor="usuarioId">ID de usuario</label>
-        <div>
-          <input
-            id="usuarioId"
-            type="number"
-            min="1"
-            value={usuarioId}
-            onChange={(event) => setUsuarioId(event.target.value)}
-            placeholder="Ej.: 1"
-            required
-          />
-          <button type="submit">Consultar perfil</button>
+      {estado.texto && <p className={`perfil-estado ${estado.tipo}`} role="alert">{estado.texto}</p>}
+
+      {perfil && !editando && (
+        <div className="perfil-datos">
+          <div><span>Nombre</span><strong>{perfil.nombre}</strong></div>
+          <div><span>Correo electrónico</span><strong>{perfil.email}</strong></div>
+          <div><span>Fecha de registro</span><strong>{new Date(perfil.creado_en).toLocaleDateString('es-AR')}</strong></div>
+          <button type="button" onClick={() => setEditando(true)}>Editar perfil</button>
         </div>
-      </form>
+      )}
 
-      {estado && <p className="perfil-estado" role="alert">{estado}</p>}
-
-      {perfil && (
-        <dl className="perfil-datos">
-          <div><dt>Nombre</dt><dd>{perfil.nombre}</dd></div>
-          <div><dt>Correo electrónico</dt><dd>{perfil.email}</dd></div>
-          <div><dt>Fecha de registro</dt><dd>{new Date(perfil.creado_en).toLocaleDateString('es-AR')}</dd></div>
-        </dl>
+      {editando && (
+        <form className="perfil-form" onSubmit={guardarCambios}>
+          <label>Nombre<input name="nombre" value={form.nombre} onChange={handleChange} maxLength="120" required /></label>
+          <label>Correo electrónico<input name="email" type="email" value={form.email} onChange={handleChange} maxLength="120" required /></label>
+          <label>Nueva contraseña <span>(opcional)</span><input name="password" type="password" value={form.password} onChange={handleChange} minLength="6" autoComplete="new-password" /></label>
+          <label>Repetir contraseña<input name="confirmarPassword" type="password" value={form.confirmarPassword} onChange={handleChange} minLength="6" autoComplete="new-password" /></label>
+          <div className="perfil-acciones">
+            <button type="submit" disabled={cargando}>{cargando ? 'Guardando...' : 'Guardar cambios'}</button>
+            <button type="button" className="perfil-cancelar" onClick={() => setEditando(false)} disabled={cargando}>Cancelar</button>
+          </div>
+        </form>
       )}
     </section>
   )

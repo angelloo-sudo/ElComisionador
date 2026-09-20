@@ -28,11 +28,8 @@ export default function App() {
         <Link to="/viajes">Viajes</Link>
         <Link to="/encomiendas">Encomiendas</Link>
         <Link to="/clientes">Clientes</Link>
-<<<<<<< HEAD
         <Link to="/perfil">Mi perfil</Link>
-=======
         <button type="button" onClick={handleLogout}>Cerrar sesión</button>
->>>>>>> 3f84e1c18fb6a0f0f734b7e1874623ee4276024b
       </nav>
       <main className="content">
         <Routes>
