@@ -22,3 +22,15 @@ body {
 .nav a:hover { color: #fff; }
 
 .content { padding: 2rem 1.5rem; max-width: 960px; margin: 0 auto; }
+
+.perfil { max-width: 620px; }
+.perfil-form { margin: 1.5rem 0; }
+.perfil-form label { display: block; font-weight: 600; margin-bottom: 0.5rem; }
+.perfil-form div { display: flex; gap: 0.75rem; }
+.perfil-form input { padding: 0.6rem; border: 1px solid #b9c2bd; border-radius: 4px; }
+.perfil-form button { border: 0; border-radius: 4px; padding: 0.6rem 1rem; background: #123a2b; color: #fff; cursor: pointer; }
+.perfil-estado { color: #a02020; }
+.perfil-datos { display: grid; gap: 0.75rem; margin: 1.5rem 0; padding: 1rem; background: #fff; border-radius: 6px; }
+.perfil-datos div { display: grid; gap: 0.2rem; }
+.perfil-datos dt { font-size: 0.9rem; color: #56615b; }
+.perfil-datos dd { margin: 0; font-weight: 600; }

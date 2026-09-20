@@ -3,6 +3,7 @@ import Dashboard from './pages/Dashboard.jsx'
 import Viajes from './pages/Viajes.jsx'
 import Encomiendas from './pages/Encomiendas.jsx'
 import Clientes from './pages/Clientes.jsx'
+import Perfil from './pages/Perfil.jsx'
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
         <Link to="/viajes">Viajes</Link>
         <Link to="/encomiendas">Encomiendas</Link>
         <Link to="/clientes">Clientes</Link>
+        <Link to="/perfil">Mi perfil</Link>
       </nav>
       <main className="content">
         <Routes>
@@ -20,6 +22,7 @@ export default function App() {
           <Route path="/viajes" element={<Viajes />} />
           <Route path="/encomiendas" element={<Encomiendas />} />
           <Route path="/clientes" element={<Clientes />} />
+          <Route path="/perfil" element={<Perfil />} />
         </Routes>
       </main>
     </div>
