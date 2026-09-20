@@ -2,9 +2,14 @@
 const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
 
 async function request(path, options = {}) {
+  const token = localStorage.getItem('comitrack_token')
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
   })
   if (!res.ok) {
     const msg = await res.text()
@@ -18,4 +23,14 @@ export const api = {
   post: (path, body) => request(path, { method: 'POST', body: JSON.stringify(body) }),
   put: (path, body) => request(path, { method: 'PUT', body: JSON.stringify(body) }),
   del: (path) => request(path, { method: 'DELETE' }),
+}
+
+export function guardarSesion({ token, usuario }) {
+  localStorage.setItem('comitrack_token', token)
+  localStorage.setItem('comitrack_usuario', JSON.stringify(usuario))
+}
+
+export function cerrarSesion() {
+  localStorage.removeItem('comitrack_token')
+  localStorage.removeItem('comitrack_usuario')
 }
