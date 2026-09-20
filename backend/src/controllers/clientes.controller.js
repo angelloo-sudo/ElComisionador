@@ -3,16 +3,28 @@
 import { query } from '../config/db.js'
 
 export async function listar(req, res, next) {
-  try {
-    // const { rows } = await query('SELECT * FROM clientes ORDER BY apellido, nombre')
-    // res.json(rows)
-    res.status(501).json({ mensaje: 'listar clientes: pendiente' })
+   try {
+    const usuarioId = req.usuario?.id
+
+    const { rows } = await query(
+      `SELECT * FROM clientes
+       WHERE usuario_id = $1 AND activo = true
+       ORDER BY apellido, nombre`,
+      [usuarioId]
+    )
+
+    res.json(rows)
   } catch (e) { next(e) }
 }
 
 export async function obtener(req, res, next) {
   try {
-    res.status(501).json({ mensaje: `obtener cliente ${req.params.id}: pendiente` })
+    const { id } = req.params
+    const resultado = await query('SELECT * FROM clientes WHERE id = $1', [id])
+    if (resultado.rowCount === 0) {
+      return res.status(404).json({ mensaje: `Cliente ${id} no encontrado` })
+    }
+    res.status(200).json(resultado.rows[0])
   } catch (e) { next(e) }
 }
 
@@ -56,6 +68,19 @@ export async function actualizar(req, res, next) {
 
 export async function eliminar(req, res, next) {
   try {
-    res.status(501).json({ mensaje: `eliminar cliente ${req.params.id}: pendiente` })
-  } catch (e) { next(e) }
+    const { id } = req.params
+
+    const resultado = await query(
+      `UPDATE clientes
+       SET activo = false
+       WHERE id = $1 AND activo = true RETURNING *`,
+      [id]
+    )
+    if (resultado.rowCount === 0) {
+      return res.status(404).json({ mensaje: `Cliente ${id} no encontrado o ya esta dado de baja` })
+    }
+
+    res.status(200).json({ mensaje: `Cliente dado de baja correctamente`, cliente: resultado.rows[0] })
+     } catch (e) { next(e) }
+
 }
