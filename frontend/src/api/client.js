@@ -12,8 +12,19 @@ async function request(path, options = {}) {
     },
   })
   if (!res.ok) {
-    const msg = await res.text()
-    throw new Error(msg || `Error ${res.status}`)
+    const texto = await res.text()
+    // El backend responde JSON con { mensaje } o { errores: [...] }. Si se puede
+    // parsear, mostramos el mensaje limpio; si no, el texto crudo como antes.
+    try {
+      const cuerpo = JSON.parse(texto)
+      const mensaje = cuerpo.mensaje ?? (Array.isArray(cuerpo.errores) ? cuerpo.errores.join(' | ') : null)
+      throw new Error(mensaje || texto || `Error ${res.status}`)
+    } catch (e) {
+      if (e instanceof SyntaxError) {
+        throw new Error(texto || `Error ${res.status}`)
+      }
+      throw e
+    }
   }
   return res.status === 204 ? null : res.json()
 }

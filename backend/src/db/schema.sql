@@ -1,31 +1,42 @@
 -- Esquema inicial de ComiTrack (PostgreSQL)
 -- Ejecutar sobre una base ya creada:  psql -U postgres -d comitrack -f schema.sql
 
--- Epica 1: usuarios (comisionistas) y clientes
+-- Epica 1: usuarios (comisionista, cliente y administrador), con roles.
+-- Guarda SOLO los datos de cuenta/login. Los datos de contacto de un cliente
+-- (DNI, telefono, direccion) viven en la tabla "clientes" de abajo, 1 a 1.
 CREATE TABLE IF NOT EXISTS usuarios (
   id            SERIAL PRIMARY KEY,
   nombre        VARCHAR(120) NOT NULL,
+  apellido      VARCHAR(120),
   email         VARCHAR(120) UNIQUE NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
+  rol           VARCHAR(20) NOT NULL DEFAULT 'cliente'
+                CHECK (rol IN ('comisionista', 'cliente', 'administrador')),
+  activo        BOOLEAN NOT NULL DEFAULT true,
   creado_en     TIMESTAMP DEFAULT NOW()
 );
 
+-- Datos de contacto propios de un cliente. 1 a 1 con usuarios: solo existe una fila
+-- aca cuando el usuario tiene rol = 'cliente'. Si se borra el usuario (baja, US12),
+-- esta fila se borra en cascada automaticamente.
+-- NOTA: dni y telefono son obligatorios a nivel de aplicacion (ver validators/),
+-- no se marcan NOT NULL aca para no romper bases ya creadas con datos previos.
 CREATE TABLE IF NOT EXISTS clientes (
-  id           SERIAL PRIMARY KEY,
-  usuario_id   INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
-  nombre       VARCHAR(120) NOT NULL,
-  apellido     VARCHAR(120) NOT NULL,
-  dni          VARCHAR(20),
-  telefono     VARCHAR(40),
-  barrio       VARCHAR(120),
-  calle        VARCHAR(120),
-  altura       VARCHAR(20),
-  descripcion  TEXT,
-  activo       BOOLEAN NOT NULL DEFAULT true,
-  creado_en    TIMESTAMP DEFAULT NOW()
+  id          SERIAL PRIMARY KEY,
+  usuario_id  INTEGER NOT NULL UNIQUE REFERENCES usuarios(id) ON DELETE CASCADE,
+  dni         VARCHAR(20),
+  telefono    VARCHAR(40),
+  creado_en   TIMESTAMP DEFAULT NOW()
 );
 
--- Epica 2: viajes
+-- Si tu base ya existia de antes (con barrio/calle/altura/descripcion), esto la
+-- pone al dia sin perder el resto de los datos. Correr una sola vez.
+ALTER TABLE clientes DROP COLUMN IF EXISTS barrio;
+ALTER TABLE clientes DROP COLUMN IF EXISTS calle;
+ALTER TABLE clientes DROP COLUMN IF EXISTS altura;
+ALTER TABLE clientes DROP COLUMN IF EXISTS descripcion;
+
+-- Epica 4: viajes
 CREATE TABLE IF NOT EXISTS viajes (
   id          SERIAL PRIMARY KEY,
   usuario_id  INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,

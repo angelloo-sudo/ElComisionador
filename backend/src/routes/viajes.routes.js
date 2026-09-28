@@ -1,14 +1,17 @@
 import { Router } from 'express'
 import * as viajes from '../controllers/viajes.controller.js'
 import { validarViaje } from '../validators/viaje.validador.js'
-import { autenticar } from '../middlewares/auth.middleware.js'
+import { autenticar, permitirRoles } from '../middlewares/auth.middleware.js'
 
 const router = Router()
 
-router.get('/', autenticar, viajes.listar)                // US12
-router.get('/:id', autenticar, viajes.obtener)             // US12
-router.post('/', autenticar, validarViaje, viajes.crear)   // US10
-router.put('/:id', autenticar, viajes.actualizar)          // US11 (pendiente)
-router.delete('/:id', autenticar, viajes.eliminar)         // US11 (pendiente)
+// Épica 4: Gestión de Viajes y Traslados. Los viajes los administra el comisionista.
+router.use(autenticar, permitirRoles('comisionista'))
+
+router.get('/', viajes.listar)                // US16
+router.get('/:id', viajes.obtener)            // US16
+router.post('/', validarViaje, viajes.crear)  // US14
+router.put('/:id', viajes.actualizar)         // fuera de alcance del Sprint 1 (sin US asignada)
+router.delete('/:id', viajes.eliminar)        // fuera de alcance del Sprint 1 (sin US asignada)
 
 export default router

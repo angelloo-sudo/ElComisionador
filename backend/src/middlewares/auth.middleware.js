@@ -17,3 +17,19 @@ export function autenticar(req, res, next) {
     res.status(401).json({ mensaje: 'Token inválido o vencido' })
   }
 }
+
+// Debe usarse siempre despues de `autenticar` (necesita req.usuario.rol ya cargado).
+// Uso: router.post('/', autenticar, permitirRoles('comisionista'), controlador)
+export function permitirRoles(...rolesPermitidos) {
+  return (req, res, next) => {
+    if (!req.usuario) {
+      return res.status(401).json({ mensaje: 'Se requiere autenticación' })
+    }
+
+    if (!rolesPermitidos.includes(req.usuario.rol)) {
+      return res.status(403).json({ mensaje: 'No tenés permisos para realizar esta acción' })
+    }
+
+    next()
+  }
+}
