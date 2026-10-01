@@ -68,3 +68,13 @@ body {
   color: #fff;
   border-color: #222;
 }
+
+/* Repeticion de viajes (formulario de nuevo viaje) */
+.repeticion { border: 1px solid #ccc; border-radius: 6px; padding: 0.75rem; margin: 0.75rem 0; display: grid; gap: 0.75rem; }
+.repeticion legend { font-weight: 600; padding: 0 0.4rem; }
+.repeticion-tipos { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.repeticion-tipos button { flex: 1; padding: 0.5rem; border: 1px solid #ccc; background: #f5f5f5; border-radius: 6px; cursor: pointer; }
+.repeticion-tipos button.activo { background: #222; color: #fff; border-color: #222; }
+.repeticion-dias { display: flex; gap: 0.4rem; }
+.repeticion-dias button { width: 2.4rem; height: 2.4rem; border-radius: 50%; border: 1px solid #ccc; background: #f5f5f5; cursor: pointer; font-weight: 600; }
+.repeticion-dias button.activo { background: #123a2b; color: #fff; border-color: #123a2b; }

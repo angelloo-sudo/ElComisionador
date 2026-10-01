@@ -54,9 +54,13 @@ export default function Viajes() {
     setModalAbierto(true)
   }
 
-  function handleSaved() {
+  function handleSaved(guardado) {
     cargarViajes(filtrosAplicados)
-    mostrarNotificacion('Viaje creado correctamente.')
+    mostrarNotificacion(
+      guardado?.cantidad > 1
+        ? `Se crearon ${guardado.cantidad} viajes correctamente.`
+        : 'Viaje creado correctamente.'
+    )
   }
 
   function handleFiltroChange(e) {
@@ -125,7 +129,8 @@ export default function Viajes() {
               <th>Origen</th>
               <th>Destino</th>
               <th>Fecha</th>
-              <th>Hora</th>
+              <th>Salida</th>
+              <th>Llegada</th>
               <th>Cupo</th>
               <th>Estado</th>
               <th>Acciones</th>
@@ -138,6 +143,7 @@ export default function Viajes() {
                 <td>{viaje.destino}</td>
                 <td>{new Date(viaje.fecha).toLocaleDateString('es-AR')}</td>
                 <td>{viaje.hora_salida ? viaje.hora_salida.slice(0, 5) : '-'}</td>
+                <td>{viaje.hora_llegada ? viaje.hora_llegada.slice(0, 5) : '-'}</td>
                 <td>{viaje.cupo_total ?? '-'}</td>
                 <td>{ESTADOS[viaje.estado] ?? viaje.estado}</td>
                 <td>

@@ -176,7 +176,7 @@ export async function darDeBajaMiCuenta(req, res, next) {
 // interno (nunca se toma del body) para que nadie pueda autoasignarse un rol.
 async function registrarConRol(req, res, next, rolFijo) {
   try {
-    const { nombre, apellido, email, password, dni, telefono } = req.body
+    const { nombre, apellido, email, password, confirmarPassword, dni, telefono } = req.body
     const esCliente = rolFijo === 'cliente'
 
     const errorValidacion = validarDatosPerfil({ nombre, apellido, email, password: password ?? '', dni, telefono }, { esCliente , apellidoObligatorio: true })
@@ -185,6 +185,14 @@ async function registrarConRol(req, res, next, rolFijo) {
     }
     if (!password || password.length < 6) {
       return res.status(400).json({ mensaje: 'La contraseña es obligatoria y debe tener al menos 6 caracteres' })
+    }
+
+    // Aplica a todos los usuarios que se registran (cliente y comisionista).
+    if (confirmarPassword === undefined || confirmarPassword === null || confirmarPassword === '') {
+      return res.status(400).json({ mensaje: 'Tenés que repetir la contraseña' })
+    }
+    if (password !== confirmarPassword) {
+      return res.status(400).json({ mensaje: 'Las contraseñas no coinciden' })
     }
 
     const emailNormalizado = email.trim().toLowerCase()

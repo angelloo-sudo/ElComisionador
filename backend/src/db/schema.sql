@@ -44,11 +44,23 @@ CREATE TABLE IF NOT EXISTS viajes (
   destino     VARCHAR(120) NOT NULL,
   fecha       DATE NOT NULL,
   hora_salida TIME,
+  hora_llegada TIME,
+  serie_id    UUID,
+  repeticion_dias VARCHAR(20),
   cupo_total  INTEGER DEFAULT 0,
   estado      VARCHAR(20) DEFAULT 'programado'
               CHECK (estado IN ('programado', 'en_curso', 'finalizado', 'cancelado')),
   creado_en   TIMESTAMP DEFAULT NOW()
 );
+
+-- Si tu base ya existia de antes, esto agrega los campos nuevos (correr una sola vez):
+--   hora_llegada    : hora aproximada de llegada al destino
+--   serie_id        : identifica a los viajes creados juntos como "repetitivos"
+--   repeticion_dias : dias de la semana de la repeticion (0=Dom ... 6=Sab, ej '1,3,5');
+--                     NULL = viaje unico. 'todos' cuando se repite todos los dias.
+ALTER TABLE viajes ADD COLUMN IF NOT EXISTS hora_llegada TIME;
+ALTER TABLE viajes ADD COLUMN IF NOT EXISTS serie_id UUID;
+ALTER TABLE viajes ADD COLUMN IF NOT EXISTS repeticion_dias VARCHAR(20);
 
 -- Epica 3: encomiendas (core)
 CREATE TABLE IF NOT EXISTS encomiendas (

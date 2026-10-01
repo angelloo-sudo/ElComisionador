@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api, guardarSesion } from '../api/client.js'
 
-const formularioInicial = { nombre: '', apellido: '', email: '', password: '', dni: '', telefono: '' }
+const formularioInicial = { nombre: '', apellido: '', email: '', password: '', confirmarPassword: '', dni: '', telefono: '' }
 
 export default function Auth({ onAuthenticated }) {
   const [modo, setModo] = useState('login')
@@ -18,6 +18,12 @@ export default function Auth({ onAuthenticated }) {
   async function handleSubmit(event) {
     event.preventDefault()
     setError(null)
+
+    if (modo === 'register' && form.password !== form.confirmarPassword) {
+      setError('Las contraseñas no coinciden')
+      return
+    }
+
     setCargando(true)
 
     try {
@@ -31,7 +37,7 @@ export default function Auth({ onAuthenticated }) {
       // El comisionista no tiene ficha de contacto (dni/telefono), asi que no
       // hace falta mandarlos si se está registrando con ese rol.
       const body = modo === 'register' && rol === 'comisionista'
-  ? { nombre: form.nombre, apellido: form.apellido, email: form.email, password: form.password }
+  ? { nombre: form.nombre, apellido: form.apellido, email: form.email, password: form.password, confirmarPassword: form.confirmarPassword }
   : form
 
       const respuesta = await api.post(endpoint, body)
@@ -106,6 +112,21 @@ export default function Auth({ onAuthenticated }) {
           <input name="password" type="password" value={form.password} onChange={handleChange} minLength="6" required />
         </label>
 
+        {registrando && (
+          <label>
+            Repetir contraseña
+            <input
+              name="confirmarPassword"
+              type="password"
+              value={form.confirmarPassword}
+              onChange={handleChange}
+              minLength="6"
+              autoComplete="new-password"
+              required
+            />
+          </label>
+        )}
+
         {registrando && rol === 'cliente' && (
           <>
             <label>
@@ -129,6 +150,7 @@ export default function Auth({ onAuthenticated }) {
           onClick={() => {
             setModo(registrando ? 'login' : 'register')
             setError(null)
+            setForm((f) => ({ ...f, confirmarPassword: '' }))
           }}
         >
           {registrando ? 'Ya tengo una cuenta' : 'Crear una cuenta'}

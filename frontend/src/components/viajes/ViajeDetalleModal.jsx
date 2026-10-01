@@ -9,6 +9,14 @@ const ESTADOS = {
   cancelado: 'Cancelado',
 }
 
+const DIAS_CORTOS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+
+function textoRepeticion(valor) {
+  if (!valor) return 'Viaje único'
+  if (valor === 'todos') return 'Todos los días'
+  return 'Todos los ' + valor.split(',').map((d) => DIAS_CORTOS[Number(d)]).join(', ')
+}
+
 export default function ViajeDetalleModal({ viajeId, onClose }) {
   const [viaje, setViaje] = useState(null)
   const [error, setError] = useState(null)
@@ -37,6 +45,8 @@ export default function ViajeDetalleModal({ viajeId, onClose }) {
             <div><span>Destino</span><strong>{viaje.destino}</strong></div>
             <div><span>Fecha</span><strong>{new Date(viaje.fecha).toLocaleDateString('es-AR')}</strong></div>
             <div><span>Hora de salida</span><strong>{viaje.hora_salida ? viaje.hora_salida.slice(0, 5) : '-'}</strong></div>
+            <div><span>Hora de llegada (aprox.)</span><strong>{viaje.hora_llegada ? viaje.hora_llegada.slice(0, 5) : '-'}</strong></div>
+            <div><span>Repetición</span><strong>{textoRepeticion(viaje.repeticion_dias)}</strong></div>
             <div><span>Cupo total</span><strong>{viaje.cupo_total ?? '-'}</strong></div>
             <div><span>Estado</span><strong>{ESTADOS[viaje.estado] ?? viaje.estado}</strong></div>
             <div><span>Creado</span><strong>{new Date(viaje.creado_en).toLocaleDateString('es-AR')}</strong></div>

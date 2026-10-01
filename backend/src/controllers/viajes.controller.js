@@ -1,17 +1,22 @@
 // Epica 2: Gestion de Viajes.
-import { query } from '../config/db.js'
+import { randomUUID } from 'node:crypto'
+import { query, pool } from '../config/db.js'
+import { generarFechas } from '../validators/viaje.validador.js'
 
-// NOTA sobre superposicion de horarios: la tabla "viajes" solo guarda hora_salida,
-// no tiene hora de llegada ni duracion. Para poder detectar una superposicion real
-// asumimos que cada viaje "ocupa" un bloque fijo de tiempo a partir de su salida.
-// Si el equipo agrega mas adelante un campo de duracion real (o "hora_llegada"),
-// esta funcion es el unico lugar que hay que ajustar.
-const DURACION_VIAJE_MINUTOS = 60
+// Superposicion de horarios: cada viaje ocupa el bloque [hora_salida, hora_llegada].
+// Los viajes viejos (cargados antes de existir hora_llegada) no tienen ese dato, asi
+// que para ellos se asume un bloque de DURACION_POR_DEFECTO_MINUTOS desde la salida.
+const DURACION_POR_DEFECTO_MINUTOS = 60
 
-function rangoMinutos(horaSalida, duracionMinutos = DURACION_VIAJE_MINUTOS) {
-  const [horas, minutos] = horaSalida.split(':').map(Number)
-  const inicio = horas * 60 + minutos
-  return { inicio, fin: inicio + duracionMinutos }
+function aMinutos(hora) {
+  const [h, m] = hora.slice(0, 5).split(':').map(Number)
+  return h * 60 + m
+}
+
+function rangoViaje(horaSalida, horaLlegada) {
+  const inicio = aMinutos(horaSalida)
+  const fin = horaLlegada ? aMinutos(horaLlegada) : inicio + DURACION_POR_DEFECTO_MINUTOS
+  return { inicio, fin }
 }
 
 function seSuperponen(rangoA, rangoB) {
@@ -76,36 +81,75 @@ export async function obtener(req, res, next) {
 
 export async function crear(req, res, next) {
   try {
-    const { origen, destino, fecha, hora_salida, cupo_total } = req.body
+    const { origen, destino, fecha, hora_salida, hora_llegada, cupo_total, repeticion } = req.body
     const usuarioId = req.usuario?.id
 
+    // Fechas a crear: una sola si el viaje es unico, o todas las ocurrencias si se repite.
+    const fechas = generarFechas(fecha, repeticion)
+    const esSerie = fechas.length > 1 || (repeticion?.tipo && repeticion.tipo !== 'unico')
+
     // Criterio de aceptacion: no se pueden crear dos viajes del mismo comisionista
-    // que se superpongan en horario el mismo dia (ver nota de DURACION_VIAJE_MINUTOS).
-    const { rows: viajesDelDia } = await query(
-      `SELECT hora_salida FROM viajes
-       WHERE usuario_id = $1 AND fecha = $2 AND estado <> 'cancelado'`,
-      [usuarioId, fecha]
+    // que se superpongan en horario el mismo dia. Se chequean TODAS las fechas antes
+    // de insertar nada, para no dejar una serie a medias.
+    const { rows: existentes } = await query(
+      `SELECT fecha::text AS fecha, hora_salida, hora_llegada FROM viajes
+       WHERE usuario_id = $1 AND fecha = ANY($2::date[]) AND estado <> 'cancelado'`,
+      [usuarioId, fechas]
     )
 
-    const rangoNuevo = rangoMinutos(hora_salida)
-    const hayConflicto = viajesDelDia.some((v) =>
-      seSuperponen(rangoNuevo, rangoMinutos(v.hora_salida.slice(0, 5)))
-    )
+    const rangoNuevo = rangoViaje(hora_salida, hora_llegada)
+    const fechasConflicto = [...new Set(
+      existentes
+        .filter((v) => seSuperponen(rangoNuevo, rangoViaje(v.hora_salida, v.hora_llegada)))
+        .map((v) => v.fecha.slice(0, 10))
+    )].sort()
 
-    if (hayConflicto) {
+    if (fechasConflicto.length > 0) {
+      const lista = fechasConflicto
+        .slice(0, 5)
+        .map((f) => f.split('-').reverse().join('/'))
+        .join(', ')
+      const resto = fechasConflicto.length > 5 ? ` y ${fechasConflicto.length - 5} más` : ''
       return res.status(409).json({
-        mensaje: 'Ya tenés un viaje programado que se superpone con ese horario ese mismo día',
+        mensaje: fechas.length === 1
+          ? 'Ya tenés un viaje programado que se superpone con ese horario ese mismo día'
+          : `Ya tenés viajes que se superponen con ese horario en: ${lista}${resto}. No se creó ninguno.`,
       })
     }
 
-    const { rows } = await query(
-      `INSERT INTO viajes (usuario_id, origen, destino, fecha, hora_salida, cupo_total)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *`,
-      [usuarioId, origen, destino, fecha, hora_salida || null, cupo_total ?? 0]
-    )
+    const serieId = esSerie ? randomUUID() : null
+    const repeticionDias = !esSerie
+      ? null
+      : repeticion.tipo === 'diario'
+        ? 'todos'
+        : [...new Set(repeticion.dias.map(Number))].sort().join(',')
 
-    res.status(201).json(rows[0])
+    // Todo o nada: si falla un insert, no queda ningun viaje de la serie.
+    const cliente = await pool.connect()
+    try {
+      await cliente.query('BEGIN')
+      const creados = []
+      for (const f of fechas) {
+        const { rows } = await cliente.query(
+          `INSERT INTO viajes (usuario_id, origen, destino, fecha, hora_salida, hora_llegada,
+                               cupo_total, serie_id, repeticion_dias)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           RETURNING *`,
+          [usuarioId, origen.trim(), destino.trim(), f, hora_salida, hora_llegada,
+           cupo_total ?? 0, serieId, repeticionDias]
+        )
+        creados.push(rows[0])
+      }
+      await cliente.query('COMMIT')
+
+      // Compatibilidad: un viaje unico responde con el viaje; una serie, con la lista.
+      res.status(201).json(esSerie ? { cantidad: creados.length, viajes: creados } : creados[0])
+    } catch (e) {
+      await cliente.query('ROLLBACK')
+      throw e
+    } finally {
+      cliente.release()
+    }
   } catch (e) { next(e) }
 }
 
