@@ -25,7 +25,47 @@ comitrack/
 
 Requisitos: Node.js 18+ y PostgreSQL instalado.
 
-1. Instalar dependencias de todo el proyecto:
+1. Instalar dependencias de todo el proy
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ecto:
 
    ```bash
    npm run install:all
