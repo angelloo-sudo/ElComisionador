@@ -1,6 +1,18 @@
 // US10 - Validaciones de negocio para el alta de un viaje.
+import { esLocalidadValida } from '../services/localidades.service.js'
+
 const REGEX_HORA = /^([01]\d|2[0-3]):([0-5]\d)$/
-const MAX_OCURRENCIAS = 366
+// Cuanto dura una repeticion: se crean los viajes de los proximos 3 meses desde la fecha inicial.
+export const DURACION_REPETICION_MESES = 3
+
+// Fecha de fin de la repeticion: la inicial + 3 meses calendario (si el mes de destino es mas
+// corto, queda en su ultimo dia: 31/01 + 3 meses = 30/04).
+function fechaFinRepeticion(fecha) {
+  const [anio, mes, dia] = fecha.split('-').map(Number)
+  const ultimoDia = new Date(Date.UTC(anio, mes - 1 + DURACION_REPETICION_MESES + 1, 0)).getUTCDate()
+  return new Date(Date.UTC(anio, mes - 1 + DURACION_REPETICION_MESES, Math.min(dia, ultimoDia)))
+}
+
 function validarHora(valor, etiqueta, errores) {
   if (!valor) {
     errores.push(`La ${etiqueta} es obligatoria`)
@@ -20,13 +32,13 @@ function validarHora(valor, etiqueta, errores) {
 // Devuelve las fechas (YYYY-MM-DD) en las que se va a repetir el viaje, incluyendo
 // la fecha inicial si cae en un dia elegido. Trabaja en UTC para evitar corrimientos
 // por zona horaria.
-// repeticion: { tipo: 'unico' | 'diario' | 'semanal', dias: [0..6], hasta: 'YYYY-MM-DD' }
+// repeticion: { tipo: 'unico' | 'diario' | 'semanal', dias: [0..6] }  (dura DURACION_REPETICION_MESES)
 export function generarFechas(fecha, repeticion) {
   if (!repeticion || repeticion.tipo === 'unico' || !repeticion.tipo) return [fecha]
 
   const dias = repeticion.tipo === 'diario' ? [0, 1, 2, 3, 4, 5, 6] : repeticion.dias.map(Number)
   const fechas = []
-  const fin = new Date(`${repeticion.hasta}T00:00:00Z`)
+  const fin = fechaFinRepeticion(fecha)
   for (let d = new Date(`${fecha}T00:00:00Z`); d <= fin; d.setUTCDate(d.getUTCDate() + 1)) {
     if (dias.includes(d.getUTCDay())) fechas.push(d.toISOString().slice(0, 10))
   }
@@ -38,12 +50,18 @@ export function validarViaje(req, res, next) {
 
   const errores = []
 
+  // Origen y destino deben ser una localidad de la lista de Cordoba. Si la lista
+  // todavia no fue generada (esLocalidadValida devuelve null) no se bloquea el alta.
   if (!origen || !origen.trim()) {
     errores.push('El origen es obligatorio')
+  } else if (esLocalidadValida(origen) === false) {
+    errores.push('El origen debe ser una localidad de la lista de Córdoba')
   }
 
   if (!destino || !destino.trim()) {
     errores.push('El destino es obligatorio')
+  } else if (esLocalidadValida(destino) === false) {
+    errores.push('El destino debe ser una localidad de la lista de Córdoba')
   }
 
   let fechaValida = false
@@ -86,19 +104,6 @@ export function validarViaje(req, res, next) {
           errores.push('Elegí al menos un día de la semana para repetir el viaje')
         } else if (!dias.every((d) => Number.isInteger(Number(d)) && d >= 0 && d <= 6)) {
           errores.push('Los días de repetición no son válidos')
-        }
-      }
-
-      if (!repeticion.hasta || !/^\d{4}-\d{2}-\d{2}$/.test(repeticion.hasta) || Number.isNaN(Date.parse(repeticion.hasta))) {
-        errores.push('Indicá hasta qué fecha se repite el viaje')
-      } else if (fechaValida && repeticion.hasta < fecha) {
-        errores.push('La fecha "repetir hasta" no puede ser anterior a la fecha del viaje')
-      } else if (fechaValida && errores.length === 0) {
-        const cantidad = generarFechas(fecha, repeticion).length
-        if (cantidad === 0) {
-          errores.push('Con esos días y esa fecha límite no se genera ningún viaje')
-        } else if (cantidad > MAX_OCURRENCIAS) {
-          errores.push(`No se pueden crear más de ${MAX_OCURRENCIAS} viajes de una vez; acortá la fecha límite`)
         }
       }
     }

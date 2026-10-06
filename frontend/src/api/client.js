@@ -37,8 +37,11 @@ export const api = {
 }
 
 export function guardarSesion({ token, usuario }) {
+  // La foto y la presentacion pueden pesar bastante: no se guardan en localStorage
+  // (la sesion solo necesita rol, nombre, etc.). Se piden a /auth/perfil cuando hacen falta.
+  const { foto_perfil, presentacion, ...usuarioLiviano } = usuario
   localStorage.setItem('comitrack_token', token)
-  localStorage.setItem('comitrack_usuario', JSON.stringify(usuario))
+  localStorage.setItem('comitrack_usuario', JSON.stringify(usuarioLiviano))
 }
 
 export function cerrarSesion() {

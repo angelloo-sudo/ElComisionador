@@ -1,29 +1,35 @@
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { query } from '../config/db.js'
-import { validarNombrePropio, validarDni, validarTelefono } from '../validators/comunes.validador.js'
+import {
+  validarNombrePropio, validarDni, validarTelefono, validarPresentacion, validarFotoPerfil,
+} from '../validators/comunes.validador.js'
 
 const JWT_SECRET = process.env.JWT_SECRET
 
-// "usuarios" guarda la cuenta (login/rol). "clientes" guarda los datos de contacto,
-// 1 a 1 con usuarios, y solo existe una fila ahi para cuentas con rol = 'cliente'.
-// Este LEFT JOIN es la unica forma en que el resto del controller "ve" ambas tablas
-// como si fueran una sola: para comisionista/administrador, las columnas de clientes
-// simplemente vienen en null.
+// "usuarios" guarda la cuenta (login/rol). "clientes" y "comisionistas" guardan los datos
+// propios de cada rol, 1 a 1 con usuarios: una fila en "clientes" solo para cuentas con
+// rol = 'cliente', y una en "comisionistas" solo para rol = 'comisionista'.
+// Los LEFT JOIN son la unica forma en que el resto del controller "ve" las tablas como
+// si fueran una sola: dni/telefono salen de la que corresponda al rol, y las columnas
+// que no aplican simplemente vienen en null.
 const SELECT_PERFIL = `
   SELECT u.id, u.nombre, u.apellido, u.email, u.rol, u.activo, u.creado_en,
-         c.dni, c.telefono
+         COALESCE(c.dni, m.dni) AS dni,
+         COALESCE(c.telefono, m.telefono) AS telefono,
+         m.presentacion, m.foto_perfil
   FROM usuarios u
   LEFT JOIN clientes c ON c.usuario_id = u.id
+  LEFT JOIN comisionistas m ON m.usuario_id = u.id
 `
 
 function crearToken(usuario) {
   return jwt.sign({ id: usuario.id, email: usuario.email, rol: usuario.rol }, JWT_SECRET, { expiresIn: '8h' })
 }
 
-// esCliente indica si además de nombre/email/password hay que exigir dni/telefono
-// (solo aplica a cuentas con rol 'cliente'; comisionista/administrador no los tienen).
-function validarDatosPerfil({ nombre, apellido, email, password, dni, telefono }, { esCliente }) {
+// pideContacto indica si además de nombre/email/password hay que exigir dni/telefono
+// (aplica a cuentas con rol 'cliente' y 'comisionista'; el administrador no los tiene).
+function validarDatosPerfil({ nombre, apellido, email, password, dni, telefono }, { pideContacto }) {
   const errorNombre = validarNombrePropio(nombre, { etiqueta: 'El nombre' })
   if (errorNombre) return errorNombre
 
@@ -43,7 +49,7 @@ function validarDatosPerfil({ nombre, apellido, email, password, dni, telefono }
     return 'La contraseña debe tener al menos 6 caracteres'
   }
 
-  if (esCliente) {
+  if (pideContacto) {
     const errorDni = validarDni(dni)
     if (errorDni) return errorDni
 
@@ -54,9 +60,10 @@ function validarDatosPerfil({ nombre, apellido, email, password, dni, telefono }
   return null
 }
 
-// El shape de salida hacia el frontend NO cambia (sigue siendo un objeto plano con
-// dni/telefono), aunque por dentro salga de un JOIN entre dos tablas.
-function datosPerfil(fila) {
+// El shape de salida hacia el frontend es un objeto plano con dni/telefono, aunque por
+// dentro salga de un JOIN entre varias tablas. La presentacion y la foto (que pueden
+// pesar) solo se incluyen cuando se piden: el login y el registro no las necesitan.
+function datosPerfil(fila, { conPerfilPublico = false } = {}) {
   return {
     id: fila.id,
     nombre: fila.nombre,
@@ -67,6 +74,7 @@ function datosPerfil(fila) {
     telefono: fila.telefono,
     activo: fila.activo,
     creado_en: fila.creado_en,
+    ...(conPerfilPublico && { presentacion: fila.presentacion, foto_perfil: fila.foto_perfil }),
   }
 }
 
@@ -88,6 +96,28 @@ async function upsertDatosContacto(usuarioId, { dni, telefono }) {
   )
 }
 
+// Inserta/actualiza la fila de "comisionistas". dni/telefono ya vienen validados como
+// obligatorios. presentacion y foto son opcionales: si NO vienen en el pedido
+// (undefined) se conservan los valores guardados; si vienen vacios, se borran.
+async function upsertDatosComisionista(usuarioId, { dni, telefono, presentacion, foto }) {
+  const cambiaPresentacion = presentacion !== undefined
+  const cambiaFoto = foto !== undefined
+  await query(
+    `INSERT INTO comisionistas (usuario_id, dni, telefono, presentacion, foto_perfil)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (usuario_id) DO UPDATE SET
+       dni = EXCLUDED.dni,
+       telefono = EXCLUDED.telefono,
+       presentacion = CASE WHEN $6::boolean THEN EXCLUDED.presentacion ELSE comisionistas.presentacion END,
+       foto_perfil = CASE WHEN $7::boolean THEN EXCLUDED.foto_perfil ELSE comisionistas.foto_perfil END`,
+    [
+      usuarioId, dni.trim(), telefono.trim(),
+      presentacion?.trim() || null, foto || null,
+      cambiaPresentacion, cambiaFoto,
+    ],
+  )
+}
+
 // NOTA: el viejo endpoint publico GET /auth/perfil/:id (sin `autenticar`) se elimino:
 // permitia consultar el perfil de cualquier usuario sin loguearse. Ahora cada
 // usuario solo puede consultar su propia cuenta (ver obtenerMiPerfil).
@@ -101,7 +131,7 @@ export async function obtenerMiPerfil(req, res, next) {
       return res.status(404).json({ mensaje: 'Usuario no encontrado' })
     }
 
-    res.json(datosPerfil(fila))
+    res.json(datosPerfil(fila, { conPerfilPublico: true }))
   } catch (e) { next(e) }
 }
 
@@ -109,12 +139,24 @@ export async function obtenerMiPerfil(req, res, next) {
 // El rol NUNCA se toma del body: no te podés autoascender a comisionista/administrador desde acá.
 export async function actualizarMiPerfil(req, res, next) {
   try {
-    const { nombre, apellido, email, password, dni, telefono } = req.body
+    const { nombre, apellido, email, password, dni, telefono, presentacion, foto_perfil } = req.body
     const esCliente = req.usuario.rol === 'cliente'
+    const esComisionista = req.usuario.rol === 'comisionista'
 
-    const errorValidacion = validarDatosPerfil({ nombre, apellido, email, password, dni, telefono }, { esCliente })
+    const errorValidacion = validarDatosPerfil(
+      { nombre, apellido, email, password, dni, telefono },
+      { pideContacto: esCliente || esComisionista },
+    )
     if (errorValidacion) {
       return res.status(400).json({ mensaje: errorValidacion })
+    }
+
+    // La presentacion y la foto son solo del comisionista.
+    if (esComisionista) {
+      const errorExtras = validarPresentacion(presentacion) || validarFotoPerfil(foto_perfil)
+      if (errorExtras) {
+        return res.status(400).json({ mensaje: errorExtras })
+      }
     }
 
     const emailNormalizado = email.trim().toLowerCase()
@@ -141,13 +183,18 @@ export async function actualizarMiPerfil(req, res, next) {
       return res.status(404).json({ mensaje: 'Usuario no encontrado' })
     }
 
-    // Los datos de contacto (dni/telefono) solo existen para el rol cliente.
+    // Los datos propios de cada rol (dni/telefono, y presentacion/foto del comisionista).
     if (rows[0].rol === 'cliente') {
       await upsertDatosContacto(req.usuario.id, { dni, telefono })
+    } else if (rows[0].rol === 'comisionista') {
+      await upsertDatosComisionista(req.usuario.id, { dni, telefono, presentacion, foto: foto_perfil })
     }
 
     const perfilActualizado = await buscarPerfilPorId(req.usuario.id)
-    res.json({ usuario: datosPerfil(perfilActualizado), token: crearToken(perfilActualizado) })
+    res.json({
+      usuario: datosPerfil(perfilActualizado, { conPerfilPublico: true }),
+      token: crearToken(perfilActualizado),
+    })
   } catch (e) { next(e) }
 }
 
@@ -179,7 +226,8 @@ async function registrarConRol(req, res, next, rolFijo) {
     const { nombre, apellido, email, password, confirmarPassword, dni, telefono } = req.body
     const esCliente = rolFijo === 'cliente'
 
-    const errorValidacion = validarDatosPerfil({ nombre, apellido, email, password: password ?? '', dni, telefono }, { esCliente , apellidoObligatorio: true })
+    // Cliente y comisionista deben dejar DNI y telefono al registrarse.
+    const errorValidacion = validarDatosPerfil({ nombre, apellido, email, password: password ?? '', dni, telefono }, { pideContacto: true , apellidoObligatorio: true })
     if (errorValidacion) {
       return res.status(400).json({ mensaje: errorValidacion })
     }
@@ -211,9 +259,12 @@ async function registrarConRol(req, res, next, rolFijo) {
 
     const nuevoId = rows[0].id
 
-    // Los campos de contacto (dni/telefono) solo se guardan para clientes.
+    // dni/telefono se guardan en la tabla que corresponde al rol. La presentacion y la
+    // foto del comisionista se cargan despues, desde su perfil.
     if (esCliente) {
       await upsertDatosContacto(nuevoId, { dni, telefono })
+    } else {
+      await upsertDatosComisionista(nuevoId, { dni, telefono })
     }
 
     const perfil = await buscarPerfilPorId(nuevoId)

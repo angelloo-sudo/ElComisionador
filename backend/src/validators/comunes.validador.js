@@ -54,3 +54,38 @@ export function validarTelefono(valor, { obligatorio = true } = {}) {
   }
   return null
 }
+
+const LONGITUD_MAXIMA_PRESENTACION = 500
+
+// Presentacion del comisionista: texto libre y opcional, hasta 500 caracteres.
+export function validarPresentacion(valor) {
+  if (valor === undefined || valor === null || valor === '') return null
+  if (typeof valor !== 'string') return 'La presentación no es válida'
+  if (valor.trim().length > LONGITUD_MAXIMA_PRESENTACION) {
+    return `La presentación no puede superar los ${LONGITUD_MAXIMA_PRESENTACION} caracteres`
+  }
+  return null
+}
+
+// Foto de perfil: llega como data URL (el navegador ya la achico). Solo se aceptan
+// jpeg/png/webp (nada de SVG, que puede llevar scripts) y se comprueba que el contenido
+// empiece con la firma real del formato, no solo que el texto diga "image/jpeg".
+const LONGITUD_MAXIMA_FOTO = 400_000 // caracteres base64, ~300 KB de imagen
+const FIRMAS_FOTO = {
+  'image/jpeg': '/9j/',
+  'image/png': 'iVBORw0KGgo',
+  'image/webp': 'UklGR',
+}
+
+export function validarFotoPerfil(valor) {
+  if (valor === undefined || valor === null || valor === '') return null
+  if (typeof valor !== 'string') return 'La foto de perfil no es válida'
+
+  const partes = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/.exec(valor)
+  if (!partes) return 'La foto debe ser una imagen JPG, PNG o WebP'
+
+  const [, tipo, contenido] = partes
+  if (!contenido.startsWith(FIRMAS_FOTO[tipo])) return 'La foto de perfil no es una imagen válida'
+  if (valor.length > LONGITUD_MAXIMA_FOTO) return 'La foto es demasiado pesada (máximo 300 KB)'
+  return null
+}
