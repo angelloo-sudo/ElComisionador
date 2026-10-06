@@ -3,8 +3,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { api } from '../api/client.js'
 import ViajeDetalleModal from '../components/viajes/ViajeDetalleModal.jsx'
+import CancelarViajeModal from '../components/viajes/CancelarViajeModal.jsx'
 import Icon from '../components/Icon.jsx'
-import { Campo, Alerta, BadgeEstado, ESTADOS_VIAJE, formatoFecha } from '../components/ui.jsx'
+import { Campo, Alerta, Toast, BadgeEstado, ESTADOS_VIAJE, formatoFecha, textoRepeticion } from '../components/ui.jsx'
 import { codigoViaje } from './ViajeNuevo.jsx'
 
 const FILTROS_VACIOS = { fecha: '', origen: '', destino: '', estado: '' }
@@ -17,6 +18,11 @@ export default function Viajes() {
   const [error, setError] = useState(null)
   // Si venimos de "Ver viaje" (tras registrar uno), se abre su detalle directamente.
   const [viajeDetalleId, setViajeDetalleId] = useState(ubicacion.state?.abrirId ?? null)
+  const [viajeACancelar, setViajeACancelar] = useState(null)
+  const [toast, setToast] = useState(() => ubicacion.state?.aviso ?? null)
+  // US18: aviso visual para el comisionista cuando el viaje modificado tiene clientes asociados.
+  const [alertaClientes, setAlertaClientes] = useState(() => ubicacion.state?.alertaClientes ?? null)
+  const cerrarToast = useCallback(() => setToast(null), [])
   const [filtros, setFiltros] = useState(FILTROS_VACIOS)
   const [filtrosAplicados, setFiltrosAplicados] = useState(FILTROS_VACIOS)
 
@@ -38,9 +44,30 @@ export default function Viajes() {
       .finally(() => setCargando(false))
   }, [])
 
+  // Limpia el state de la navegacion para que no reaparezca al refrescar.
+  useEffect(() => {
+    if (ubicacion.state?.aviso || ubicacion.state?.alertaClientes || ubicacion.state?.abrirId) {
+      navegar(ubicacion.pathname, { replace: true, state: null })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
     cargarViajes(filtrosAplicados)
   }, [cargarViajes, filtrosAplicados])
+
+  // US16: el viaje ya se cancelo en el backend; se recarga la lista y se avisa.
+  function handleCancelado(respuesta) {
+    const cancelado = viajeACancelar
+    setViajeACancelar(null)
+    setViajeDetalleId(null)
+    cargarViajes(filtrosAplicados)
+    setToast(
+      respuesta.cantidad > 1
+        ? { titulo: 'Viajes cancelados', texto: `Se cancelaron ${respuesta.cantidad} viajes de la serie.` }
+        : { titulo: 'Viaje cancelado', texto: `El viaje ${codigoViaje(cancelado.id)} pasó a estado Cancelado.` }
+    )
+  }
 
   function handleFiltroChange(e) {
     setFiltros({ ...filtros, [e.target.name]: e.target.value })
@@ -93,6 +120,10 @@ export default function Viajes() {
         </div>
       </form>
 
+      {alertaClientes && (
+        <Alerta tipo="aviso" titulo={alertaClientes.titulo} onCerrar={() => setAlertaClientes(null)}>{alertaClientes.texto}</Alerta>
+      )}
+
       {error && <Alerta tipo="error" titulo="No se pudieron cargar los viajes">{error}</Alerta>}
 
       <div className="card tabla-wrap">
@@ -122,14 +153,31 @@ export default function Viajes() {
               {viajes.map((viaje) => (
                 <tr key={viaje.id}>
                   <td className="codigo">{codigoViaje(viaje.id)}</td>
-                  <td>{viaje.origen}<span className="flecha">→</span>{viaje.destino}</td>
+                  <td className="col-recorrido">
+                    {viaje.origen}<span className="flecha">→</span>{viaje.destino}
+                    {viaje.serie_id && (
+                      <span className="tag-serie" title={textoRepeticion(viaje.repeticion_dias, viaje.serie_id)}>
+                        <Icon nombre="repeat" tamano={13} /> Se repite
+                      </span>
+                    )}
+                  </td>
                   <td>{formatoFecha(viaje.fecha)}</td>
                   <td>{viaje.hora_salida ? viaje.hora_salida.slice(0, 5) : '-'}</td>
                   <td>{viaje.hora_llegada ? viaje.hora_llegada.slice(0, 5) : '-'}</td>
                   <td>{viaje.ocupados ?? 0} / {viaje.cupo_total ?? '-'}</td>
                   <td><BadgeEstado estado={viaje.estado} /></td>
                   <td>
-                    <button type="button" className="btn btn-chico" onClick={() => setViajeDetalleId(viaje.id)}>Ver detalle</button>
+                    <div className="acciones-fila">
+                      <button type="button" className="btn btn-chico" onClick={() => setViajeDetalleId(viaje.id)}>Ver detalle</button>
+                      {viaje.estado === 'programado' && (
+                        <button type="button" className="btn btn-chico" onClick={() => navegar(`/viajes/${viaje.id}/editar`)}>
+                          <Icon nombre="pencil" tamano={13} /> Modificar
+                        </button>
+                      )}
+                      {viaje.estado === 'programado' && (
+                        <button type="button" className="btn btn-chico btn-peligro" onClick={() => setViajeACancelar(viaje)}>Cancelar</button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -142,8 +190,20 @@ export default function Viajes() {
         <ViajeDetalleModal
           viajeId={viajeDetalleId}
           onClose={() => setViajeDetalleId(null)}
+          onCancelar={(viaje) => setViajeACancelar(viaje)}
+          onModificar={(viaje) => navegar(`/viajes/${viaje.id}/editar`)}
         />
       )}
+
+      {viajeACancelar && (
+        <CancelarViajeModal
+          viaje={viajeACancelar}
+          onClose={() => setViajeACancelar(null)}
+          onCancelado={handleCancelado}
+        />
+      )}
+
+      {toast && <Toast titulo={toast.titulo} texto={toast.texto} onClose={cerrarToast} />}
     </section>
   )
 }

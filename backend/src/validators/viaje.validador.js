@@ -2,12 +2,14 @@
 import { esLocalidadValida } from '../services/localidades.service.js'
 
 const REGEX_HORA = /^([01]\d|2[0-3]):([0-5]\d)$/
-// Cuanto dura una repeticion: se crean los viajes de los proximos 3 meses desde la fecha inicial.
+// Los viajes repetitivos no tienen fecha de fin: se repiten hasta que el comisionista los cancele.
+// Para no generar viajes infinitos, siempre se mantienen creados los proximos 3 meses
+// (ventana de generacion); el resto se va creando solo (ver extenderSeries en viajes.service.js).
 export const DURACION_REPETICION_MESES = 3
 
-// Fecha de fin de la repeticion: la inicial + 3 meses calendario (si el mes de destino es mas
-// corto, queda en su ultimo dia: 31/01 + 3 meses = 30/04).
-function fechaFinRepeticion(fecha) {
+// Fin de la ventana de generacion: la fecha dada + 3 meses calendario (si el mes de destino es
+// mas corto, queda en su ultimo dia: 31/01 + 3 meses = 30/04).
+export function fechaFinRepeticion(fecha) {
   const [anio, mes, dia] = fecha.split('-').map(Number)
   const ultimoDia = new Date(Date.UTC(anio, mes - 1 + DURACION_REPETICION_MESES + 1, 0)).getUTCDate()
   return new Date(Date.UTC(anio, mes - 1 + DURACION_REPETICION_MESES, Math.min(dia, ultimoDia)))
@@ -32,7 +34,7 @@ function validarHora(valor, etiqueta, errores) {
 // Devuelve las fechas (YYYY-MM-DD) en las que se va a repetir el viaje, incluyendo
 // la fecha inicial si cae en un dia elegido. Trabaja en UTC para evitar corrimientos
 // por zona horaria.
-// repeticion: { tipo: 'unico' | 'diario' | 'semanal', dias: [0..6] }  (dura DURACION_REPETICION_MESES)
+// repeticion: { tipo: 'unico' | 'diario' | 'semanal', dias: [0..6] }  (se generan DURACION_REPETICION_MESES por adelantado)
 export function generarFechas(fecha, repeticion) {
   if (!repeticion || repeticion.tipo === 'unico' || !repeticion.tipo) return [fecha]
 
