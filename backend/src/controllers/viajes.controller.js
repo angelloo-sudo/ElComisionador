@@ -51,9 +51,11 @@ export async function listar(req, res, next) {
     }
 
     const { rows } = await query(
-      `SELECT * FROM viajes
+      `SELECT v.*,
+              (SELECT COUNT(*)::int FROM viaje_pasajero vp WHERE vp.viaje_id = v.id) AS ocupados
+       FROM viajes v
        WHERE ${condiciones.join(' AND ')}
-       ORDER BY fecha, hora_salida`,
+       ORDER BY v.fecha, v.hora_salida`,
       valores
     )
 

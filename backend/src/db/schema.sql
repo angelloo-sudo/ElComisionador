@@ -29,6 +29,22 @@ CREATE TABLE IF NOT EXISTS clientes (
   creado_en   TIMESTAMP DEFAULT NOW()
 );
 
+-- Datos de perfil propios de un comisionista. 1 a 1 con usuarios, igual que "clientes":
+-- solo existe una fila aca cuando el usuario tiene rol = 'comisionista'. Si se borra el
+-- usuario (baja), esta fila se borra en cascada.
+--   dni / telefono : se piden al registrarse (obligatorios a nivel de aplicacion).
+--   presentacion   : texto breve que el comisionista carga despues, para que lo vea el cliente.
+--   foto_perfil    : imagen (data URL jpeg/png/webp) ya achicada por el navegador (~50 KB).
+CREATE TABLE IF NOT EXISTS comisionistas (
+  id            SERIAL PRIMARY KEY,
+  usuario_id    INTEGER NOT NULL UNIQUE REFERENCES usuarios(id) ON DELETE CASCADE,
+  dni           VARCHAR(20),
+  telefono      VARCHAR(40),
+  presentacion  TEXT,
+  foto_perfil   TEXT,
+  creado_en     TIMESTAMP DEFAULT NOW()
+);
+
 -- Si tu base ya existia de antes (con barrio/calle/altura/descripcion), esto la
 -- pone al dia sin perder el resto de los datos. Correr una sola vez.
 ALTER TABLE clientes DROP COLUMN IF EXISTS barrio;

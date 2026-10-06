@@ -1,8 +1,12 @@
 export default function Encomiendas() {
   return (
-    <section>
-      <h1>Encomiendas</h1>
-      <p>Registro y seguimiento de encomiendas (Epica 3 - core). Pendiente de implementar.</p>
+    <section className="card">
+      <div className="card-cabecera">
+        <div>
+          <h2>Encomiendas</h2>
+          <p>Registro y seguimiento de encomiendas (Épica 3 - core). Pendiente de implementar.</p>
+        </div>
+      </div>
     </section>
   )
 }
