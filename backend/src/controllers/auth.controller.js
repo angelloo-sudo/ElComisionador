@@ -4,6 +4,8 @@ import { query } from '../config/db.js'
 import {
   validarNombrePropio, validarDni, validarTelefono, validarPresentacion, validarFotoPerfil,
 } from '../validators/comunes.validador.js'
+import crypto from 'crypto'
+import { enviarEmailRecuperacion } from '../services/mail.service.js'
 
 const JWT_SECRET = process.env.JWT_SECRET
 
@@ -299,5 +301,78 @@ export async function login(req, res, next) {
 
     const perfil = await buscarPerfilPorId(usuario.id)
     res.json({ usuario: datosPerfil(perfil), token: crearToken(perfil) })
+  } catch (e) { next(e) }
+}
+
+const TOKEN_RECUPERACION_VALIDEZ_MINUTOS = 60
+
+function generarTokenRecuperacion() {
+  const tokenPlano = crypto.randomBytes(32).toString('hex') // este viaja por mail
+  const tokenHash = crypto.createHash('sha256').update(tokenPlano).digest('hex') // este va a la DB
+  return { tokenPlano, tokenHash }
+}
+
+// Solicitar el envío del email de recuperación.
+export async function solicitarRecuperacion(req, res, next) {
+  try {
+    const email = req.body.email?.trim().toLowerCase()
+
+    // Respuesta genérica siempre, exista o no el email: así este endpoint no sirve
+    // para averiguar qué correos están registrados en el sistema.
+    const mensajeGenerico = { mensaje: 'Si el email existe en el sistema, te enviamos un enlace para restablecer tu contraseña.' }
+
+    if (!email) {
+      return res.status(400).json({ mensaje: 'Ingresá tu email' })
+    }
+
+    const { rows } = await query('SELECT id FROM usuarios WHERE email = $1 AND activo = true', [email])
+    if (rows.length === 0) {
+      return res.json(mensajeGenerico)
+    }
+
+    const { tokenPlano, tokenHash } = generarTokenRecuperacion()
+    const expira = new Date(Date.now() + TOKEN_RECUPERACION_VALIDEZ_MINUTOS * 60 * 1000)
+
+    await query(
+      'UPDATE usuarios SET reset_token = $1, reset_token_expira = $2 WHERE id = $3',
+      [tokenHash, expira, rows[0].id],
+    )
+
+    const link = `${process.env.FRONTEND_URL}/?token=${tokenPlano}`
+    await enviarEmailRecuperacion(email, link)
+
+    res.json(mensajeGenerico)
+  } catch (e) { next(e) }
+}
+
+// Restablecer la contraseña usando el token recibido por email.
+export async function restablecerPassword(req, res, next) {
+  try {
+    const { token, password } = req.body
+
+    if (!token) {
+      return res.status(400).json({ mensaje: 'Falta el token de recuperación' })
+    }
+    if (!password || password.length < 6) {
+      return res.status(400).json({ mensaje: 'La contraseña debe tener al menos 6 caracteres' })
+    }
+
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex')
+    const { rows } = await query(
+      'SELECT id FROM usuarios WHERE reset_token = $1 AND reset_token_expira > NOW()',
+      [tokenHash],
+    )
+
+    if (rows.length === 0) {
+      return res.status(400).json({ mensaje: 'El enlace de recuperación es inválido o expiró' })
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10)
+    await query(
+      'UPDATE usuarios SET password_hash = $1, reset_token = NULL, reset_token_expira = NULL WHERE id = $2',
+      [passwordHash, rows[0].id],
+    )
+
+    res.json({ mensaje: 'Tu contraseña fue actualizada correctamente. Ya podés iniciar sesión.' })
   } catch (e) { next(e) }
 }

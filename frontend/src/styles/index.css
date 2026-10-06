@@ -222,6 +222,8 @@ textarea.area:focus { border-color: #52525b; }
 .auth-form { display: grid; gap: 18px; }
 .auth-pie { text-align: center; color: var(--texto-2); margin-top: 22px; }
 .auth-pie button { background: none; border: 0; color: var(--texto); font-weight: 600; padding: 0; }
+.auth-olvide { text-align: right; margin-top: -8px; }
+.auth-olvide button { background: none; border: 0; color: var(--texto-2); font-size: 0.85rem; padding: 0; }
 .auth-centro { text-align: center; padding: 20px 12px; }
 .auth-centro .icono-caja { margin: 0 auto 18px; }
 .icono-caja { width: 52px; height: 52px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; background: #11271b; border: 1px solid #1a6737; color: var(--verde); }

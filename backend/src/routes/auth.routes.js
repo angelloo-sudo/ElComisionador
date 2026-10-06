@@ -22,4 +22,7 @@ router.get('/perfil', autenticar, auth.obtenerMiPerfil)        // US10 / US13
 router.put('/perfil', autenticar, auth.actualizarMiPerfil)     // US09 / US14
 router.delete('/perfil', autenticar, auth.darDeBajaMiCuenta)   // US07 / US12 (baja = borrado real)
 
+router.post('/recuperar', auth.solicitarRecuperacion)
+router.post('/restablecer', auth.restablecerPassword)
+
 export default router
