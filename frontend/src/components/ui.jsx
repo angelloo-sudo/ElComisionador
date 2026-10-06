@@ -50,7 +50,7 @@ export function CampoPassword({ label, requerido, opcional, error, ...inputProps
   )
 }
 
-export function Alerta({ tipo = 'error', titulo, children }) {
+export function Alerta({ tipo = 'error', titulo, children, onCerrar }) {
   return (
     <div className={`alerta ${tipo}`} role={tipo === 'error' ? 'alert' : 'status'}>
       <Icon nombre={tipo === 'aviso' ? 'warning' : tipo === 'exito' ? 'checkcircle' : 'alert'} tamano={20} />
@@ -58,6 +58,9 @@ export function Alerta({ tipo = 'error', titulo, children }) {
         {titulo && <strong>{titulo}</strong>}
         {children && <p>{children}</p>}
       </div>
+      {onCerrar && (
+        <button type="button" className="alerta-cerrar" aria-label="Cerrar aviso" onClick={onCerrar}><Icon nombre="x" tamano={16} /></button>
+      )}
     </div>
   )
 }
@@ -101,4 +104,15 @@ export function BadgeEstado({ estado }) {
 
 export function formatoFecha(valor) {
   return new Date(valor).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+const DIAS_CORTOS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+
+// Los viajes repetitivos no tienen fecha de fin: siguen hasta que el comisionista los cancele.
+export function textoRepeticion(valor, serieId) {
+  if (!valor) return serieId ? 'Serie cancelada' : 'Viaje único'
+  const dias = valor === 'todos'
+    ? 'Todos los días'
+    : 'Todos los ' + valor.split(',').map((d) => DIAS_CORTOS[Number(d)]).join(', ')
+  return `${dias} · hasta cancelarlo`
 }

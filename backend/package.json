@@ -5,6 +5,9 @@
   "type": "module",
   "description": "API de ComiTrack (Node.js + Express + PostgreSQL)",
   "main": "src/index.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",

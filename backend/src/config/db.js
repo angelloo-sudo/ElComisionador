@@ -12,5 +12,7 @@ export const pool = new Pool({
   database: process.env.DB_NAME,
 })
 
+console.log('DB_PASSWORD =', process.env.DB_PASSWORD);
+console.log('TIPO =', typeof process.env.DB_PASSWORD);
 // Helper para hacer consultas: query('SELECT ...', [params])
 export const query = (text, params) => pool.query(text, params)

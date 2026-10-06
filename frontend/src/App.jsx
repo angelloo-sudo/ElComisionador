@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import { Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import Auth from './pages/Auth.jsx'
+import VerificarEmail from './pages/VerificarEmail.jsx'
 import { cerrarSesion } from './api/client.js'
 import Dashboard from './pages/Dashboard.jsx'
 import Viajes from './pages/Viajes.jsx'
 import ViajeNuevo from './pages/ViajeNuevo.jsx'
+import ViajeEditar from './pages/ViajeEditar.jsx'
 import Encomiendas from './pages/Encomiendas.jsx'
+import Clientes from './pages/Clientes.jsx'
 import Perfil from './pages/Perfil.jsx'
 import Icon from './components/Icon.jsx'
 import Avatar from './components/Avatar.jsx'
@@ -25,9 +28,11 @@ function fechaDeHoy() {
 }
 
 function tituloDePagina(ruta, esComisionista) {
+  if (ruta.endsWith('/editar')) return 'Modificar viaje'
   if (ruta.startsWith('/viajes/nuevo')) return 'Registrar viaje'
   if (ruta.startsWith('/viajes')) return 'Viajes'
   if (ruta.startsWith('/encomiendas')) return 'Encomiendas'
+  if (ruta.startsWith('/clientes')) return 'Clientes'
   if (ruta.startsWith('/perfil')) return 'Mi perfil'
   return esComisionista ? 'Resumen' : 'Inicio'
 }
@@ -61,6 +66,8 @@ export default function App() {
   const [confirmandoSalida, setConfirmandoSalida] = useState(false)
   const ubicacion = useLocation()
   const navegar = useNavigate()
+
+  if (ubicacion.pathname === '/verificar-email') return <VerificarEmail />
 
   if (!token) {
     if (pantallaFinal) return <PantallaFinal tipo={pantallaFinal} onVolver={() => setPantallaFinal(null)} />
@@ -98,6 +105,7 @@ export default function App() {
           <NavLink to="/" end className={claseNav}><Icon nombre="grid" /> {esComisionista ? 'Resumen' : 'Inicio'}</NavLink>
           {esComisionista && <NavLink to="/viajes" className={claseNav}><Icon nombre="logo" /> Viajes</NavLink>}
           {esComisionista && <NavLink to="/encomiendas" className={claseNav}><Icon nombre="package" /> Encomiendas</NavLink>}
+          {esComisionista && <NavLink to="/clientes" className={claseNav}><Icon nombre="users" /> Clientes</NavLink>}
         </nav>
         <div className="sidebar-fondo">
           <p className="nav-titulo">Cuenta</p>
@@ -130,7 +138,9 @@ export default function App() {
             <Route path="/" element={<Dashboard />} />
             {esComisionista && <Route path="/viajes" element={<Viajes />} />}
             {esComisionista && <Route path="/viajes/nuevo" element={<ViajeNuevo />} />}
+            {esComisionista && <Route path="/viajes/:id/editar" element={<ViajeEditar />} />}
             {esComisionista && <Route path="/encomiendas" element={<Encomiendas />} />}
+            {esComisionista && <Route path="/clientes" element={<Clientes />} />}
             <Route path="/perfil" element={<Perfil onCuentaDadaDeBaja={() => salir('baja')} />} />
           </Routes>
         </main>

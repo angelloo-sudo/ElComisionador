@@ -55,6 +55,10 @@ export default function Auth({ onAuthenticated }) {
   const [registroExitoso, setRegistroExitoso] = useState(null) // rol con el que se registro
   const [recuperacionEnviada, setRecuperacionEnviada] = useState(false)
   const [restablecimientoExitoso, setRestablecimientoExitoso] = useState(false)
+  const [requiereVerificacion, setRequiereVerificacion] = useState(false)
+  const [cargandoReenvio, setCargandoReenvio] = useState(false)
+  const [mensajeReenvio, setMensajeReenvio] = useState('')
+  const [errorReenvio, setErrorReenvio] = useState('')
 
   const registrando = modo === 'register'
 
@@ -72,19 +76,43 @@ export default function Auth({ onAuthenticated }) {
     setErrores((e) => ({ ...e, [name]: undefined }))
   }
 
- function cambiarModo(nuevo) {
+function cambiarModo(nuevo) {
   setModo(nuevo)
   setError(null)
   setErrores({})
   setRegistroExitoso(null)
   setRecuperacionEnviada(false)
   setRestablecimientoExitoso(false)
+  setRequiereVerificacion(false)
+  setMensajeReenvio('')
+  setErrorReenvio('')
   setForm((f) => ({ ...formularioInicial, email: f.email }))
 }
+
+  async function reenviarVerificacion() {
+    const email = registroExitoso?.email || form.email.trim()
+    if (!email) {
+      setErrorReenvio('Ingresá tu correo para solicitar un nuevo enlace.')
+      return
+    }
+
+    setCargandoReenvio(true)
+    setMensajeReenvio('')
+    setErrorReenvio('')
+    try {
+      const respuesta = await api.post('/auth/reenviar-verificacion', { email })
+      setMensajeReenvio(respuesta.mensaje)
+    } catch (err) {
+      setErrorReenvio(err.message)
+    } finally {
+      setCargandoReenvio(false)
+    }
+  }
 
   async function handleSubmit(event) {
     event.preventDefault()
     setError(null)
+    setRequiereVerificacion(false)
 
     const encontrados = validar(form, modo)
     if (Object.keys(encontrados).length > 0) {
@@ -123,14 +151,14 @@ export default function Auth({ onAuthenticated }) {
       const respuesta = await api.post(endpoint, datos)
 
       if (registrando) {
-        // Como en el prototipo: pantalla de exito y luego "Ir a iniciar sesión" (no entra solo).
-        setRegistroExitoso(rol)
+        setRegistroExitoso({ rol, email: respuesta.email ?? form.email, verificacionEnviada: respuesta.verificacionEnviada })
       } else {
         guardarSesion(respuesta)
         onAuthenticated()
       }
     } catch (err) {
       setError(err.message)
+      setRequiereVerificacion(err.codigo === 'EMAIL_NO_VERIFICADO')
     } finally {
       setCargando(false)
     }
@@ -140,17 +168,23 @@ export default function Auth({ onAuthenticated }) {
     return (
       <main className="auth-pagina">
         <div className="auth-card auth-centro">
-          <span className="icono-caja"><Icon nombre="checkcircle" tamano={26} /></span>
+          <span className={`icono-caja ${registroExitoso.verificacionEnviada ? '' : 'rojo'}`}><Icon nombre={registroExitoso.verificacionEnviada ? 'checkcircle' : 'alert'} tamano={26} /></span>
           <p className="auth-kicker">ComiTrack</p>
-          <h1>Cuenta creada correctamente</h1>
+          <h1>{registroExitoso.verificacionEnviada ? 'Revisa tu correo' : 'Cuenta creada, falta verificarla'}</h1>
           <p>
-            Tu usuario de {registroExitoso === 'comisionista' ? 'comisionista' : 'cliente'} fue registrado con éxito.<br />
-            Ya puedes iniciar sesión con tu correo electrónico y contraseña.
+            Tu cuenta de {registroExitoso.rol === 'comisionista' ? 'comisionista' : 'cliente'} fue creada para {registroExitoso.email}.
+            {registroExitoso.verificacionEnviada
+              ? ' Abrí el enlace que te enviamos para verificar el correo; vence en una hora.'
+              : ' No pudimos enviar el enlace. Revisá la configuración de correo o solicitá uno nuevo.'}
           </p>
+          {mensajeReenvio && <Alerta tipo="exito">{mensajeReenvio}</Alerta>}
+          {errorReenvio && <Alerta tipo="error">{errorReenvio}</Alerta>}
+          <button type="button" className="btn btn-bloque" onClick={reenviarVerificacion} disabled={cargandoReenvio}>
+            {cargandoReenvio ? 'Enviando...' : 'Reenviar enlace de verificación'}
+          </button>
           <button type="button" className="btn btn-primario btn-bloque" onClick={() => cambiarModo('login')}>
             Ir a iniciar sesión <Icon nombre="arrow" />
           </button>
-          <p className="auth-nota">Registro exitoso · Tus datos fueron almacenados correctamente.</p>
         </div>
       </main>
     )
@@ -280,6 +314,13 @@ export default function Auth({ onAuthenticated }) {
           )}
 
           {error && <Alerta tipo="error" titulo={registrando ? 'No pudimos crear la cuenta' : 'No pudimos iniciar sesión'}>{error}</Alerta>}
+          {!registrando && requiereVerificacion && (
+            <button type="button" className="btn" onClick={reenviarVerificacion} disabled={cargandoReenvio}>
+              {cargandoReenvio ? 'Enviando...' : 'Reenviar enlace de verificación'}
+            </button>
+          )}
+          {mensajeReenvio && <Alerta tipo="exito">{mensajeReenvio}</Alerta>}
+          {errorReenvio && <Alerta tipo="error">{errorReenvio}</Alerta>}
 
           {registrando && (
             <div className="grilla-2">
