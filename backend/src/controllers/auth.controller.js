@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { query } from '../config/db.js'
+import { enviarEmailVerificacion } from '../services/email.service.js'
 import {
   validarNombrePropio, validarDni, validarTelefono, validarPresentacion, validarFotoPerfil,
 } from '../validators/comunes.validador.js'
@@ -25,6 +26,18 @@ const SELECT_PERFIL = `
 
 function crearToken(usuario) {
   return jwt.sign({ id: usuario.id, email: usuario.email, rol: usuario.rol }, JWT_SECRET, { expiresIn: '8h' })
+}
+
+function crearTokenVerificacion(usuario) {
+  return jwt.sign(
+    { sub: String(usuario.id), email: usuario.email, rol: usuario.rol, tipo: 'verificacion_email' },
+    JWT_SECRET,
+    { expiresIn: '1h' },
+  )
+}
+
+async function enviarVerificacion(usuario) {
+  await enviarEmailVerificacion({ email: usuario.email, token: crearTokenVerificacion(usuario) })
 }
 
 // pideContacto indica si además de nombre/email/password hay que exigir dni/telefono
@@ -251,8 +264,8 @@ async function registrarConRol(req, res, next, rolFijo) {
 
     const passwordHash = await bcrypt.hash(password, 10)
     const { rows } = await query(
-      `INSERT INTO usuarios (nombre, apellido, email, password_hash, rol)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO usuarios (nombre, apellido, email, password_hash, rol, email_verificado)
+       VALUES ($1, $2, $3, $4, $5, false)
        RETURNING id`,
       [nombre.trim(), apellido?.trim() || null, emailNormalizado, passwordHash, rolFijo],
     )
@@ -268,7 +281,19 @@ async function registrarConRol(req, res, next, rolFijo) {
     }
 
     const perfil = await buscarPerfilPorId(nuevoId)
-    res.status(201).json({ usuario: datosPerfil(perfil), token: crearToken(perfil) })
+    let verificacionEnviada = true
+    try {
+      await enviarVerificacion(perfil)
+    } catch (e) {
+      verificacionEnviada = false
+      console.error('No se pudo enviar el correo de verificación:', e.message)
+    }
+
+    res.status(201).json({
+      mensaje: 'Cuenta creada. Verificá tu correo antes de iniciar sesión.',
+      email: perfil.email,
+      verificacionEnviada,
+    })
   } catch (e) { next(e) }
 }
 
@@ -283,6 +308,79 @@ export async function registerComisionista(req, res, next) {
   return registrarConRol(req, res, next, 'comisionista')
 }
 
+export async function verificarEmail(req, res, next) {
+  try {
+    const { token } = req.body
+    if (typeof token !== 'string' || !token) {
+      return res.status(400).json({ mensaje: 'El enlace de verificación no es válido' })
+    }
+
+    let datosToken
+    try {
+      datosToken = jwt.verify(token, JWT_SECRET)
+    } catch (e) {
+      const vencido = e.name === 'TokenExpiredError'
+      return res.status(vencido ? 410 : 400).json({
+        mensaje: vencido ? 'El enlace venció. Solicitá uno nuevo para verificar tu correo.' : 'El enlace de verificación no es válido',
+      })
+    }
+
+    if (datosToken.tipo !== 'verificacion_email' || !['cliente', 'comisionista'].includes(datosToken.rol)) {
+      return res.status(400).json({ mensaje: 'El enlace de verificación no es válido' })
+    }
+
+    const actualizacion = await query(
+      `UPDATE usuarios
+       SET email_verificado = true
+       WHERE id = $1 AND email = $2 AND rol = $3 AND activo = true AND email_verificado = false
+       RETURNING id`,
+      [datosToken.sub, datosToken.email, datosToken.rol],
+    )
+
+    if (actualizacion.rowCount === 0) {
+      const existente = await query(
+        `SELECT email_verificado FROM usuarios
+         WHERE id = $1 AND email = $2 AND rol = $3 AND activo = true`,
+        [datosToken.sub, datosToken.email, datosToken.rol],
+      )
+      if (!existente.rows[0]) {
+        return res.status(400).json({ mensaje: 'El enlace ya no corresponde a una cuenta activa' })
+      }
+      if (existente.rows[0].email_verificado) {
+        return res.json({ mensaje: 'El correo ya estaba verificado' })
+      }
+      return res.status(400).json({ mensaje: 'El enlace de verificación no es válido' })
+    }
+
+    res.json({ mensaje: 'Correo verificado. Ya podés iniciar sesión.' })
+  } catch (e) { next(e) }
+}
+
+export async function reenviarVerificacion(req, res, next) {
+  try {
+    const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : ''
+    const resultado = await query(
+      `SELECT id, email, rol, email_verificado, activo
+       FROM usuarios WHERE email = $1 AND rol IN ('cliente', 'comisionista')`,
+      [email],
+    )
+    const usuario = resultado.rows[0]
+
+    if (!usuario || !usuario.activo || usuario.email_verificado) {
+      return res.json({ mensaje: 'Si la cuenta existe y necesita verificación, enviaremos un enlace.' })
+    }
+
+    try {
+      await enviarVerificacion(usuario)
+    } catch (e) {
+      console.error('No se pudo reenviar el correo de verificación:', e.message)
+      return res.status(503).json({ mensaje: 'No se pudo enviar el correo. Revisá la configuración SMTP e intentá de nuevo.' })
+    }
+
+    res.json({ mensaje: 'Enviamos un nuevo enlace de verificación.' })
+  } catch (e) { next(e) }
+}
+
 export async function login(req, res, next) {
   try {
     const { email, password } = req.body
@@ -295,6 +393,13 @@ export async function login(req, res, next) {
 
     if (!usuario.activo) {
       return res.status(403).json({ mensaje: 'Esta cuenta fue dada de baja' })
+    }
+
+    if (!usuario.email_verificado) {
+      return res.status(403).json({
+        codigo: 'EMAIL_NO_VERIFICADO',
+        mensaje: 'Verificá tu correo antes de iniciar sesión.',
+      })
     }
 
     const perfil = await buscarPerfilPorId(usuario.id)

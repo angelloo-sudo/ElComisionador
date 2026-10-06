@@ -18,7 +18,9 @@ async function request(path, options = {}) {
     try {
       const cuerpo = JSON.parse(texto)
       const mensaje = cuerpo.mensaje ?? (Array.isArray(cuerpo.errores) ? cuerpo.errores.join(' | ') : null)
-      throw new Error(mensaje || texto || `Error ${res.status}`)
+      const error = new Error(mensaje || texto || `Error ${res.status}`)
+      error.codigo = cuerpo.codigo
+      throw error
     } catch (e) {
       if (e instanceof SyntaxError) {
         throw new Error(texto || `Error ${res.status}`)
