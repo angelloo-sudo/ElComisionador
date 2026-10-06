@@ -10,6 +10,8 @@ router.post('/login', auth.login)     // US01
 
 // Épica 2: Gestión de Usuarios (Comisionista) - autogestión de la propia cuenta.
 router.post('/register-comisionista', auth.registerComisionista) // US06 (autorregistro, siempre rol 'comisionista')
+router.post('/verificar-email', auth.verificarEmail)
+router.post('/reenviar-verificacion', auth.reenviarVerificacion)
 
 // Épica 3: Gestión de Usuarios (Cliente) - autogestión de la propia cuenta.
 router.post('/register', auth.register)                       // US11 (autorregistro, siempre rol 'cliente')

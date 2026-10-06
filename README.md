@@ -23,7 +23,7 @@ comitrack/
 
 ## Puesta en marcha
 
-Requisitos: Node.js 18+ y PostgreSQL instalado.
+Requisitos: Node.js 20+ y PostgreSQL instalado.
 
 1. Instalar dependencias de todo el proyecto:
 
@@ -45,6 +45,10 @@ Requisitos: Node.js 18+ y PostgreSQL instalado.
    ```
 
    (en Windows CMD. En Git Bash usar `cp` en vez de `copy`.)
+
+   Para enviar verificaciones de correo, completa en `backend/.env` `SMTP_HOST`, `SMTP_PORT`,
+   `SMTP_USER`, `SMTP_PASSWORD` y `SMTP_FROM`. `FRONTEND_URL` debe apuntar al sitio que abrirá
+   el enlace (en desarrollo, `http://localhost:5173`).
 
 4. Levantar backend + frontend a la vez:
 

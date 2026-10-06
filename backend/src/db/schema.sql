@@ -13,8 +13,12 @@ CREATE TABLE IF NOT EXISTS usuarios (
   rol           VARCHAR(20) NOT NULL DEFAULT 'cliente'
                 CHECK (rol IN ('comisionista', 'cliente', 'administrador')),
   activo        BOOLEAN NOT NULL DEFAULT true,
+  email_verificado BOOLEAN NOT NULL DEFAULT true,
   creado_en     TIMESTAMP DEFAULT NOW()
 );
+
+-- Las cuentas existentes se conservan verificadas; los nuevos registros se crean pendientes.
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS email_verificado BOOLEAN NOT NULL DEFAULT true;
 
 -- Datos de contacto propios de un cliente. 1 a 1 con usuarios: solo existe una fila
 -- aca cuando el usuario tiene rol = 'cliente'. Si se borra el usuario (baja, US12),
