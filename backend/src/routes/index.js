@@ -5,6 +5,7 @@ import encomiendasRoutes from './encomiendas.routes.js'
 import pasajerosRoutes from './pasajeros.routes.js'
 import finanzasRoutes from './finanzas.routes.js'
 import localidadesRoutes from './localidades.routes.js'
+import clientesRoutes from './clientes.routes.js'
 
 const router = Router()
 
@@ -14,5 +15,6 @@ router.use('/encomiendas', encomiendasRoutes)
 router.use('/pasajeros', pasajerosRoutes)
 router.use('/finanzas', finanzasRoutes)
 router.use('/localidades', localidadesRoutes)
+router.use('/clientes', clientesRoutes)
 
 export default router

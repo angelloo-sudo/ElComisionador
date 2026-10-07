@@ -12,6 +12,9 @@ export function autenticar(req, res, next) {
 
   try {
     req.usuario = jwt.verify(token, JWT_SECRET)
+    if (!req.usuario.id || req.usuario.tipo === 'verificacion_email') {
+      return res.status(401).json({ mensaje: 'Token de sesión inválido' })
+    }
     next()
   } catch {
     res.status(401).json({ mensaje: 'Token inválido o vencido' })

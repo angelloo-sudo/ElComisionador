@@ -222,6 +222,8 @@ textarea.area:focus { border-color: #52525b; }
 .auth-form { display: grid; gap: 18px; }
 .auth-pie { text-align: center; color: var(--texto-2); margin-top: 22px; }
 .auth-pie button { background: none; border: 0; color: var(--texto); font-weight: 600; padding: 0; }
+.auth-olvide { text-align: right; margin-top: -8px; }
+.auth-olvide button { background: none; border: 0; color: var(--texto-2); font-size: 0.85rem; padding: 0; }
 .auth-centro { text-align: center; padding: 20px 12px; }
 .auth-centro .icono-caja { margin: 0 auto 18px; }
 .icono-caja { width: 52px; height: 52px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; background: #11271b; border: 1px solid #1a6737; color: var(--verde); }
@@ -263,8 +265,8 @@ textarea.area:focus { border-color: #52525b; }
 .filtros .acciones { display: flex; gap: 8px; }
 .tabla-wrap { overflow-x: auto; }
 .tabla { width: 100%; border-collapse: collapse; }
-.tabla th { text-align: left; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--texto-3); font-weight: 600; padding: 14px 16px; border-bottom: 1px solid var(--divisor); white-space: nowrap; }
-.tabla td { padding: 14px 16px; border-bottom: 1px solid var(--divisor); white-space: nowrap; }
+.tabla th { text-align: left; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--texto-3); font-weight: 600; padding: 14px 12px; border-bottom: 1px solid var(--divisor); white-space: nowrap; }
+.tabla td { padding: 14px 12px; border-bottom: 1px solid var(--divisor); white-space: nowrap; }
 .tabla tr:last-child td { border-bottom: 0; }
 .tabla tbody tr:hover { background: #18181b; }
 .tabla .codigo { font-weight: 600; }
@@ -307,3 +309,25 @@ textarea.area:focus { border-color: #52525b; }
   .auth-card { padding: 24px 20px; }
   .toast { right: 16px; }
 }
+
+/* US16 - cancelar viaje */
+.acciones-fila { display: flex; gap: 8px; justify-content: flex-end; }
+.opciones-alcance { margin: 18px 0 0; padding: 0; border: 0; display: grid; gap: 8px; }
+.opciones-alcance legend { padding: 0; margin-bottom: 8px; color: var(--texto-2); }
+.opciones-alcance label { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border: 1px solid #3f3f46; border-radius: 10px; cursor: pointer; color: var(--texto-2); }
+.opciones-alcance label.activo { border-color: var(--primario); color: var(--texto); }
+.opciones-alcance input { accent-color: var(--primario); }
+
+/* Etiqueta de viaje repetitivo en el listado */
+.tag-serie { display: inline-flex; align-items: center; gap: 5px; margin-left: 10px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--borde); background: var(--activo); color: var(--texto-2); font-size: 12px; font-weight: 600; }
+.tabla td.col-recorrido { white-space: normal; min-width: 200px; }
+.tabla td.col-recorrido .tag-serie { margin-left: 8px; }
+
+.alerta-cerrar { margin-left: auto; align-self: flex-start; background: none; border: 0; color: inherit; cursor: pointer; padding: 2px; opacity: .8; }
+.alerta-cerrar:hover { opacity: 1; }
+.alerta ul { margin: 6px 0 0 18px; }
+.acciones-fila { gap: 6px; }
+.acciones-fila .btn-chico { padding: 0 10px; gap: 5px; }
+.tabla th, .tabla td { padding-left: 9px; padding-right: 9px; }
+.modal-acciones { flex-wrap: wrap; }
+.modal-acciones .btn { white-space: nowrap; }

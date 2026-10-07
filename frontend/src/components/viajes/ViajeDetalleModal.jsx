@@ -1,18 +1,10 @@
 // US12 - Detalle de consulta de un viaje puntual.
 import { useState, useEffect } from 'react'
 import { api } from '../../api/client.js'
-import { Modal, Alerta, BadgeEstado, formatoFecha } from '../ui.jsx'
+import { Modal, Alerta, BadgeEstado, formatoFecha, textoRepeticion } from '../ui.jsx'
 import { codigoViaje } from '../../pages/ViajeNuevo.jsx'
 
-const DIAS_CORTOS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
-
-function textoRepeticion(valor) {
-  if (!valor) return 'Viaje único'
-  if (valor === 'todos') return 'Todos los días'
-  return 'Todos los ' + valor.split(',').map((d) => DIAS_CORTOS[Number(d)]).join(', ')
-}
-
-export default function ViajeDetalleModal({ viajeId, onClose }) {
+export default function ViajeDetalleModal({ viajeId, onClose, onCancelar, onModificar }) {
   const [viaje, setViaje] = useState(null)
   const [error, setError] = useState(null)
   const [cargando, setCargando] = useState(true)
@@ -40,7 +32,7 @@ export default function ViajeDetalleModal({ viajeId, onClose }) {
           <div className="resumen-fila"><span>Fecha</span><strong>{formatoFecha(viaje.fecha)}</strong></div>
           <div className="resumen-fila"><span>Hora de salida</span><strong>{viaje.hora_salida ? viaje.hora_salida.slice(0, 5) : '-'}</strong></div>
           <div className="resumen-fila"><span>Hora de llegada (aprox.)</span><strong>{viaje.hora_llegada ? viaje.hora_llegada.slice(0, 5) : '-'}</strong></div>
-          <div className="resumen-fila"><span>Repetición</span><strong>{textoRepeticion(viaje.repeticion_dias)}</strong></div>
+          <div className="resumen-fila"><span>Repetición</span><strong>{textoRepeticion(viaje.repeticion_dias, viaje.serie_id)}</strong></div>
           <div className="resumen-fila"><span>Cupo total</span><strong>{viaje.cupo_total ?? '-'}</strong></div>
           <div className="resumen-fila"><span>Estado</span><BadgeEstado estado={viaje.estado} /></div>
           <div className="resumen-fila"><span>Creado</span><strong>{formatoFecha(viaje.creado_en)}</strong></div>
@@ -48,6 +40,12 @@ export default function ViajeDetalleModal({ viajeId, onClose }) {
       )}
 
       <div className="modal-acciones">
+        {viaje?.estado === 'programado' && onModificar && (
+          <button type="button" className="btn" onClick={() => onModificar(viaje)}>Modificar viaje</button>
+        )}
+        {viaje?.estado === 'programado' && onCancelar && (
+          <button type="button" className="btn btn-peligro" onClick={() => onCancelar(viaje)}>Cancelar viaje</button>
+        )}
         <button type="button" className="btn" onClick={onClose}>Cerrar</button>
       </div>
     </Modal>

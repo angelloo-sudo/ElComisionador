@@ -18,7 +18,9 @@ async function request(path, options = {}) {
     try {
       const cuerpo = JSON.parse(texto)
       const mensaje = cuerpo.mensaje ?? (Array.isArray(cuerpo.errores) ? cuerpo.errores.join(' | ') : null)
-      throw new Error(mensaje || texto || `Error ${res.status}`)
+      const error = new Error(mensaje || texto || `Error ${res.status}`)
+      error.codigo = cuerpo.codigo
+      throw error
     } catch (e) {
       if (e instanceof SyntaxError) {
         throw new Error(texto || `Error ${res.status}`)
@@ -33,6 +35,7 @@ export const api = {
   get: (path) => request(path),
   post: (path, body) => request(path, { method: 'POST', body: JSON.stringify(body) }),
   put: (path, body) => request(path, { method: 'PUT', body: JSON.stringify(body) }),
+  patch: (path, body) => request(path, { method: 'PATCH', body: JSON.stringify(body) }),
   del: (path) => request(path, { method: 'DELETE' }),
 }
 

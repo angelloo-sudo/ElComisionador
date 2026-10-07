@@ -27,12 +27,12 @@ export function codigoViaje(id) {
   return `V-${String(id).padStart(4, '0')}`
 }
 
-function hoyISO() {
+export function hoyISO() {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function SelectorHora({ hora, minuto, onHora, onMinuto, etiqueta }) {
+export function SelectorHora({ hora, minuto, onHora, onMinuto, etiqueta }) {
   return (
     <div className="hora-selects">
       <select value={hora} onChange={(e) => onHora(e.target.value)} aria-label={`${etiqueta}: hora`}>
@@ -188,7 +188,7 @@ export default function ViajeNuevo() {
         <div className="card exito-card">
           <span className="icono-caja"><Icon nombre="checkcircle" tamano={26} /></span>
           <h2>{serie ? 'Viajes registrados correctamente' : 'Viaje registrado correctamente'}</h2>
-          <p>{serie ? `Se guardaron ${registrado.cantidad} viajes y quedaron disponibles para los clientes.` : 'El viaje fue guardado y quedó disponible para los clientes.'}</p>
+          <p>{serie ? `Se registraron ${registrado.cantidad} viajes. En Viajes vas a ver el más próximo; el siguiente aparece cuando se realice, y la serie sigue hasta que la canceles.` : 'El viaje fue guardado y quedó disponible para los clientes.'}</p>
           <div className="exito-detalle">
             <div className="resumen-fila"><span>{serie ? 'Primer viaje' : 'N° de viaje'}</span><strong>{codigoViaje(v.id)}</strong></div>
             <div className="resumen-fila"><span>Recorrido</span><strong>{v.origen} <span style={{ color: 'var(--texto-3)' }}>→</span> {v.destino}</strong></div>
@@ -210,8 +210,8 @@ export default function ViajeNuevo() {
   // ---------- Formulario ----------
   const textoRepeticion =
     tipoRepeticion === 'unico' ? 'Una sola vez'
-    : tipoRepeticion === 'diario' ? 'Todos los días (3 meses)'
-    : diasSel.length ? `${[...diasSel].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map((d) => DIAS_CORTOS[d]).join(', ')} (3 meses)` : '—'
+    : tipoRepeticion === 'diario' ? 'Todos los días, sin fin'
+    : diasSel.length ? `${[...diasSel].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map((d) => DIAS_CORTOS[d]).join(', ')} (sin fin)` : '—'
 
   return (
     <section>
@@ -284,7 +284,7 @@ export default function ViajeNuevo() {
                 </div>
               )}
               {tipoRepeticion !== 'unico' && (
-                <p className="campo-ayuda" style={{ marginTop: 12 }}>Se crean los viajes de los próximos 3 meses a partir de la fecha elegida.</p>
+                <p className="campo-ayuda" style={{ marginTop: 12 }}>El viaje se repite hasta que lo canceles. Se crean con 3 meses de anticipación y la serie se va extendiendo sola.</p>
               )}
             </div>
           </div>
