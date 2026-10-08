@@ -77,7 +77,15 @@ export async function obtener(req, res, next) {
 
     const resultado = await query(
       `SELECT v.*,
-              (SELECT COUNT(*)::int FROM viaje_pasajero vp WHERE vp.viaje_id = v.id AND vp.estado = 'activo') AS ocupados
+              (SELECT COUNT(*)::int
+               FROM viaje_pasajero vp
+               WHERE vp.viaje_id = v.id AND vp.estado = 'activo') AS ocupados,
+              COALESCE((
+                SELECT json_agg(p.nombre ORDER BY p.nombre)
+                FROM viaje_pasajero vp
+                JOIN pasajeros p ON p.id = vp.pasajero_id
+                WHERE vp.viaje_id = v.id AND vp.estado = 'activo'
+              ), '[]'::json) AS pasajeros
        FROM viajes v WHERE v.id = $1 AND v.usuario_id = $2`,
       [id, usuarioId]
     )

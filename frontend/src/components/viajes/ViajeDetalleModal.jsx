@@ -33,9 +33,17 @@ export default function ViajeDetalleModal({ viajeId, onClose, onCancelar, onModi
           <div className="resumen-fila"><span>Hora de salida</span><strong>{viaje.hora_salida ? viaje.hora_salida.slice(0, 5) : '-'}</strong></div>
           <div className="resumen-fila"><span>Hora de llegada (aprox.)</span><strong>{viaje.hora_llegada ? viaje.hora_llegada.slice(0, 5) : '-'}</strong></div>
           <div className="resumen-fila"><span>Repetición</span><strong>{textoRepeticion(viaje.repeticion_dias, viaje.serie_id)}</strong></div>
-          <div className="resumen-fila"><span>Cupo total</span><strong>{viaje.cupo_total ?? '-'}</strong></div>
+          <div className="resumen-fila"><span>Reservas activas</span><strong>{viaje.ocupados} / {viaje.cupo_total ?? '-'}</strong></div>
           <div className="resumen-fila"><span>Estado</span><BadgeEstado estado={viaje.estado} /></div>
           <div className="resumen-fila"><span>Creado</span><strong>{formatoFecha(viaje.creado_en)}</strong></div>
+          <h3 style={{ marginTop: 18 }}>Pasajeros con reserva</h3>
+          {viaje.pasajeros.length === 0 ? (
+            <p className="campo-ayuda">Todavía no hay reservas activas para este viaje.</p>
+          ) : (
+            <ul style={{ margin: '12px 0 0', paddingLeft: 22 }}>
+              {viaje.pasajeros.map((nombre, indice) => <li key={`${nombre}-${indice}`}>{nombre}</li>)}
+            </ul>
+          )}
         </div>
       )}
 

@@ -9,10 +9,13 @@ function fechaLocal(fecha) {
 
 export default function MisTraslados() {
   const [traslados, setTraslados] = useState([])
+  const [viajesDisponibles, setViajesDisponibles] = useState([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
+  const [viajeAReservar, setViajeAReservar] = useState(null)
   const [trasladoACancelar, setTrasladoACancelar] = useState(null)
   const [procesando, setProcesando] = useState(false)
+  const [errorReserva, setErrorReserva] = useState('')
   const [errorCancelacion, setErrorCancelacion] = useState('')
   const [toast, setToast] = useState(false)
   const cerrarToast = useCallback(() => setToast(false), [])
@@ -21,9 +24,14 @@ export default function MisTraslados() {
     setCargando(true)
     setError('')
     try {
-      setTraslados(await api.get('/pasajeros/mis-traslados'))
+      const [reservas, disponibles] = await Promise.all([
+        api.get('/pasajeros/mis-traslados'),
+        api.get('/pasajeros/viajes-disponibles'),
+      ])
+      setTraslados(reservas)
+      setViajesDisponibles(disponibles)
     } catch (err) {
-      setError(err.message || 'No se pudieron cargar tus traslados.')
+      setError(err.message || 'No se pudieron cargar los viajes.')
     } finally {
       setCargando(false)
     }
@@ -32,6 +40,22 @@ export default function MisTraslados() {
   useEffect(() => {
     cargarTraslados()
   }, [cargarTraslados])
+
+  async function confirmarReserva() {
+    if (!viajeAReservar || procesando) return
+    setProcesando(true)
+    setErrorReserva('')
+    try {
+      await api.post(`/pasajeros/viajes/${viajeAReservar.viaje_id}/reservar`, {})
+      setViajeAReservar(null)
+      setToast('reserva')
+      await cargarTraslados()
+    } catch (err) {
+      setErrorReserva(err.message || 'No se pudo reservar el viaje.')
+    } finally {
+      setProcesando(false)
+    }
+  }
 
   async function confirmarCancelacion() {
     if (!trasladoACancelar || procesando) return
@@ -43,7 +67,7 @@ export default function MisTraslados() {
         {},
       )
       setTrasladoACancelar(null)
-      setToast(true)
+      setToast('cancelacion')
       await cargarTraslados()
     } catch (err) {
       setErrorCancelacion(err.message || 'No se pudo cancelar el traslado.')
@@ -57,13 +81,73 @@ export default function MisTraslados() {
       <div className="barra-pagina">
         <div>
           <h2>Mis traslados</h2>
-          <p>Consultá tus reservas y cancelá las que todavía no hayan iniciado.</p>
+          <p>Encontrá viajes disponibles, reservá tu lugar y administrá tus traslados.</p>
         </div>
       </div>
 
-      {error && <Alerta tipo="error" titulo="No se pudieron cargar tus traslados">{error}</Alerta>}
+      {error && <Alerta tipo="error" titulo="No se pudieron cargar los viajes">{error}</Alerta>}
 
-      <div className="card tabla-wrap">
+      <div className="card">
+        <div className="card-cabecera">
+          <div>
+            <h2>Viajes disponibles</h2>
+            <p>Viajes programados con lugares disponibles.</p>
+          </div>
+        </div>
+        <div className="tabla-wrap">
+          {cargando ? (
+            <p className="vacio">Cargando viajes...</p>
+          ) : viajesDisponibles.length === 0 ? (
+            <p className="vacio">No hay viajes programados con cupos disponibles en este momento.</p>
+          ) : (
+            <table className="tabla">
+              <thead>
+                <tr>
+                  <th>Recorrido</th>
+                  <th>Fecha</th>
+                  <th>Salida</th>
+                  <th>Comisionista</th>
+                  <th>Cupos</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {viajesDisponibles.map((viaje) => (
+                  <tr key={viaje.viaje_id}>
+                    <td className="col-recorrido">
+                      {viaje.origen}<span className="flecha">→</span>{viaje.destino}
+                    </td>
+                    <td>{fechaLocal(viaje.fecha)}</td>
+                    <td>{viaje.hora_salida ? viaje.hora_salida.slice(0, 5) : '-'}</td>
+                    <td>{`${viaje.comisionista_nombre} ${viaje.comisionista_apellido ?? ''}`.trim()}</td>
+                    <td>{viaje.cupos_disponibles} / {viaje.cupo_total}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn btn-chico btn-primario"
+                        onClick={() => {
+                          setViajeAReservar(viaje)
+                          setErrorReserva('')
+                        }}
+                      >
+                        <Icon nombre="seat" tamano={13} /> Reservar
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      <div className="card tabla-wrap" style={{ marginTop: 20 }}>
+        <div className="card-cabecera">
+          <div>
+            <h2>Mis reservas</h2>
+            <p>Consultá el estado de tus traslados y cancelá los que todavía no iniciaron.</p>
+          </div>
+        </div>
         {cargando ? (
           <p className="vacio">Cargando tus traslados...</p>
         ) : traslados.length === 0 ? (
@@ -115,6 +199,38 @@ export default function MisTraslados() {
         )}
       </div>
 
+      {viajeAReservar && (
+        <Modal onClose={() => { if (!procesando) setViajeAReservar(null) }}>
+          <span className="modal-icono"><Icon nombre="seat" tamano={22} /></span>
+          <h2>¿Confirmar tu reserva?</h2>
+          <p>
+            Te vas a sumar al viaje {viajeAReservar.origen} → {viajeAReservar.destino} del{' '}
+            {fechaLocal(viajeAReservar.fecha)} a las{' '}
+            {viajeAReservar.hora_salida ? viajeAReservar.hora_salida.slice(0, 5) : '00:00'}.
+            {' '}Quedan {viajeAReservar.cupos_disponibles} cupo(s) disponibles.
+          </p>
+          {errorReserva && <Alerta tipo="error" titulo="No se pudo reservar">{errorReserva}</Alerta>}
+          <div className="modal-acciones">
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setViajeAReservar(null)}
+              disabled={procesando}
+            >
+              Volver
+            </button>
+            <button
+              type="button"
+              className="btn btn-primario"
+              onClick={confirmarReserva}
+              disabled={procesando}
+            >
+              {procesando ? 'Reservando...' : 'Confirmar reserva'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
       {trasladoACancelar && (
         <Modal onClose={() => { if (!procesando) setTrasladoACancelar(null) }}>
           <span className="modal-icono"><Icon nombre="alert" tamano={22} /></span>
@@ -150,8 +266,10 @@ export default function MisTraslados() {
 
       {toast && (
         <Toast
-          titulo="Traslado cancelado"
-          texto="Tu reserva se canceló y el asiento quedó liberado."
+          titulo={toast === 'reserva' ? 'Viaje reservado' : 'Traslado cancelado'}
+          texto={toast === 'reserva'
+            ? 'Tu lugar quedó reservado. Encontrarás el viaje en Mis reservas.'
+            : 'Tu reserva se canceló y el asiento quedó liberado.'}
           onClose={cerrarToast}
         />
       )}

@@ -4,6 +4,8 @@ import { autenticar, permitirRoles } from '../middlewares/auth.middleware.js'
 
 const router = Router()
 
+router.get('/viajes-disponibles', autenticar, permitirRoles('cliente'), pasajeros.listarViajesDisponibles)
+router.post('/viajes/:viajeId/reservar', autenticar, permitirRoles('cliente'), pasajeros.reservarViaje)
 router.get('/mis-traslados', autenticar, permitirRoles('cliente'), pasajeros.listarMisTraslados)
 router.patch(
   '/mis-traslados/:viajeId/:pasajeroId/cancelar',
