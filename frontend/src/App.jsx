@@ -92,8 +92,9 @@ export default function App() {
     navegar('/')
   }
 
-  // Viajes y Encomiendas son del comisionista; el cliente gestiona sus traslados y perfil.
+  // Clientes gestionan encomiendas y traslados; comisionistas revisan envíos y viajes.
   const esComisionista = usuario?.rol === 'comisionista' || usuario?.rol === 'administrador'
+  const esCliente = usuario?.rol === 'cliente'
   const nombreCompleto = `${usuario?.nombre ?? ''} ${usuario?.apellido ?? ''}`.trim()
   const claseNav = ({ isActive }) => `nav-item${isActive ? ' activo' : ''}`
 
@@ -105,7 +106,7 @@ export default function App() {
         <nav className="nav-lista">
           <NavLink to="/" end className={claseNav}><Icon nombre="grid" /> {esComisionista ? 'Resumen' : 'Inicio'}</NavLink>
           {esComisionista && <NavLink to="/viajes" className={claseNav}><Icon nombre="logo" /> Viajes</NavLink>}
-          {esComisionista && <NavLink to="/encomiendas" className={claseNav}><Icon nombre="package" /> Encomiendas</NavLink>}
+          {(esComisionista || esCliente) && <NavLink to="/encomiendas" className={claseNav}><Icon nombre="package" /> Encomiendas</NavLink>}
           {esComisionista && <NavLink to="/clientes" className={claseNav}><Icon nombre="users" /> Clientes</NavLink>}
           {usuario?.rol === 'cliente' && <NavLink to="/mis-traslados" className={claseNav}><Icon nombre="logo" /> Mis traslados</NavLink>}
         </nav>
@@ -141,7 +142,7 @@ export default function App() {
             {esComisionista && <Route path="/viajes" element={<Viajes />} />}
             {esComisionista && <Route path="/viajes/nuevo" element={<ViajeNuevo />} />}
             {esComisionista && <Route path="/viajes/:id/editar" element={<ViajeEditar />} />}
-            {esComisionista && <Route path="/encomiendas" element={<Encomiendas />} />}
+            {(esComisionista || esCliente) && <Route path="/encomiendas" element={<Encomiendas usuario={usuario} />} />}
             {esComisionista && <Route path="/clientes" element={<Clientes />} />}
             {usuario?.rol === 'cliente' && <Route path="/mis-traslados" element={<MisTraslados />} />}
             <Route path="/perfil" element={<Perfil onCuentaDadaDeBaja={() => salir('baja')} />} />

@@ -2,9 +2,9 @@
 :root {
   --bg: #0b0b0d;
   --sidebar: #0f0f11;
-  --card: #141416;
-  --borde: #27272a;
-  --divisor: #1e1e21;
+  --card: #19191c;
+  --borde: #37373d;
+  --divisor: #2b2b30;
   --input: #0f0f11;
   --texto: #fafafa;
   --texto-2: #a1a1aa;
@@ -331,3 +331,120 @@ textarea.area:focus { border-color: #52525b; }
 .tabla th, .tabla td { padding-left: 9px; padding-right: 9px; }
 .modal-acciones { flex-wrap: wrap; }
 .modal-acciones .btn { white-space: nowrap; }
+.content { padding: 2rem 1.5rem; max-width: 960px; margin: 0 auto; }
+
+.perfil { max-width: 620px; }
+.perfil-form { display: grid; gap: 1rem; margin: 1.5rem 0; }
+.perfil-form label { display: grid; gap: 0.4rem; font-weight: 600; }
+.perfil-form label span { font-size: 0.85rem; font-weight: 400; color: #56615b; }
+.perfil-form input { width: 100%; padding: 0.6rem; border: 1px solid #b9c2bd; border-radius: 4px; font: inherit; }
+.perfil-form button, .perfil-datos button { border: 0; border-radius: 4px; padding: 0.6rem 1rem; background: #123a2b; color: #fff; cursor: pointer; }
+.perfil-form button:disabled { opacity: 0.65; cursor: wait; }
+.perfil-estado { padding: 0.75rem; border-radius: 4px; }
+.perfil-estado.error { color: #8a1717; background: #fbe8e8; }
+.perfil-estado.exito { color: #145c36; background: #e6f5eb; }
+
+/* Notificacion generica reutilizada en Viajes y Auth (mismo estilo que perfil-estado) */
+.notificacion { padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem; }
+.notificacion.error { color: #8a1717; background: #fbe8e8; }
+.notificacion.exito { color: #145c36; background: #e6f5eb; }
+.perfil-datos { display: grid; gap: 1rem; margin: 1.5rem 0; padding: 1.25rem; background: #fff; border-radius: 6px; }
+.perfil-datos div { display: grid; gap: 0.2rem; }
+.perfil-datos span { font-size: 0.9rem; color: #56615b; }
+.perfil-datos strong { font-weight: 600; }
+.perfil-acciones { display: flex; gap: 0.75rem; }
+.perfil-cancelar { background: #56615b !important; }
+
+@media (max-width: 560px) {
+  .nav { flex-wrap: wrap; }
+  .perfil-acciones { flex-direction: column; }
+}
+
+.auth-rol-selector {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.auth-rol-selector button {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  background: #f5f5f5;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.auth-rol-selector button.activo {
+  background: #222;
+  color: #fff;
+  border-color: #222;
+}
+
+.solicitud-encomienda { max-width: 760px; }
+.solicitud-encomienda-cabecera { margin-bottom: 1.5rem; }
+.solicitud-encomienda-cabecera h1 { margin: 0.25rem 0; }
+.solicitud-encomienda-cabecera > p:last-child { color: #56615b; }
+.solicitud-encomienda-etiqueta { margin: 0; color: #26704d; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; }
+.solicitud-encomienda-form { display: grid; grid-template-columns: 1fr 1.4fr; gap: 1rem; }
+.solicitud-encomienda-form fieldset { min-width: 0; margin: 0; padding: 1rem; border: 1px solid var(--borde); border-radius: 8px; background: var(--card); color: var(--texto); }
+.solicitud-encomienda-form legend { padding: 0 0.35rem; color: var(--texto); font-weight: 700; }
+.solicitud-remitente p { margin: 0 0 0.35rem; font-weight: 700; }
+.solicitud-remitente span { display: block; margin-top: 0.25rem; color: var(--texto-2); overflow-wrap: anywhere; }
+.solicitud-destinatario { display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; }
+.solicitud-encomienda-form label { display: grid; gap: 0.4rem; color: var(--texto); font-weight: 600; }
+.solicitud-encomienda-form input,
+.solicitud-encomienda-form textarea,
+.solicitud-encomienda-form select { width: 100%; min-width: 0; padding: 0.65rem; border: 1px solid var(--borde); border-radius: 8px; font: inherit; background: var(--input); color: var(--texto); }
+.solicitud-encomienda-form input:focus,
+.solicitud-encomienda-form textarea:focus,
+.solicitud-encomienda-form select:focus { outline: 2px solid #71717a; outline-offset: 1px; }
+.solicitud-encomienda-form select option { background: var(--card); color: var(--texto); }
+.solicitud-campo-ancho { grid-column: 1 / -1; }
+.solicitud-caracteristicas { grid-column: 1 / -1; }
+.solicitud-caracteristicas span { color: var(--texto-2); font-size: 0.9rem; font-weight: 400; }
+.solicitud-descripcion-otro { grid-column: 1 / -1; max-width: 520px; }
+.solicitud-encomienda-form > button { grid-column: 1 / -1; justify-self: start; border: 1px solid var(--primario); border-radius: 8px; padding: 0.7rem 1rem; background: var(--primario); color: var(--primario-texto); font: inherit; cursor: pointer; }
+.solicitud-encomienda-form > button:disabled { opacity: 0.65; cursor: wait; }
+.solicitud-formulario-acciones { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.solicitud-formulario-acciones button:not(.boton-secundario) { border: 1px solid var(--primario); border-radius: 8px; padding: 0.7rem 1rem; background: var(--primario); color: var(--primario-texto); font: inherit; cursor: pointer; }
+.solicitud-formulario-acciones button:disabled { opacity: 0.65; cursor: wait; }
+.encomiendas-menu { display: grid; justify-items: start; gap: 0.75rem; }
+.encomiendas-menu button { min-height: 44px; border: 1px solid var(--primario); border-radius: 8px; padding: 0.7rem 1rem; background: var(--primario); color: var(--primario-texto); font: inherit; cursor: pointer; text-align: left; }
+.boton-secundario { border: 1px solid var(--borde); border-radius: 8px; padding: 0.65rem 1rem; background: var(--activo); color: var(--texto); font: inherit; cursor: pointer; }
+.boton-secundario:hover { background: #303036; }
+.solicitudes-lista { display: grid; gap: 0.75rem; margin-bottom: 1rem; }
+.solicitud-item { position: relative; display: flex; justify-content: space-between; gap: 1rem; padding: 1rem; border: 1px solid var(--borde); border-radius: 8px; background: var(--card); color: var(--texto); }
+.solicitud-item-contenido { min-width: 0; }
+.solicitud-item-contenido h2 { margin: 0 0 0.65rem; color: var(--texto); font-size: 1rem; }
+.solicitud-item-contenido p { margin: 0.35rem 0; overflow-wrap: anywhere; }
+.solicitud-item-menu { position: relative; flex: 0 0 auto; }
+.solicitud-item-menu > button { width: 2.5rem; height: 2.5rem; border: 1px solid var(--borde); border-radius: 8px; background: var(--activo); color: var(--texto); font-size: 1.5rem; line-height: 1; cursor: pointer; }
+.solicitud-menu-opciones { position: absolute; z-index: 1; top: calc(100% + 0.25rem); right: 0; display: grid; min-width: 9rem; padding: 0.25rem; border: 1px solid var(--borde); border-radius: 8px; background: var(--card); box-shadow: 0 8px 24px #0008; }
+.solicitud-menu-opciones button { padding: 0.6rem 0.75rem; border: 0; border-radius: 5px; background: transparent; color: var(--texto); font: inherit; text-align: left; cursor: pointer; }
+.solicitud-menu-opciones button:hover { background: var(--activo); }
+.encomiendas-secciones { display: inline-flex; gap: 0.25rem; margin: 0 0 1rem; padding: 0.25rem; border: 1px solid var(--borde); border-radius: 8px; background: var(--card); }
+.encomiendas-secciones button { min-height: 40px; padding: 0.5rem 0.85rem; border: 0; border-radius: 6px; background: transparent; color: var(--texto-2); font: inherit; cursor: pointer; }
+.encomiendas-secciones button.activo { background: var(--activo); color: var(--texto); }
+.solicitud-item-comisionista { padding-top: 3.25rem; }
+.solicitud-item-comisionista .solicitud-item-menu { position: absolute; top: 0.5rem; right: 0.5rem; }
+.solicitud-item-comisionista > .solicitud-estado { position: absolute; top: 0.8rem; right: 3.5rem; display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; font-weight: 700; }
+.solicitud-estado > span { width: 0.65rem; height: 0.65rem; border-radius: 50%; background: #b84036; }
+.solicitud-estado-aceptado > span { background: #e2b52e; }
+.solicitud-estado-retirado > span { background: #27835c; }
+.solicitud-item-comisionista > button { align-self: flex-end; margin-left: auto; border: 1px solid var(--primario); border-radius: 8px; padding: 0.65rem 1rem; background: var(--primario); color: var(--primario-texto); font: inherit; cursor: pointer; }
+.solicitud-historial { margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--divisor); }
+.solicitud-historial p { color: var(--texto-2); font-size: 0.9rem; }
+.solicitud-encomienda .notificacion.error { color: #fecaca; background: #2f1a1b; border: 1px solid #862d2e; }
+.solicitud-encomienda .notificacion.exito { color: #bbf7d0; background: #12261c; border: 1px solid #1a6737; }
+.mis-traslados > .card { background: var(--card); border-color: var(--borde); }
+
+@media (max-width: 620px) {
+  .solicitud-encomienda-form,
+  .solicitud-destinatario { grid-template-columns: 1fr; }
+  .solicitud-encomienda-form fieldset,
+  .solicitud-campo-ancho,
+  .solicitud-caracteristicas,
+  .solicitud-encomienda-form > button { grid-column: 1; }
+  .solicitud-formulario-acciones { grid-column: 1; }
+  .solicitud-item { gap: 0.5rem; padding: 0.75rem; }
+  .solicitud-item-comisionista { padding-top: 3.25rem; }
+}

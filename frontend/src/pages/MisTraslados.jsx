@@ -77,7 +77,7 @@ export default function MisTraslados() {
   }
 
   return (
-    <section>
+    <section className="mis-traslados">
       <div className="barra-pagina">
         <div>
           <h2>Mis traslados</h2>

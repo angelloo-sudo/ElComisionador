@@ -23,6 +23,11 @@ CREATE TABLE IF NOT EXISTS usuarios (
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS email_verificado BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255);
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS reset_token_expira TIMESTAMP;
+-- Actualiza bases existentes sin afectar los datos.
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS apellido VARCHAR(120);
+ALTER TABLE usuarios
+  ADD COLUMN IF NOT EXISTS rol VARCHAR(20) NOT NULL DEFAULT 'cliente'
+  CHECK (rol IN ('comisionista', 'cliente', 'administrador'));
 
 -- Datos de contacto propios de un cliente. 1 a 1 con usuarios: solo existe una fila
 -- aca cuando el usuario tiene rol = 'cliente'. Si se borra el usuario (baja, US12),
@@ -30,11 +35,12 @@ ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS reset_token_expira TIMESTAMP;
 -- NOTA: dni y telefono son obligatorios a nivel de aplicacion (ver validators/),
 -- no se marcan NOT NULL aca para no romper bases ya creadas con datos previos.
 CREATE TABLE IF NOT EXISTS clientes (
-  id          SERIAL PRIMARY KEY,
-  usuario_id  INTEGER NOT NULL UNIQUE REFERENCES usuarios(id) ON DELETE CASCADE,
-  dni         VARCHAR(20),
-  telefono    VARCHAR(40),
-  creado_en   TIMESTAMP DEFAULT NOW()
+  id                                  SERIAL PRIMARY KEY,
+  usuario_id                          INTEGER NOT NULL UNIQUE REFERENCES usuarios(id) ON DELETE CASCADE,
+  dni                                 VARCHAR(20),
+  telefono                            VARCHAR(40),
+  primera_solicitud_encomienda_realizada BOOLEAN NOT NULL DEFAULT false,
+  creado_en                           TIMESTAMP DEFAULT NOW()
 );
 
 -- Datos de perfil propios de un comisionista. 1 a 1 con usuarios, igual que "clientes":
@@ -52,6 +58,8 @@ CREATE TABLE IF NOT EXISTS comisionistas (
   foto_perfil   TEXT,
   creado_en     TIMESTAMP DEFAULT NOW()
 );
+ALTER TABLE clientes
+  ADD COLUMN IF NOT EXISTS primera_solicitud_encomienda_realizada BOOLEAN NOT NULL DEFAULT false;
 
 -- Si tu base ya existia de antes (con barrio/calle/altura/descripcion), esto la
 -- pone al dia sin perder el resto de los datos. Correr una sola vez.
@@ -91,14 +99,109 @@ CREATE TABLE IF NOT EXISTS encomiendas (
   id                     SERIAL PRIMARY KEY,
   viaje_id               INTEGER REFERENCES viajes(id) ON DELETE SET NULL,
   cliente_remitente_id   INTEGER REFERENCES clientes(id) ON DELETE SET NULL,
+  remitente_nombre       VARCHAR(241),
+  remitente_telefono     VARCHAR(40),
+  direccion_retiro       VARCHAR(200),
   destinatario_nombre    VARCHAR(120) NOT NULL,
   destinatario_telefono  VARCHAR(40),
   destinatario_direccion VARCHAR(200),
+  tipo_contenido         VARCHAR(30) CHECK (tipo_contenido IN ('electronica', 'ropa', 'alimentos', 'libros', 'hogar', 'documentacion', 'juguetes', 'otro')),
+  peso_kg                NUMERIC(8,2) CHECK (peso_kg > 0),
+  dimensiones            VARCHAR(10) CHECK (dimensiones IN ('0.5x0.5', '1x1', '2x2')),
+  fragil                 BOOLEAN,
   descripcion            TEXT,
   monto_flete            NUMERIC(12,2) DEFAULT 0,
-  estado                 VARCHAR(20) DEFAULT 'recibido'
-                         CHECK (estado IN ('recibido', 'en_viaje', 'entregado')),
-  creado_en              TIMESTAMP DEFAULT NOW()
+  estado                 VARCHAR(20) NOT NULL DEFAULT 'pendiente',
+  estado_pago            VARCHAR(20)
+                         CHECK (estado_pago IN ('pendiente', 'pagado', 'reembolsado')),
+  fecha_solicitud        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  creado_en              TIMESTAMP DEFAULT NOW(),
+  CHECK (peso_kg IS NULL OR peso_kg > 0),
+  CHECK (dimensiones IS NULL OR dimensiones IN ('0.5x0.5', '1x1', '2x2'))
+);
+
+ALTER TABLE encomiendas
+  ADD COLUMN IF NOT EXISTS tipo_contenido VARCHAR(30)
+    CHECK (tipo_contenido IN ('electronica', 'ropa', 'alimentos', 'libros', 'hogar', 'documentacion', 'juguetes', 'otro'));
+ALTER TABLE encomiendas
+  ADD COLUMN IF NOT EXISTS tamano VARCHAR(10)
+    CHECK (tamano IN ('pequeno', 'mediano', 'grande'));
+ALTER TABLE encomiendas ADD COLUMN IF NOT EXISTS fragil BOOLEAN;
+ALTER TABLE encomiendas ADD COLUMN IF NOT EXISTS remitente_nombre VARCHAR(241);
+ALTER TABLE encomiendas ADD COLUMN IF NOT EXISTS remitente_telefono VARCHAR(40);
+ALTER TABLE encomiendas ADD COLUMN IF NOT EXISTS direccion_retiro VARCHAR(200);
+ALTER TABLE encomiendas ADD COLUMN IF NOT EXISTS peso_kg NUMERIC(8,2) CHECK (peso_kg > 0);
+ALTER TABLE encomiendas
+  ADD COLUMN IF NOT EXISTS dimensiones VARCHAR(10)
+    CHECK (dimensiones IN ('0.5x0.5', '1x1', '2x2'));
+ALTER TABLE encomiendas
+  ADD COLUMN IF NOT EXISTS estado_pago VARCHAR(20);
+ALTER TABLE encomiendas ADD COLUMN IF NOT EXISTS fecha_solicitud TIMESTAMPTZ;
+
+UPDATE encomiendas
+SET dimensiones = CASE tamano
+  WHEN 'pequeno' THEN '0.5x0.5'
+  WHEN 'mediano' THEN '1x1'
+  WHEN 'grande' THEN '2x2'
+  ELSE dimensiones
+END
+WHERE dimensiones IS NULL;
+UPDATE encomiendas SET fecha_solicitud = creado_en WHERE fecha_solicitud IS NULL;
+ALTER TABLE encomiendas ALTER COLUMN fecha_solicitud SET DEFAULT NOW();
+ALTER TABLE encomiendas ALTER COLUMN fecha_solicitud SET NOT NULL;
+
+ALTER TABLE encomiendas ALTER COLUMN estado SET DEFAULT 'pendiente';
+ALTER TABLE encomiendas DROP CONSTRAINT IF EXISTS encomiendas_estado_check;
+UPDATE encomiendas SET estado = 'pendiente' WHERE estado = 'recibido';
+ALTER TABLE encomiendas
+  ADD CONSTRAINT encomiendas_estado_check
+  CHECK (estado IN ('pendiente', 'aceptado', 'retirado', 'recibido', 'en_viaje', 'entregado'));
+ALTER TABLE encomiendas ALTER COLUMN estado_pago DROP NOT NULL;
+ALTER TABLE encomiendas ALTER COLUMN estado_pago DROP DEFAULT;
+ALTER TABLE encomiendas DROP CONSTRAINT IF EXISTS encomiendas_estado_pago_check;
+UPDATE encomiendas
+SET estado_pago = CASE
+  WHEN estado IN ('aceptado', 'en_viaje', 'entregado') THEN COALESCE(estado_pago, 'pendiente')
+  ELSE NULL
+END;
+ALTER TABLE encomiendas
+  ADD CONSTRAINT encomiendas_estado_pago_check
+  CHECK (estado_pago IS NULL OR estado_pago IN ('pendiente', 'pagado', 'reembolsado'));
+
+CREATE TABLE IF NOT EXISTS historial_encomiendas (
+  id             SERIAL PRIMARY KEY,
+  encomienda_id  INTEGER NOT NULL REFERENCES encomiendas(id) ON DELETE CASCADE,
+  estado         VARCHAR(20) NOT NULL,
+  fecha_hora     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (estado IN ('pendiente', 'aceptado', 'retirado', 'recibido', 'en_viaje', 'entregado'))
+);
+
+ALTER TABLE historial_encomiendas DROP CONSTRAINT IF EXISTS historial_encomiendas_estado_check;
+ALTER TABLE historial_encomiendas
+  ADD CONSTRAINT historial_encomiendas_estado_check
+  CHECK (estado IN ('pendiente', 'aceptado', 'retirado', 'recibido', 'en_viaje', 'entregado'));
+
+CREATE OR REPLACE FUNCTION registrar_historial_estado_encomienda()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' OR OLD.estado IS DISTINCT FROM NEW.estado THEN
+    INSERT INTO historial_encomiendas (encomienda_id, estado)
+    VALUES (NEW.id, NEW.estado);
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS encomiendas_historial_estado ON encomiendas;
+CREATE TRIGGER encomiendas_historial_estado
+AFTER INSERT OR UPDATE ON encomiendas
+FOR EACH ROW EXECUTE FUNCTION registrar_historial_estado_encomienda();
+
+UPDATE clientes c
+SET primera_solicitud_encomienda_realizada = true
+WHERE EXISTS (
+  SELECT 1 FROM encomiendas e
+  WHERE e.cliente_remitente_id = c.id
 );
 
 -- Epica 4: pasajeros y su relacion con viajes
