@@ -10,6 +10,7 @@ import ViajeEditar from './pages/ViajeEditar.jsx'
 import Encomiendas from './pages/Encomiendas.jsx'
 import Clientes from './pages/Clientes.jsx'
 import Perfil from './pages/Perfil.jsx'
+import MisTraslados from './pages/MisTraslados.jsx'
 import Icon from './components/Icon.jsx'
 import Avatar from './components/Avatar.jsx'
 import { Logo, Modal } from './components/ui.jsx'
@@ -28,6 +29,7 @@ function fechaDeHoy() {
 }
 
 function tituloDePagina(ruta, esComisionista) {
+  if (ruta.startsWith('/mis-traslados')) return 'Mis traslados'
   if (ruta.endsWith('/editar')) return 'Modificar viaje'
   if (ruta.startsWith('/viajes/nuevo')) return 'Registrar viaje'
   if (ruta.startsWith('/viajes')) return 'Viajes'
@@ -90,8 +92,7 @@ export default function App() {
     navegar('/')
   }
 
-  // Las pantallas de Viajes y Encomiendas son
-  // exclusivas del comisionista; el cliente solo ve su propia cuenta (Mi perfil).
+  // Viajes y Encomiendas son del comisionista; el cliente gestiona sus traslados y perfil.
   const esComisionista = usuario?.rol === 'comisionista' || usuario?.rol === 'administrador'
   const nombreCompleto = `${usuario?.nombre ?? ''} ${usuario?.apellido ?? ''}`.trim()
   const claseNav = ({ isActive }) => `nav-item${isActive ? ' activo' : ''}`
@@ -106,6 +107,7 @@ export default function App() {
           {esComisionista && <NavLink to="/viajes" className={claseNav}><Icon nombre="logo" /> Viajes</NavLink>}
           {esComisionista && <NavLink to="/encomiendas" className={claseNav}><Icon nombre="package" /> Encomiendas</NavLink>}
           {esComisionista && <NavLink to="/clientes" className={claseNav}><Icon nombre="users" /> Clientes</NavLink>}
+          {usuario?.rol === 'cliente' && <NavLink to="/mis-traslados" className={claseNav}><Icon nombre="logo" /> Mis traslados</NavLink>}
         </nav>
         <div className="sidebar-fondo">
           <p className="nav-titulo">Cuenta</p>
@@ -141,6 +143,7 @@ export default function App() {
             {esComisionista && <Route path="/viajes/:id/editar" element={<ViajeEditar />} />}
             {esComisionista && <Route path="/encomiendas" element={<Encomiendas />} />}
             {esComisionista && <Route path="/clientes" element={<Clientes />} />}
+            {usuario?.rol === 'cliente' && <Route path="/mis-traslados" element={<MisTraslados />} />}
             <Route path="/perfil" element={<Perfil onCuentaDadaDeBaja={() => salir('baja')} />} />
           </Routes>
         </main>

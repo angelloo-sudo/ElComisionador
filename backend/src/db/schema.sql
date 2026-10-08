@@ -13,17 +13,16 @@ CREATE TABLE IF NOT EXISTS usuarios (
   rol           VARCHAR(20) NOT NULL DEFAULT 'cliente'
                 CHECK (rol IN ('comisionista', 'cliente', 'administrador')),
   activo        BOOLEAN NOT NULL DEFAULT true,
-<<<<<<< HEAD
   reset_token         VARCHAR(255),
   reset_token_expira  TIMESTAMP,
-=======
-  email_verificado BOOLEAN NOT NULL DEFAULT true,
->>>>>>> b5a57f498a2bbd624367a8a574f20cc39efd43de
+  email_verificado    BOOLEAN NOT NULL DEFAULT true,
   creado_en     TIMESTAMP DEFAULT NOW()
 );
 
 -- Las cuentas existentes se conservan verificadas; los nuevos registros se crean pendientes.
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS email_verificado BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255);
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS reset_token_expira TIMESTAMP;
 
 -- Datos de contacto propios de un cliente. 1 a 1 con usuarios: solo existe una fila
 -- aca cuando el usuario tiene rol = 'cliente'. Si se borra el usuario (baja, US12),
@@ -117,8 +116,13 @@ CREATE TABLE IF NOT EXISTS viaje_pasajero (
   punto_ascenso  VARCHAR(200),
   punto_descenso VARCHAR(200),
   monto          NUMERIC(12,2) DEFAULT 0,
+  estado         VARCHAR(20) NOT NULL DEFAULT 'activo'
+                 CHECK (estado IN ('activo', 'cancelado')),
   PRIMARY KEY (viaje_id, pasajero_id)
 );
+
+ALTER TABLE viaje_pasajero ADD COLUMN IF NOT EXISTS estado VARCHAR(20) NOT NULL DEFAULT 'activo'
+  CHECK (estado IN ('activo', 'cancelado'));
 
 -- Epica 5: ingresos y gastos
 CREATE TABLE IF NOT EXISTS ingresos (

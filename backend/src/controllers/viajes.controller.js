@@ -46,7 +46,7 @@ export async function listar(req, res, next) {
     const { rows } = await query(
       `WITH base AS (
          SELECT v.*,
-                (SELECT COUNT(*)::int FROM viaje_pasajero vp WHERE vp.viaje_id = v.id) AS ocupados,
+                (SELECT COUNT(*)::int FROM viaje_pasajero vp WHERE vp.viaje_id = v.id AND vp.estado = 'activo') AS ocupados,
                 (v.fecha + COALESCE(v.hora_llegada, v.hora_salida, TIME '23:59'))
                   <= (NOW() AT TIME ZONE 'America/Argentina/Cordoba') AS ya_paso
          FROM viajes v
@@ -77,7 +77,7 @@ export async function obtener(req, res, next) {
 
     const resultado = await query(
       `SELECT v.*,
-              (SELECT COUNT(*)::int FROM viaje_pasajero vp WHERE vp.viaje_id = v.id) AS ocupados
+              (SELECT COUNT(*)::int FROM viaje_pasajero vp WHERE vp.viaje_id = v.id AND vp.estado = 'activo') AS ocupados
        FROM viajes v WHERE v.id = $1 AND v.usuario_id = $2`,
       [id, usuarioId]
     )
@@ -288,7 +288,7 @@ export async function actualizar(req, res, next) {
     const { rows: objetivos } = aplicaASerie
       ? await query(
           `SELECT v.id, v.fecha::text AS fecha,
-                  (SELECT COUNT(*)::int FROM viaje_pasajero vp WHERE vp.viaje_id = v.id) AS ocupados
+                  (SELECT COUNT(*)::int FROM viaje_pasajero vp WHERE vp.viaje_id = v.id AND vp.estado = 'activo') AS ocupados
            FROM viajes v
            WHERE v.serie_id = $1 AND v.usuario_id = $2 AND v.estado = 'programado'
              AND (v.fecha, v.hora_salida) >= (SELECT fecha, hora_salida FROM viajes WHERE id = $3)
@@ -298,7 +298,7 @@ export async function actualizar(req, res, next) {
         )
       : await query(
           `SELECT v.id, v.fecha::text AS fecha,
-                  (SELECT COUNT(*)::int FROM viaje_pasajero vp WHERE vp.viaje_id = v.id) AS ocupados
+                  (SELECT COUNT(*)::int FROM viaje_pasajero vp WHERE vp.viaje_id = v.id AND vp.estado = 'activo') AS ocupados
            FROM viajes v WHERE v.id = $1`,
           [id]
         )
