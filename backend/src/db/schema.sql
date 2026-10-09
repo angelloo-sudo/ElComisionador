@@ -15,7 +15,11 @@ CREATE TABLE IF NOT EXISTS usuarios (
   activo        BOOLEAN NOT NULL DEFAULT true,
   reset_token         VARCHAR(255),
   reset_token_expira  TIMESTAMP,
+<<<<<<< Updated upstream
   email_verificado    BOOLEAN NOT NULL DEFAULT true,
+=======
+  email_verificado BOOLEAN NOT NULL DEFAULT true,
+>>>>>>> Stashed changes
   creado_en     TIMESTAMP DEFAULT NOW()
 );
 
