@@ -28,7 +28,9 @@ if (command === 'create') {
   const direction = command === 'down' ? 'down' : 'up'
   const fake = command === 'baseline'
   const dryRun = args.includes('--dry-run')
-  const requiredVariables = ['DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME']
+  const requiredVariables = process.env.DATABASE_URL
+    ? []
+    : ['DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME']
   const missingVariables = requiredVariables.filter((name) => !process.env[name])
 
   if (missingVariables.length > 0) {
@@ -42,14 +44,22 @@ if (command === 'create') {
     console.warn('Baseline: no se ejecutará SQL; node-pg-migrate marcará las migraciones pendientes como aplicadas.')
   }
 
+  const databaseConfig = process.env.DATABASE_URL
+    ? { connectionString: process.env.DATABASE_URL }
+    : {
+        host: process.env.DB_HOST,
+        port: Number(process.env.DB_PORT),
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_NAME,
+      }
+
+  if (process.env.DB_SSL === 'true') {
+    databaseConfig.ssl = { rejectUnauthorized: false }
+  }
+
   await runner({
-    databaseUrl: {
-      host: process.env.DB_HOST,
-      port: Number(process.env.DB_PORT),
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME,
-    },
+    databaseUrl: databaseConfig,
     dir: migrationsDir,
     direction,
     migrationsTable: 'pgmigrations',
