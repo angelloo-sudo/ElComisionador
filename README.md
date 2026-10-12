@@ -71,13 +71,7 @@ ecto:
    npm run install:all
    ```
 
-2. Crear la base y las tablas (una vez creada la base "comitrack" en PostgreSQL):
-
-   ```bash
-   psql -U postgres -d comitrack -f backend/src/db/schema.sql
-   ```
-
-3. Copiar los archivos de entorno y completarlos:
+2. Copiar los archivos de entorno y completar `backend/.env` con los datos de PostgreSQL:
 
    ```bash
    copy backend\.env.example backend\.env
@@ -86,11 +80,19 @@ ecto:
 
    (en Windows CMD. En Git Bash usar `cp` en vez de `copy`.)
 
-   Para enviar verificaciones de correo, completa en `backend/.env` `SMTP_HOST`, `SMTP_PORT`,
+3. Crear la base "comitrack" en PostgreSQL y aplicar el esquema inicial:
+
+   ```bash
+   npm --prefix backend run migrate:up
+   ```
+
+   Para bases existentes que ya tienen el esquema actual cargado desde `schema.sql`, seguí el paso de baseline de [backend/MIGRATIONS.md](backend/MIGRATIONS.md) en lugar de recrear la base.
+
+4. Para enviar verificaciones de correo, completa en `backend/.env` `SMTP_HOST`, `SMTP_PORT`,
    `SMTP_USER`, `SMTP_PASSWORD` y `SMTP_FROM`. `FRONTEND_URL` debe apuntar al sitio que abrirá
    el enlace (en desarrollo, `http://localhost:5173`).
 
-4. Levantar backend + frontend a la vez:
+5. Levantar backend + frontend a la vez:
 
    ```bash
    npm run dev

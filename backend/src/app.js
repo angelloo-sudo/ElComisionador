@@ -1,4 +1,7 @@
 // Configuracion de la app Express: middlewares y rutas.
+import { existsSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import express from 'express'
 import cors from 'cors'
 import morgan from 'morgan'
@@ -18,6 +21,17 @@ app.get('/api/health', (req, res) => {
 
 // Todas las rutas del negocio cuelgan de /api
 app.use('/api', router)
+
+const frontendDistPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../frontend/dist')
+const frontendIndexPath = resolve(frontendDistPath, 'index.html')
+
+if (existsSync(frontendIndexPath)) {
+  app.use(express.static(frontendDistPath))
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next()
+    res.sendFile(frontendIndexPath)
+  })
+}
 
 // Manejo central de errores (siempre al final)
 app.use(errorHandler)
