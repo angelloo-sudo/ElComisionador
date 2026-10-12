@@ -6,6 +6,7 @@ import pasajerosRoutes from './pasajeros.routes.js'
 import finanzasRoutes from './finanzas.routes.js'
 import localidadesRoutes from './localidades.routes.js'
 import clientesRoutes from './clientes.routes.js'
+import solicitudesRoutes from './solicitudes.routes.js'
 
 const router = Router()
 
@@ -16,5 +17,6 @@ router.use('/pasajeros', pasajerosRoutes)
 router.use('/finanzas', finanzasRoutes)
 router.use('/localidades', localidadesRoutes)
 router.use('/clientes', clientesRoutes)
+router.use('/solicitudes', solicitudesRoutes)
 
 export default router

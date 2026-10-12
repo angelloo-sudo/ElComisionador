@@ -4,10 +4,12 @@ import nodemailer from 'nodemailer'
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: Number(process.env.SMTP_PORT ?? 587),
-  secure: Number(process.env.SMTP_PORT) === 465, // true solo si usan el puerto 465
+  // Mismas variables que email.service.js (verificacion de correo): SMTP_SECURE y SMTP_PASSWORD.
+  // SMTP_PASS se sigue aceptando por compatibilidad con .env anteriores.
+  secure: process.env.SMTP_SECURE === 'true' || Number(process.env.SMTP_PORT) === 465,
   auth: {
     user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
+    pass: process.env.SMTP_PASSWORD || process.env.SMTP_PASS,
   },
 })
 

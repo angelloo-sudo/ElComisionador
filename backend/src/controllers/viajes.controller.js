@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto'
 import { query, pool } from '../config/db.js'
 import { generarFechas } from '../validators/viaje.validador.js'
-import { rangoViaje, seSuperponen, extenderSeries } from '../services/viajes.service.js'
+import { rangoViaje, seSuperponen, extenderSeries, SQL_OCUPADOS } from '../services/viajes.service.js'
 
 // US16 - Listar viajes del comisionista logueado, con filtros opcionales por
 // query string: ?fecha=YYYY-MM-DD&origen=texto&destino=texto&estado=programado
@@ -46,7 +46,7 @@ export async function listar(req, res, next) {
     const { rows } = await query(
       `WITH base AS (
          SELECT v.*,
-                (SELECT COUNT(*)::int FROM viaje_pasajero vp WHERE vp.viaje_id = v.id AND vp.estado = 'activo') AS ocupados,
+                ${SQL_OCUPADOS} AS ocupados,
                 (v.fecha + COALESCE(v.hora_llegada, v.hora_salida, TIME '23:59'))
                   <= (NOW() AT TIME ZONE 'America/Argentina/Cordoba') AS ya_paso
          FROM viajes v
@@ -77,14 +77,11 @@ export async function obtener(req, res, next) {
 
     const resultado = await query(
       `SELECT v.*,
-              (SELECT COUNT(*)::int
-               FROM viaje_pasajero vp
-               WHERE vp.viaje_id = v.id AND vp.estado = 'activo') AS ocupados,
+              ${SQL_OCUPADOS} AS ocupados,
               COALESCE((
-                SELECT json_agg(p.nombre ORDER BY p.nombre)
-                FROM viaje_pasajero vp
-                JOIN pasajeros p ON p.id = vp.pasajero_id
-                WHERE vp.viaje_id = v.id AND vp.estado = 'activo'
+                SELECT json_agg(s.nombre || ' ' || s.apellido || CASE WHEN s.cantidad_pasajeros > 1 THEN ' (' || s.cantidad_pasajeros || ' pasajeros)' ELSE '' END ORDER BY s.id)
+                FROM solicitudes_viaje s
+                WHERE s.viaje_id = v.id AND s.tipo = 'pasajero' AND s.estado = 'aceptada'
               ), '[]'::json) AS pasajeros
        FROM viajes v WHERE v.id = $1 AND v.usuario_id = $2`,
       [id, usuarioId]
@@ -296,7 +293,7 @@ export async function actualizar(req, res, next) {
     const { rows: objetivos } = aplicaASerie
       ? await query(
           `SELECT v.id, v.fecha::text AS fecha,
-                  (SELECT COUNT(*)::int FROM viaje_pasajero vp WHERE vp.viaje_id = v.id AND vp.estado = 'activo') AS ocupados
+                  ${SQL_OCUPADOS} AS ocupados
            FROM viajes v
            WHERE v.serie_id = $1 AND v.usuario_id = $2 AND v.estado = 'programado'
              AND (v.fecha, v.hora_salida) >= (SELECT fecha, hora_salida FROM viajes WHERE id = $3)
@@ -306,7 +303,7 @@ export async function actualizar(req, res, next) {
         )
       : await query(
           `SELECT v.id, v.fecha::text AS fecha,
-                  (SELECT COUNT(*)::int FROM viaje_pasajero vp WHERE vp.viaje_id = v.id AND vp.estado = 'activo') AS ocupados
+                  ${SQL_OCUPADOS} AS ocupados
            FROM viajes v WHERE v.id = $1`,
           [id]
         )

@@ -10,10 +10,9 @@ export async function listar(req, res, next) {
          AND (
            EXISTS (
              SELECT 1
-             FROM pasajeros p
-             JOIN viaje_pasajero vp ON vp.pasajero_id = p.id
-             JOIN viajes v ON v.id = vp.viaje_id
-             WHERE p.cliente_id = c.id AND v.usuario_id = $1
+             FROM solicitudes_viaje s
+             JOIN viajes v ON v.id = s.viaje_id
+             WHERE s.cliente_id = c.id AND v.usuario_id = $1 AND s.estado = 'aceptada'
            )
            OR EXISTS (
              SELECT 1

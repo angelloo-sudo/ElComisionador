@@ -7,10 +7,11 @@ import Dashboard from './pages/Dashboard.jsx'
 import Viajes from './pages/Viajes.jsx'
 import ViajeNuevo from './pages/ViajeNuevo.jsx'
 import ViajeEditar from './pages/ViajeEditar.jsx'
-import Encomiendas from './pages/Encomiendas.jsx'
 import Clientes from './pages/Clientes.jsx'
 import Perfil from './pages/Perfil.jsx'
 import MisTraslados from './pages/MisTraslados.jsx'
+import Postulaciones from './pages/Postulaciones.jsx'
+import SolicitarViaje from './pages/SolicitarViaje.jsx'
 import Icon from './components/Icon.jsx'
 import Avatar from './components/Avatar.jsx'
 import { Logo, Modal } from './components/ui.jsx'
@@ -29,11 +30,12 @@ function fechaDeHoy() {
 }
 
 function tituloDePagina(ruta, esComisionista) {
+  if (ruta.startsWith('/mis-traslados/solicitar')) return 'Solicitar viaje'
   if (ruta.startsWith('/mis-traslados')) return 'Mis traslados'
+  if (ruta.startsWith('/solicitudes')) return 'Solicitudes'
   if (ruta.endsWith('/editar')) return 'Modificar viaje'
   if (ruta.startsWith('/viajes/nuevo')) return 'Registrar viaje'
   if (ruta.startsWith('/viajes')) return 'Viajes'
-  if (ruta.startsWith('/encomiendas')) return 'Encomiendas'
   if (ruta.startsWith('/clientes')) return 'Clientes'
   if (ruta.startsWith('/perfil')) return 'Mi perfil'
   return esComisionista ? 'Resumen' : 'Inicio'
@@ -106,7 +108,7 @@ export default function App() {
         <nav className="nav-lista">
           <NavLink to="/" end className={claseNav}><Icon nombre="grid" /> {esComisionista ? 'Resumen' : 'Inicio'}</NavLink>
           {esComisionista && <NavLink to="/viajes" className={claseNav}><Icon nombre="logo" /> Viajes</NavLink>}
-          {(esComisionista || esCliente) && <NavLink to="/encomiendas" className={claseNav}><Icon nombre="package" /> Encomiendas</NavLink>}
+          {esComisionista && <NavLink to="/solicitudes" className={claseNav}><Icon nombre="checkcircle" /> Solicitudes</NavLink>}
           {esComisionista && <NavLink to="/clientes" className={claseNav}><Icon nombre="users" /> Clientes</NavLink>}
           {usuario?.rol === 'cliente' && <NavLink to="/mis-traslados" className={claseNav}><Icon nombre="logo" /> Mis traslados</NavLink>}
         </nav>
@@ -142,9 +144,10 @@ export default function App() {
             {esComisionista && <Route path="/viajes" element={<Viajes />} />}
             {esComisionista && <Route path="/viajes/nuevo" element={<ViajeNuevo />} />}
             {esComisionista && <Route path="/viajes/:id/editar" element={<ViajeEditar />} />}
-            {(esComisionista || esCliente) && <Route path="/encomiendas" element={<Encomiendas usuario={usuario} />} />}
+            {esComisionista && <Route path="/solicitudes" element={<Postulaciones />} />}
             {esComisionista && <Route path="/clientes" element={<Clientes />} />}
             {usuario?.rol === 'cliente' && <Route path="/mis-traslados" element={<MisTraslados />} />}
+            {usuario?.rol === 'cliente' && <Route path="/mis-traslados/solicitar/:id" element={<SolicitarViaje />} />}
             <Route path="/perfil" element={<Perfil onCuentaDadaDeBaja={() => salir('baja')} />} />
           </Routes>
         </main>

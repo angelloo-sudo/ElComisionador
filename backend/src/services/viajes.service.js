@@ -2,6 +2,11 @@
 import { query, pool } from '../config/db.js'
 import { fechaFinRepeticion } from '../validators/viaje.validador.js'
 
+// Lugares ocupados de un viaje (la consulta debe tener la tabla viajes con alias "v"):
+// pasajeros de las solicitudes de pasajero ya ACEPTADAS por el comisionista (US19).
+export const SQL_OCUPADOS = `COALESCE((SELECT SUM(s.cantidad_pasajeros)::int FROM solicitudes_viaje s
+  WHERE s.viaje_id = v.id AND s.tipo = 'pasajero' AND s.estado = 'aceptada'), 0)`
+
 // Superposicion de horarios: cada viaje ocupa el bloque [hora_salida, hora_llegada].
 // Los viajes viejos (cargados antes de existir hora_llegada) no tienen ese dato, asi
 // que para ellos se asume un bloque de DURACION_POR_DEFECTO_MINUTOS desde la salida.
