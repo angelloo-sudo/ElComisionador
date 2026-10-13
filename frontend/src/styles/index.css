@@ -275,6 +275,28 @@ textarea.area:focus { border-color: var(--foco); }
 .barra-pagina { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
 .barra-pagina h2 { font-size: 20px; font-weight: 600; }
 .barra-pagina p { color: var(--texto-2); margin-top: 4px; }
+.busqueda-clientes {
+  display: flex; align-items: center; gap: 11px; width: min(100%, 360px); min-height: 44px;
+  padding: 0 13px; border: 1px solid var(--borde); border-radius: 12px;
+  background: var(--card); color: var(--texto-3);
+  transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease;
+}
+.busqueda-clientes:hover { border-color: var(--borde-fuerte); background: var(--hover); }
+.busqueda-clientes:focus-within {
+  border-color: var(--foco); background: var(--input);
+  box-shadow: 0 0 0 3px rgba(161, 161, 170, .1);
+}
+.busqueda-clientes input {
+  flex: 1; min-width: 0; height: 42px; padding: 0; border: 0; outline: 0;
+  background: transparent; color: var(--texto); font: inherit; font-size: 13px;
+}
+.busqueda-clientes input::placeholder { color: var(--texto-3); }
+.busqueda-clientes input::-webkit-search-cancel-button { display: none; }
+.busqueda-clientes-limpiar {
+  display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px;
+  padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--texto-3);
+}
+.busqueda-clientes-limpiar:hover { background: var(--activo); color: var(--texto); }
 .filtros { padding: 18px 20px; margin-bottom: 20px; display: grid; grid-template-columns: repeat(4, 1fr) auto; gap: 14px; align-items: end; }
 .filtros .acciones { display: flex; gap: 8px; }
 .tabla-wrap { overflow-x: auto; }
@@ -319,6 +341,7 @@ textarea.area:focus { border-color: var(--foco); }
   .nav-lista { grid-template-columns: repeat(2, 1fr); }
   .sidebar-fondo { margin-top: 8px; }
   .topbar, .contenido { padding-left: 16px; padding-right: 16px; }
+  .busqueda-clientes { width: 100%; }
   .grilla-2, .grilla-3, .datos-grilla { grid-template-columns: 1fr; }
   .auth-card { padding: 24px 20px; }
   .toast { right: 16px; }

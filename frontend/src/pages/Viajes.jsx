@@ -7,6 +7,7 @@ import CancelarViajeModal from '../components/viajes/CancelarViajeModal.jsx'
 import Icon from '../components/Icon.jsx'
 import { Campo, Alerta, Toast, BadgeEstado, ESTADOS_VIAJE, formatoFecha, textoRepeticion } from '../components/ui.jsx'
 import { codigoViaje } from './ViajeNuevo.jsx'
+import { estadoVisibleViaje, hoyEnCordoba } from '../utils/estadoViaje.js'
 
 const FILTROS_VACIOS = { fecha: '', origen: '', destino: '', estado: '' }
 
@@ -25,6 +26,7 @@ export default function Viajes() {
   const cerrarToast = useCallback(() => setToast(null), [])
   const [filtros, setFiltros] = useState(FILTROS_VACIOS)
   const [filtrosAplicados, setFiltrosAplicados] = useState(FILTROS_VACIOS)
+  const [ahora, setAhora] = useState(() => new Date())
 
   const hayFiltrosActivos = Object.values(filtrosAplicados).some(Boolean)
 
@@ -54,6 +56,20 @@ export default function Viajes() {
 
   useEffect(() => {
     cargarViajes(filtrosAplicados)
+  }, [cargarViajes, filtrosAplicados])
+
+  useEffect(() => {
+    let dia = hoyEnCordoba()
+    const intervalo = setInterval(() => {
+      const actual = new Date()
+      setAhora(actual)
+      const diaActual = hoyEnCordoba(actual)
+      if (diaActual !== dia) {
+        dia = diaActual
+        cargarViajes(filtrosAplicados)
+      }
+    }, 60_000)
+    return () => clearInterval(intervalo)
   }, [cargarViajes, filtrosAplicados])
 
   // US16: el viaje ya se cancelo en el backend; se recarga la lista y se avisa.
@@ -165,16 +181,16 @@ export default function Viajes() {
                   <td>{viaje.hora_salida ? viaje.hora_salida.slice(0, 5) : '-'}</td>
                   <td>{viaje.hora_llegada ? viaje.hora_llegada.slice(0, 5) : '-'}</td>
                   <td>{viaje.ocupados ?? 0} / {viaje.cupo_total ?? '-'}</td>
-                  <td><BadgeEstado estado={viaje.estado} /></td>
+                  <td><BadgeEstado estado={viaje.estado} fecha={viaje.fecha} ahora={ahora} /></td>
                   <td>
                     <div className="acciones-fila">
                       <button type="button" className="btn btn-chico" onClick={() => setViajeDetalleId(viaje.id)}>Ver detalle</button>
-                      {viaje.estado === 'programado' && (
+                      {estadoVisibleViaje(viaje.estado, viaje.fecha, ahora) === 'programado' && (
                         <button type="button" className="btn btn-chico" onClick={() => navegar(`/viajes/${viaje.id}/editar`)}>
                           <Icon nombre="pencil" tamano={13} /> Modificar
                         </button>
                       )}
-                      {viaje.estado === 'programado' && (
+                      {estadoVisibleViaje(viaje.estado, viaje.fecha, ahora) === 'programado' && (
                         <button type="button" className="btn btn-chico btn-peligro" onClick={() => setViajeACancelar(viaje)}>Cancelar</button>
                       )}
                     </div>
@@ -192,6 +208,7 @@ export default function Viajes() {
           onClose={() => setViajeDetalleId(null)}
           onCancelar={(viaje) => setViajeACancelar(viaje)}
           onModificar={(viaje) => navegar(`/viajes/${viaje.id}/editar`)}
+          ahora={ahora}
         />
       )}
 

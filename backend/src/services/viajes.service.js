@@ -1,6 +1,7 @@
 // Reglas de negocio compartidas sobre viajes.
 import { query, pool } from '../config/db.js'
 import { fechaFinRepeticion } from '../validators/viaje.validador.js'
+import { obtenerEstadoViaje } from './estado-viaje.js'
 
 // Lugares ocupados de un viaje (la consulta debe tener la tabla viajes con alias "v"):
 // pasajeros de las solicitudes de pasajero ya ACEPTADAS por el comisionista (US19).
@@ -30,8 +31,8 @@ export function seSuperponen(rangoA, rangoB) {
 // US16: un viaje cancelado (o ya iniciado/finalizado) no admite nuevas asociaciones.
 // Usar esta funcion antes de asociar un pasajero (US19) o una encomienda (Epica 5) a un viaje.
 export async function viajeAdmiteAsociaciones(viajeId) {
-  const { rows } = await query('SELECT estado FROM viajes WHERE id = $1', [viajeId])
-  return rows.length > 0 && rows[0].estado === 'programado'
+  const { rows } = await query('SELECT estado, fecha::text AS fecha FROM viajes WHERE id = $1', [viajeId])
+  return rows.length > 0 && obtenerEstadoViaje(rows[0].estado, rows[0].fecha) === 'programado'
 }
 
 // Viajes repetitivos "hasta que se cancelen".

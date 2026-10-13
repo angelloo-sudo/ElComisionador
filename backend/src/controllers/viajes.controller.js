@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { query, pool } from '../config/db.js'
 import { generarFechas } from '../validators/viaje.validador.js'
 import { rangoViaje, seSuperponen, extenderSeries, SQL_OCUPADOS } from '../services/viajes.service.js'
+import { hoyEnCordoba, obtenerEstadoViaje } from '../services/estado-viaje.js'
 
 // US16 - Listar viajes del comisionista logueado, con filtros opcionales por
 // query string: ?fecha=YYYY-MM-DD&origen=texto&destino=texto&estado=programado
@@ -33,40 +34,42 @@ export async function listar(req, res, next) {
       valores.push(`%${destino}%`)
       condiciones.push(`destino ILIKE $${valores.length}`)
     }
-    if (estado) {
-      valores.push(estado)
-      condiciones.push(`estado = $${valores.length}`)
-    }
-
-    // Los viajes repetitivos se registran todos, pero en el listado de cada serie se muestra de a
-    // uno: el proximo que todavia no se realizo (y cuando pasa su horario aparece el siguiente).
-    // Se ven siempre los que estan en curso o finalizados, los cancelados que ya pasaron y el
-    // primer cancelado futuro de la serie (para que se vea que se cancelo). Los viajes unicos
-    // se muestran todos. La hora de "ahora" se toma en la zona horaria de Cordoba.
+    // Los viajes repetitivos se registran todos, pero se muestran como maximo la ultima ocurrencia
+    // vencida y la proxima programada. Tambien se ven siempre los que estan en curso o finalizados,
+    // los cancelados que ya pasaron y el primer cancelado futuro de la serie. Los viajes unicos se
+    // muestran todos. La fecha actual se toma en la zona horaria de Cordoba; un viaje de hoy sigue
+    // programado hasta que termine el dia, independientemente de su hora de llegada.
     const { rows } = await query(
       `WITH base AS (
          SELECT v.*,
+                v.fecha::text AS fecha_iso,
                 ${SQL_OCUPADOS} AS ocupados,
-                (v.fecha + COALESCE(v.hora_llegada, v.hora_salida, TIME '23:59'))
-                  <= (NOW() AT TIME ZONE 'America/Argentina/Cordoba') AS ya_paso
+                (v.fecha < $${valores.length + 1}::date) AS ya_paso
          FROM viajes v
          WHERE ${condiciones.join(' AND ')}
        ), ordenados AS (
          SELECT base.*,
-                ROW_NUMBER() OVER (PARTITION BY serie_id, estado, ya_paso ORDER BY fecha, hora_salida) AS orden_serie
+                ROW_NUMBER() OVER (PARTITION BY serie_id, estado, ya_paso ORDER BY fecha, hora_salida) AS orden_serie,
+                ROW_NUMBER() OVER (PARTITION BY serie_id, estado, ya_paso ORDER BY fecha DESC, hora_salida DESC) AS orden_serie_desc
          FROM base
        )
        SELECT * FROM ordenados
        WHERE serie_id IS NULL
           OR estado IN ('en_curso', 'finalizado')
           OR (estado = 'programado' AND NOT ya_paso AND orden_serie = 1)
+          OR (estado = 'programado' AND ya_paso AND orden_serie_desc = 1)
           OR (estado = 'cancelado' AND (ya_paso OR orden_serie = 1))
        ORDER BY fecha, hora_salida`,
-      valores
+      [...valores, hoyEnCordoba()]
     )
 
     // Columnas auxiliares de la consulta: no forman parte del viaje.
-    res.json(rows.map(({ ya_paso, orden_serie, ...viaje }) => viaje))
+    const viajes = rows.map(({ ya_paso, orden_serie, orden_serie_desc, fecha_iso, ...viaje }) => ({
+      ...viaje,
+      fecha: fecha_iso,
+      estado: obtenerEstadoViaje(viaje.estado, fecha_iso),
+    }))
+    res.json(estado ? viajes.filter((viaje) => viaje.estado === estado) : viajes)
   } catch (e) { next(e) }
 }
 
@@ -77,6 +80,7 @@ export async function obtener(req, res, next) {
 
     const resultado = await query(
       `SELECT v.*,
+              v.fecha::text AS fecha_iso,
               ${SQL_OCUPADOS} AS ocupados,
               COALESCE((
                 SELECT json_agg(s.nombre || ' ' || s.apellido || CASE WHEN s.cantidad_pasajeros > 1 THEN ' (' || s.cantidad_pasajeros || ' pasajeros)' ELSE '' END ORDER BY s.id)
@@ -91,7 +95,12 @@ export async function obtener(req, res, next) {
       return res.status(404).json({ mensaje: `Viaje ${id} no encontrado` })
     }
 
-    res.status(200).json(resultado.rows[0])
+    const { fecha_iso, ...viaje } = resultado.rows[0]
+    res.status(200).json({
+      ...viaje,
+      fecha: fecha_iso,
+      estado: obtenerEstadoViaje(viaje.estado, fecha_iso),
+    })
   } catch (e) { next(e) }
 }
 
@@ -189,7 +198,7 @@ export async function cancelar(req, res, next) {
     }
 
     const { rows } = await query(
-      'SELECT id, estado, serie_id FROM viajes WHERE id = $1 AND usuario_id = $2',
+      'SELECT id, estado, fecha::text AS fecha, serie_id FROM viajes WHERE id = $1 AND usuario_id = $2',
       [id, usuarioId]
     )
     if (rows.length === 0) {
@@ -197,7 +206,7 @@ export async function cancelar(req, res, next) {
     }
 
     const viaje = rows[0]
-    if (viaje.estado !== 'programado') {
+    if (obtenerEstadoViaje(viaje.estado, viaje.fecha) !== 'programado') {
       return res.status(409).json({ mensaje: 'Solo se pueden cancelar viajes en estado Programado' })
     }
 
@@ -224,7 +233,7 @@ export async function cancelar(req, res, next) {
       // Al cancelar una serie ("siguientes" o "toda") solo se cancelan los viajes que todavia no
       // se realizaron; los que ya pasaron de fecha/horario quedan como estan.
       const soloPendientes = viaje.serie_id && alcance !== 'este'
-        ? " AND (fecha + COALESCE(hora_llegada, hora_salida, TIME '23:59')) > (NOW() AT TIME ZONE 'America/Argentina/Cordoba')"
+        ? " AND fecha >= (NOW() AT TIME ZONE 'America/Argentina/Cordoba')::date"
         : ''
       const resultado = await cliente.query(
         `UPDATE viajes SET estado = 'cancelado'
@@ -280,7 +289,7 @@ export async function actualizar(req, res, next) {
       return res.status(404).json({ mensaje: `Viaje ${id} no encontrado` })
     }
     const viaje = rows[0]
-    if (viaje.estado !== 'programado') {
+    if (obtenerEstadoViaje(viaje.estado, viaje.fecha) !== 'programado') {
       return res.status(409).json({ mensaje: 'Solo se pueden modificar viajes en estado Programado' })
     }
 
@@ -297,8 +306,7 @@ export async function actualizar(req, res, next) {
            FROM viajes v
            WHERE v.serie_id = $1 AND v.usuario_id = $2 AND v.estado = 'programado'
              AND (v.fecha, v.hora_salida) >= (SELECT fecha, hora_salida FROM viajes WHERE id = $3)
-             AND (v.id = $3 OR (v.fecha + COALESCE(v.hora_llegada, v.hora_salida, TIME '23:59'))
-                               > (NOW() AT TIME ZONE 'America/Argentina/Cordoba'))`,
+             AND (v.id = $3 OR v.fecha >= (NOW() AT TIME ZONE 'America/Argentina/Cordoba')::date)`,
           [viaje.serie_id, usuarioId, id]
         )
       : await query(

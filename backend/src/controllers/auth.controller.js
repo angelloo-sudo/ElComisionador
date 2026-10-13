@@ -349,7 +349,7 @@ export async function verificarEmail(req, res, next) {
         return res.status(400).json({ mensaje: 'El enlace ya no corresponde a una cuenta activa' })
       }
       if (existente.rows[0].email_verificado) {
-        return res.json({ mensaje: 'El correo ya estaba verificado' })
+        return res.json({ mensaje: 'El correo ya está verificado' })
       }
       return res.status(400).json({ mensaje: 'El enlace de verificación no es válido' })
     }

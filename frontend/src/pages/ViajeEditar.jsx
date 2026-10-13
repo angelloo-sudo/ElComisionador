@@ -5,7 +5,7 @@ import { api } from '../api/client.js'
 import LocalidadSelect from '../components/LocalidadSelect.jsx'
 import useLocalidades from '../hooks/useLocalidades.js'
 import Icon from '../components/Icon.jsx'
-import { Campo, Alerta, BadgeEstado, formatoFecha, textoRepeticion } from '../components/ui.jsx'
+import { Campo, Alerta, BadgeEstado, ESTADOS_VIAJE, formatoFecha, textoRepeticion } from '../components/ui.jsx'
 import { codigoViaje, hoyISO, SelectorHora } from './ViajeNuevo.jsx'
 
 const partirHora = (h) => (h ? [h.slice(0, 2), h.slice(3, 5)] : ['', ''])
@@ -146,10 +146,11 @@ export default function ViajeEditar() {
     )
   }
   if (original.estado !== 'programado') {
+    const estadoTexto = ESTADOS_VIAJE[original.estado]?.texto ?? original.estado
     return (
       <section>
         {migas}
-        <Alerta tipo="aviso" titulo="Este viaje ya no se puede modificar">Solo se pueden modificar viajes en estado Programado. Este viaje está en estado {original.estado === 'cancelado' ? 'Cancelado' : original.estado === 'en_curso' ? 'En curso' : 'Finalizado'}.</Alerta>
+        <Alerta tipo="aviso" titulo="Este viaje ya no se puede modificar">Solo se pueden modificar viajes en estado Programado. Este viaje está en estado {estadoTexto}.</Alerta>
         <button type="button" className="btn" onClick={() => navegar('/viajes')}>Volver a Viajes</button>
       </section>
     )
@@ -237,7 +238,7 @@ export default function ViajeEditar() {
           <div className="card-cabecera"><h2>Resumen</h2></div>
           <div className="card-cuerpo">
             <div className="resumen-fila"><span>N° de viaje</span><strong>{codigoViaje(original.id)}</strong></div>
-            <div className="resumen-fila"><span>Estado</span><BadgeEstado estado={original.estado} /></div>
+            <div className="resumen-fila"><span>Estado</span><BadgeEstado estado={original.estado} fecha={original.fecha} /></div>
             <div className="resumen-fila"><span>Recorrido</span><strong>{form.origen && form.destino ? `${form.origen} → ${form.destino}` : '—'}</strong></div>
             <div className="resumen-fila"><span>Salida</span><strong>{form.fecha && horaSalida ? `${formatoFecha(`${form.fecha}T00:00:00`)} · ${horaSalida}` : '—'}</strong></div>
             <div className="resumen-fila"><span>Llegada (aprox.)</span><strong>{horaLlegada || '—'}</strong></div>
