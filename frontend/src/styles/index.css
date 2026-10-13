@@ -442,31 +442,336 @@ textarea.area:focus { border-color: var(--foco); }
 
 
 /* =====================================================================
-   MASCOTA  -  camioncito chibi a la izquierda de "ComiTrack"
-   El cuerpo toma el color primario del tema; la cara es siempre oscura.
+   PALETA TINTO  -  rojo tinto + blanco/marron. Tres variantes para elegir:
+   data-tema = tinto-claro | tinto-oscuro | tinto-vino
    ===================================================================== */
-.mascota { display: block; flex-shrink: 0; overflow: visible; }
-.mascota .m-caja { fill: var(--primario); }
-.mascota .m-cabina { fill: color-mix(in srgb, var(--primario) 70%, #fff); }
-.mascota .m-raya { fill: #fff; opacity: .38; }
-.mascota .m-parabrisas { fill: #fffdf7; }
-.mascota .m-faro { fill: #fff3b0; }
-.mascota .m-ojo { fill: #1c1917; }
-.mascota .m-brillo { fill: #fff; }
-.mascota .m-llanta { fill: #1c1917; stroke: #e7e5e4; stroke-width: 1.4; }
-.mascota .m-centro { fill: #a8a29e; }
-.mascota .m-rayo { stroke: #a8a29e; stroke-width: 1.3; stroke-linecap: round; }
-.mascota .sombra-mascota { fill: #000; opacity: .28; animation: sombra-m 1.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
-.mascota .cuerpo-mascota { animation: rebote-m 1.8s ease-in-out infinite; }
-.mascota .m-ojo, .mascota .m-brillo { transform-box: fill-box; transform-origin: center; animation: parpadeo-m 5s infinite; }
-.mascota .m-rueda { transform-box: fill-box; transform-origin: center; animation: girar-m 1.6s linear infinite; }
-.auth-card .mascota { margin-right: 2px; }
-.marca { align-items: center; }
-@keyframes rebote-m { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.6px); } }
-@keyframes sombra-m { 0%, 100% { transform: scaleX(1); opacity: .28; } 50% { transform: scaleX(.88); opacity: .18; } }
-@keyframes parpadeo-m { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
-@keyframes girar-m { to { transform: rotate(360deg); } }
-.marca:hover .mascota .cuerpo-mascota { animation-duration: .5s; }
+
+/* Tinto claro: fondo hueso, tarjetas blancas, texto marron, barra lateral tinto profundo */
+:root[data-tema='tinto-claro'] {
+  --bg: #f6efe9; --sidebar: #4a0d1c; --card: #ffffff; --borde: #e7d9d0; --borde-fuerte: #cdb5a8; --divisor: #f0e5de;
+  --input: #fffdfb; --hover: #f4e9e2; --activo: #ecdcd2; --foco: #7b1230;
+  --texto: #2d1b17; --texto-2: #6c5148; --texto-3: #9b8278;
+  --primario: #7b1230; --primario-hover: #961a3d; --primario-texto: #fff7f2;
+  --rojo: #c0392b; --rojo-fondo: #fdebe8; --rojo-borde: #efb3aa; --rojo-texto: #7d1f16;
+  --verde: #2f7d4f; --verde-fondo: #e6f3ea; --verde-borde: #a8d3b7; --verde-texto: #1b4d30;
+  --ambar: #b7791f; --ambar-fondo: #fbf0da; --ambar-borde: #ebcc8d; --ambar-texto: #6e4710;
+  --info: #8a5a2b; --info-fondo: #f5e9db; --info-borde: #dcc0a0;
+  --sombra: 0 10px 30px rgba(74, 13, 28, .16); --velo: rgba(45, 27, 23, .5);
+}
+:root[data-tema='tinto-claro'] .sidebar {
+  color: var(--texto);
+  --texto: #fbf0e8; --texto-2: #e0c3b8; --texto-3: #b8938a; --hover: #5f1527; --activo: #7b1b33; --borde: #6a1c30; --primario: #f3dcca;
+}
+:root[data-tema='tinto-claro'] .sidebar .nav-item.activo { box-shadow: inset 3px 0 0 #f3dcca; }
+:root[data-tema='tinto-claro'] .sidebar .nav-item.peligro { color: #ffb4a8; }
+:root[data-tema='tinto-claro'] .sidebar .nav-item.peligro:hover { background: #6e1a2c; }
+:root[data-tema='tinto-claro'] input[type='date']::-webkit-calendar-picker-indicator { filter: none; opacity: .6; }
+
+/* Tinto oscuro: marron casi negro, acento tinto vivo, texto crema */
+:root[data-tema='tinto-oscuro'] {
+  --bg: #170d0b; --sidebar: #110907; --card: #22130f; --borde: #3a2520; --borde-fuerte: #573630; --divisor: #2c1a16;
+  --input: #170d0b; --hover: #2b1814; --activo: #3a201b; --foco: #c93352;
+  --texto: #f7ede5; --texto-2: #cbb0a3; --texto-3: #9a7f73;
+  --primario: #b3203f; --primario-hover: #cc2a4c; --primario-texto: #fff6f1;
+  --rojo: #ff7068; --rojo-fondo: #2e1311; --rojo-borde: #7a2a25; --rojo-texto: #ffc9c3;
+  --verde: #6fcf97; --verde-fondo: #13261b; --verde-borde: #25663f; --verde-texto: #bdecd0;
+  --ambar: #f2b94b; --ambar-fondo: #2c2010; --ambar-borde: #7a5a1c; --ambar-texto: #fbe0a5;
+  --info: #d9a066; --info-fondo: #2a1d12; --info-borde: #6e4a25;
+  --sombra: 0 10px 30px rgba(0,0,0,.55); --velo: rgba(10, 4, 3, .7);
+}
+:root[data-tema='tinto-oscuro'] .sidebar { --primario: #e3c7b2; }
+:root[data-tema='tinto-oscuro'] .nav-item.activo { box-shadow: inset 3px 0 0 var(--primario); }
+
+/* Tinto vino: todo en tonos vino, botones y detalles en crema */
+:root[data-tema='tinto-vino'] {
+  --bg: #2b0b14; --sidebar: #1f070e; --card: #3a1220; --borde: #5a2434; --borde-fuerte: #7a3548; --divisor: #4a1a2a;
+  --input: #2b0b14; --hover: #471728; --activo: #5a2034; --foco: #f1d9c6;
+  --texto: #fdf3ec; --texto-2: #e1c2b8; --texto-3: #b48f88;
+  --primario: #f1d9c6; --primario-hover: #fff0e3; --primario-texto: #3a0d19;
+  --rojo: #ff8a80; --rojo-fondo: #4a1418; --rojo-borde: #94312f; --rojo-texto: #ffd0ca;
+  --verde: #7fdca4; --verde-fondo: #17301f; --verde-borde: #2c7547; --verde-texto: #c6f1d6;
+  --ambar: #f5c15a; --ambar-fondo: #3a2810; --ambar-borde: #86621c; --ambar-texto: #fbe3ac;
+  --info: #e0a878; --info-fondo: #3a2314; --info-borde: #7d5230;
+  --sombra: 0 10px 30px rgba(0,0,0,.5); --velo: rgba(18, 3, 8, .72);
+}
+
+/* Cafe y tinto: marron como color principal (barra lateral, botones, texto), rojo tinto como
+   secundario (seleccion, pestanas, foco, contadores) y detalles blancos (tarjetas, textos sobre color). */
+:root[data-tema='cafe-tinto'] {
+  --bg: #f6f0ea; --sidebar: #3a2318; --card: #ffffff; --borde: #e5d8cc; --borde-fuerte: #cdb8a8; --divisor: #f0e6dc;
+  --input: #ffffff; --hover: #f4ebe3; --activo: #ecdfd3; --foco: #8c1c34;
+  --texto: #2b1a12; --texto-2: #6a5043; --texto-3: #9a8478;
+  --primario: #5c3a28; --primario-hover: #744733; --primario-texto: #ffffff;
+  --acento: #8c1c34; --acento-hover: #a3243f;
+  --rojo: #c0392b; --rojo-fondo: #fdebe8; --rojo-borde: #efb3aa; --rojo-texto: #7d1f16;
+  --verde: #2f7d4f; --verde-fondo: #e6f3ea; --verde-borde: #a8d3b7; --verde-texto: #1b4d30;
+  --ambar: #b7791f; --ambar-fondo: #fbf0da; --ambar-borde: #ebcc8d; --ambar-texto: #6e4710;
+  --info: #8a5a2b; --info-fondo: #f5e9db; --info-borde: #dcc0a0;
+  --sombra: 0 10px 30px rgba(58, 35, 24, .18); --velo: rgba(43, 26, 18, .55);
+}
+:root[data-tema='cafe-tinto'] .sidebar {
+  color: var(--texto);
+  --texto: #ffffff; --texto-2: #e3cfc1; --texto-3: #b09685; --hover: #4a2e21; --activo: #e8d6c1; --borde: #55392c; --primario: #f6e9dc;
+}
+:root[data-tema='cafe-tinto'] .sidebar .nav-titulo { color: #d9b9a3; }
+:root[data-tema='cafe-tinto'] .sidebar .nav-item.activo { color: #3a2318; font-weight: 600; box-shadow: inset 4px 0 0 #b08968; }
+:root[data-tema='cafe-tinto'] .sidebar .nav-item.activo .icono { color: #5c3a28; }
+:root[data-tema='cafe-tinto'] .sidebar .nav-item.peligro { color: #ffb9ad; }
+:root[data-tema='cafe-tinto'] .sidebar .nav-item.peligro:hover { background: #5a2330; }
+:root[data-tema='cafe-tinto'] .topbar h1 { color: var(--primario); }
+:root[data-tema='cafe-tinto'] .pestanas button.activo { border-bottom-color: var(--acento); color: var(--acento); }
+:root[data-tema='cafe-tinto'] .pestana-contador { background: var(--acento); color: #fff; }
+:root[data-tema='cafe-tinto'] .seccion-titulo, :root[data-tema='cafe-tinto'] .auth-kicker { color: var(--acento); }
+:root[data-tema='cafe-tinto'] .tabla thead th { background: #f7efe8; color: var(--primario); }
+:root[data-tema='cafe-tinto'] .card-cabecera h2, :root[data-tema='cafe-tinto'] .modal h2 { color: var(--primario); }
+:root[data-tema='cafe-tinto'] .segmentado button.activo, :root[data-tema='cafe-tinto'] .dias button.activo { border-color: var(--acento); background: var(--acento); color: #fff; }
+:root[data-tema='cafe-tinto'] .input-wrap:focus-within, :root[data-tema='cafe-tinto'] textarea.area:focus { border-color: var(--acento); box-shadow: 0 0 0 3px color-mix(in srgb, var(--acento) 20%, transparent); }
+:root[data-tema='cafe-tinto'] .btn-primario:hover:not(:disabled) { box-shadow: 0 6px 18px color-mix(in srgb, var(--primario) 30%, transparent); }
+:root[data-tema='cafe-tinto'] .btn-peligro { background: var(--acento); border-color: var(--acento); color: #fff; }
+:root[data-tema='cafe-tinto'] .btn-peligro:hover:not(:disabled) { background: var(--acento-hover); }
+:root[data-tema='cafe-tinto'] input[type='date']::-webkit-calendar-picker-indicator { filter: none; opacity: .6; }
+:root[data-tema='cafe-tinto'] .avatar-iniciales { background: var(--acento); color: #fff; border-color: var(--acento); }
+:root[data-tema='cafe-tinto'] ::selection { background: color-mix(in srgb, var(--acento) 30%, transparent); }
+
+/* ---------------------------------------------------------------------
+   CAFE Y TINTO - ANIMADO: fondo vivo, ruta con camion, brillos e interacciones.
+   Todo es CSS; se apaga solo con "reducir movimiento" del sistema.
+   --------------------------------------------------------------------- */
+@keyframes deriva { 0% { transform: translate(0, 0) rotate(0deg) scale(1); } 50% { transform: translate(3%, -2%) rotate(3deg) scale(1.08); } 100% { transform: translate(-3%, 3%) rotate(-3deg) scale(1.04); } }
+@keyframes puntos { to { background-position: 52px 26px; } }
+@keyframes rayas { to { background-position: 56px 0; } }
+@keyframes corre { to { background-position: 200% 0; } }
+@keyframes brillo { 0%, 55% { transform: translateX(-130%); } 100% { transform: translateX(130%); } }
+@keyframes meneo { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-14deg) scale(1.1); } 75% { transform: rotate(10deg) scale(1.1); } }
+@keyframes aparecer { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes aparecer-simple { from { opacity: 0; } to { opacity: 1; } }
+@keyframes emerger { from { opacity: 0; transform: translateY(14px) scale(.95); } to { opacity: 1; transform: none; } }
+@keyframes entrar-derecha { from { opacity: 0; transform: translateX(26px); } to { opacity: 1; transform: none; } }
+@keyframes llenar { from { width: 0; } }
+@keyframes cinta { to { background-position: 23px 0; } }
+@keyframes sello { 0% { opacity: 0; transform: scale(.4) rotate(-12deg); } 70% { transform: scale(1.12) rotate(2deg); } 100% { opacity: 1; transform: none; } }
+@keyframes latir { 0%, 100% { box-shadow: 0 0 0 0 currentColor; opacity: 1; } 50% { box-shadow: 0 0 0 5px transparent; opacity: .55; } }
+@keyframes pasa { from { left: -140px; } to { left: calc(100% + 40px); } }
+@keyframes bote { from { transform: translateY(0); } to { transform: translateY(-3px); } }
+@keyframes ruta { to { background-position: 56px 50%, 0 0; } }
+@keyframes nube { from { transform: translateX(-20vw); } to { transform: translateX(120vw); } }
+
+/* Fondo vivo: manchas suaves de tinto, caramelo y beige que se mueven + puntitos que avanzan */
+:root[data-tema='cafe-tinto'] body { background: #f6f0ea; }
+:root[data-tema='cafe-tinto'] body::before {
+  content: ''; position: fixed; inset: -25%; z-index: -2; pointer-events: none;
+  background:
+    radial-gradient(38vmax 38vmax at 14% 22%, rgba(140, 28, 52, .13), transparent 62%),
+    radial-gradient(44vmax 44vmax at 86% 14%, rgba(190, 150, 112, .30), transparent 62%),
+    radial-gradient(50vmax 50vmax at 72% 92%, rgba(236, 219, 200, .95), transparent 62%),
+    radial-gradient(34vmax 34vmax at 8% 86%, rgba(92, 58, 40, .11), transparent 62%);
+  animation: deriva 26s ease-in-out infinite alternate;
+}
+:root[data-tema='cafe-tinto'] body::after {
+  content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(rgba(92, 58, 40, .22) 1.1px, transparent 1.5px) 0 0 / 26px 26px;
+  -webkit-mask-image: radial-gradient(ellipse 85% 70% at 60% 35%, #000 0%, transparent 78%);
+  mask-image: radial-gradient(ellipse 85% 70% at 60% 35%, #000 0%, transparent 78%);
+  animation: puntos 30s linear infinite;
+}
+:root[data-tema='cafe-tinto'] { scrollbar-width: thin; scrollbar-color: #b08968 transparent; }
+:root[data-tema='cafe-tinto'] :focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+
+/* Barra lateral: degradado cafe con brillo tinto, rayas que se deslizan y opcion activa que brilla */
+:root[data-tema='cafe-tinto'] .sidebar {
+  background:
+    radial-gradient(120% 55% at 0% 100%, rgba(140, 28, 52, .55), transparent 62%),
+    radial-gradient(90% 40% at 100% 0%, rgba(201, 162, 124, .20), transparent 60%),
+    linear-gradient(180deg, #46291c 0%, #2c1a11 100%);
+  overflow: hidden; border-right: 0; box-shadow: 4px 0 24px rgba(58, 35, 24, .22);
+}
+:root[data-tema='cafe-tinto'] .sidebar::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(135deg, rgba(255, 255, 255, .04) 0 2px, transparent 2px 14px);
+  animation: rayas 14s linear infinite;
+}
+:root[data-tema='cafe-tinto'] .sidebar > * { position: relative; z-index: 1; }
+:root[data-tema='cafe-tinto'] .nav-item { position: relative; overflow: hidden; transition: background-color .2s ease, transform .2s ease, color .2s ease, box-shadow .2s ease; }
+:root[data-tema='cafe-tinto'] .sidebar .nav-item:hover:not(.activo) { background: rgba(255, 255, 255, .09); transform: translateX(5px); }
+:root[data-tema='cafe-tinto'] .sidebar .nav-item:hover .icono { animation: meneo .55s ease; }
+:root[data-tema='cafe-tinto'] .sidebar .nav-item.activo { transform: translateX(3px); box-shadow: 0 6px 18px rgba(0, 0, 0, .3), inset 4px 0 0 #b08968; }
+:root[data-tema='cafe-tinto'] .sidebar .nav-item.activo::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, .6) 50%, transparent 70%);
+  transform: translateX(-130%); animation: brillo 5s ease-in-out 1.2s infinite;
+}
+:root[data-tema='cafe-tinto'] .marca { transition: transform .25s ease; }
+:root[data-tema='cafe-tinto'] .marca:hover { transform: translateX(3px); }
+
+/* Barra superior: vidrio con cinta de colores que corre */
+:root[data-tema='cafe-tinto'] .topbar { position: relative; background: rgba(255, 255, 255, .78); backdrop-filter: blur(10px); box-shadow: none; }
+:root[data-tema='cafe-tinto'] .topbar::before {
+  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px;
+  background: linear-gradient(90deg, #8c1c34, #c9a27c, #ecdbc8, #c9a27c, #8c1c34); background-size: 200% 100%;
+  animation: corre 9s linear infinite;
+}
+:root[data-tema='cafe-tinto'] .avatar-iniciales { transition: transform .3s cubic-bezier(.3, 1.6, .5, 1), box-shadow .2s; }
+:root[data-tema='cafe-tinto'] .avatar-iniciales:hover { transform: rotate(-10deg) scale(1.12); box-shadow: 0 6px 14px rgba(140, 28, 52, .35); }
+
+/* Contenido: entra escalonado */
+:root[data-tema='cafe-tinto'] .contenido > * { animation: aparecer .5s cubic-bezier(.2, .8, .2, 1) backwards; }
+:root[data-tema='cafe-tinto'] .contenido > *:nth-child(2) { animation-delay: .06s; }
+:root[data-tema='cafe-tinto'] .contenido > *:nth-child(3) { animation-delay: .12s; }
+:root[data-tema='cafe-tinto'] .contenido > *:nth-child(4) { animation-delay: .18s; }
+:root[data-tema='cafe-tinto'] .contenido > *:nth-child(n+5) { animation-delay: .24s; }
+
+/* Tarjetas: etiqueta tinto que se estira y sombra que se levanta al pasar el mouse */
+:root[data-tema='cafe-tinto'] .card { position: relative; transition: box-shadow .3s ease, border-color .3s ease; background: rgba(255, 255, 255, .94); }
+:root[data-tema='cafe-tinto'] .card::before {
+  content: ''; position: absolute; top: -1px; left: 22px; width: 34px; height: 4px; border-radius: 0 0 6px 6px;
+  background: linear-gradient(90deg, var(--acento), #c9a27c); transition: width .4s cubic-bezier(.2, .8, .2, 1);
+}
+:root[data-tema='cafe-tinto'] .card:hover { border-color: #d3bba8; box-shadow: 0 16px 38px rgba(58, 35, 24, .13); }
+:root[data-tema='cafe-tinto'] .card:hover::before { width: 96px; }
+
+/* Botones: brillo que cruza, se hunden al apretar */
+:root[data-tema='cafe-tinto'] .btn { position: relative; overflow: hidden; transition: transform .15s ease, box-shadow .25s ease, background-color .2s ease, border-color .2s ease; }
+:root[data-tema='cafe-tinto'] .btn::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: -90%; width: 55%; pointer-events: none;
+  background: linear-gradient(110deg, transparent, rgba(255, 255, 255, .38), transparent); transform: skewX(-20deg);
+  transition: left .7s ease;
+}
+:root[data-tema='cafe-tinto'] .btn:hover:not(:disabled)::after { left: 140%; }
+:root[data-tema='cafe-tinto'] .btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 18px rgba(58, 35, 24, .2); }
+:root[data-tema='cafe-tinto'] .btn:active:not(:disabled) { transform: translateY(1px) scale(.97); box-shadow: none; }
+:root[data-tema='cafe-tinto'] .btn-primario { background: linear-gradient(135deg, #6a4430, #4a2d1f); border-color: #4a2d1f; }
+:root[data-tema='cafe-tinto'] .btn-primario:hover:not(:disabled) { background: linear-gradient(135deg, #7a503a, #5a3828); }
+:root[data-tema='cafe-tinto'] .segmentado button { transition: transform .15s ease, background-color .2s, border-color .2s, color .2s; }
+:root[data-tema='cafe-tinto'] .segmentado button:hover:not(.activo) { transform: translateY(-2px); border-color: #c9a27c; }
+:root[data-tema='cafe-tinto'] .segmentado button.activo { animation: sello .35s cubic-bezier(.3, 1.6, .5, 1); }
+
+/* Campos */
+:root[data-tema='cafe-tinto'] .input-wrap { transition: border-color .2s, box-shadow .25s, transform .2s; }
+:root[data-tema='cafe-tinto'] .input-wrap:hover { border-color: #c9a27c; }
+:root[data-tema='cafe-tinto'] .input-wrap:focus-within { transform: translateY(-1px); }
+:root[data-tema='cafe-tinto'] .input-wrap .icono { transition: color .2s, transform .25s; }
+:root[data-tema='cafe-tinto'] .input-wrap:focus-within .icono { color: var(--acento); transform: scale(1.15); }
+
+/* Tablas: la fila se ilumina con una barra tinto */
+:root[data-tema='cafe-tinto'] .tabla tbody tr { transition: background-color .2s ease, box-shadow .2s ease; animation: aparecer .45s cubic-bezier(.2, .8, .2, 1) backwards; }
+:root[data-tema='cafe-tinto'] .tabla tbody tr:nth-child(1) { animation-delay: .05s; }
+:root[data-tema='cafe-tinto'] .tabla tbody tr:nth-child(2) { animation-delay: .10s; }
+:root[data-tema='cafe-tinto'] .tabla tbody tr:nth-child(3) { animation-delay: .15s; }
+:root[data-tema='cafe-tinto'] .tabla tbody tr:nth-child(4) { animation-delay: .20s; }
+:root[data-tema='cafe-tinto'] .tabla tbody tr:nth-child(5) { animation-delay: .25s; }
+:root[data-tema='cafe-tinto'] .tabla tbody tr:nth-child(n+6) { animation-delay: .30s; }
+:root[data-tema='cafe-tinto'] .tabla tbody tr:hover { background: linear-gradient(90deg, rgba(140, 28, 52, .08), rgba(201, 162, 124, .10) 40%, transparent); box-shadow: inset 4px 0 0 var(--acento); }
+
+/* Pestanas */
+:root[data-tema='cafe-tinto'] .pestanas button { transition: color .2s, border-color .25s, background-color .2s; }
+:root[data-tema='cafe-tinto'] .pestanas button:hover:not(.activo) { color: var(--acento); border-bottom-color: #c9a27c; background: rgba(201, 162, 124, .12); }
+
+/* Sellos de estado: aparecen con rebote; el pendiente late */
+:root[data-tema='cafe-tinto'] .badge { animation: sello .45s cubic-bezier(.3, 1.6, .5, 1) backwards; }
+:root[data-tema='cafe-tinto'] .badge.ambar.punto::before { animation: latir 1.6s ease-in-out infinite; }
+:root[data-tema='cafe-tinto'] .badge.verde.punto::before { animation: latir 2.6s ease-in-out infinite; }
+
+/* Cupo: barra de rayas que avanza */
+:root[data-tema='cafe-tinto'] .cupo-barra > span {
+  background: repeating-linear-gradient(135deg, #5c3a28 0 8px, #8a5d43 8px 16px); background-size: 23px 23px;
+  animation: llenar 1s cubic-bezier(.2, .8, .2, 1) backwards, cinta 1.2s linear infinite;
+}
+
+/* Modales, avisos */
+:root[data-tema='cafe-tinto'] .modal-overlay { animation: aparecer-simple .2s ease backwards; backdrop-filter: blur(3px); }
+:root[data-tema='cafe-tinto'] .modal { animation: emerger .32s cubic-bezier(.3, 1.3, .5, 1) backwards; }
+:root[data-tema='cafe-tinto'] .toast { animation: entrar-derecha .4s cubic-bezier(.2, .8, .2, 1) backwards; }
+:root[data-tema='cafe-tinto'] .alerta { animation: aparecer .35s ease backwards; }
+
+/* Login: ruta con camioncito que pasa */
+:root[data-tema='cafe-tinto'] .auth-pagina { background: transparent; position: relative; overflow: hidden; }
+:root[data-tema='cafe-tinto'] .auth-pagina::before {
+  content: ''; position: fixed; left: 0; right: 0; bottom: 0; height: 46px; pointer-events: none; z-index: 0;
+  background:
+    linear-gradient(90deg, #f1e3d3 50%, transparent 50%) 0 50% / 56px 3px repeat-x,
+    linear-gradient(180deg, #4a2d1f, #34200f);
+  border-top: 4px solid #8c1c34; animation: ruta 1.4s linear infinite;
+}
+:root[data-tema='cafe-tinto'] .auth-pagina::after {
+  content: ''; position: fixed; left: -140px; bottom: 34px; width: 110px; height: 104px; pointer-events: none; z-index: 0;
+  background: url('../assets/canguro-sprites.png') 100% 0 / 400% 100% no-repeat; filter: drop-shadow(0 6px 4px rgba(58, 35, 24, .25));
+  transform-origin: 50% 100%;
+  animation: pasa 16s linear infinite, salto-ruta 1.9s linear infinite, pies-m 1.9s steps(1, end) infinite;
+}
+@keyframes salto-ruta {
+  0%, 8% { transform: translateY(0) rotate(0deg) scale(1, 1); }
+  18% { transform: translateY(0) rotate(-3deg) scale(1.08, .88); }
+  27% { transform: translateY(-6px) rotate(2deg) scale(.95, 1.08); }
+  36% { transform: translateY(-26px) rotate(4deg) scale(.97, 1.04); }
+  47% { transform: translateY(-58px) rotate(7deg) scale(1, 1); }
+  58% { transform: translateY(-24px) rotate(-2deg) scale(1, 1); }
+  66% { transform: translateY(-3px) rotate(0deg) scale(1.02, .98); }
+  72% { transform: translateY(0) rotate(0deg) scale(1.1, .86); }
+  82% { transform: translateY(0) rotate(0deg) scale(.98, 1.03); }
+  90%, 100% { transform: translateY(0) rotate(0deg) scale(1, 1); }
+}
+
+:root[data-tema='cafe-tinto'] .auth-card { position: relative; z-index: 1; animation: emerger .6s cubic-bezier(.2, .8, .2, 1) backwards; box-shadow: 0 24px 60px rgba(58, 35, 24, .18); }
+:root[data-tema='cafe-tinto'] .auth-card::before {
+  content: ''; position: absolute; top: -5px; left: 0; right: 0; height: 5px; border-radius: 24px 24px 0 0;
+  background: linear-gradient(90deg, #8c1c34, #c9a27c, #8c1c34); background-size: 200% 100%; animation: corre 6s linear infinite;
+}
+
+/* =====================================================================
+   MASCOTA  -  canguro repartidor. El archivo canguro-sprites.png tiene 4 cuadros con el pie
+   en distintas posiciones: extendido (salto) -> medio -> medio -> planta apoyada.
+   Se cambia de cuadro con steps() y el cuerpo se agacha, salta y aterriza con transform.
+   ===================================================================== */
+.mascota { position: relative; display: inline-block; flex-shrink: 0; }
+.m-canguro {
+  position: absolute; z-index: 1; inset: 0; display: block; transform-origin: 50% 100%;
+  background: url('../assets/canguro-sprites.png') 100% 0 / 400% 100% no-repeat;
+  filter: drop-shadow(0 0 1px rgba(255, 255, 255, .9)) drop-shadow(0 0 2px rgba(255, 255, 255, .55));
+  animation: salto-m 1.9s linear infinite, pies-m 1.9s steps(1, end) infinite;
+}
+.m-sombra { position: absolute; left: 20%; right: 20%; bottom: 0; height: 7%; border-radius: 50%; background: rgba(58, 35, 24, .3); filter: blur(1px); animation: sombra-m 1.9s linear infinite; }
+.sidebar .m-sombra { background: rgba(0, 0, 0, .4); }
+.m-viento { position: absolute; z-index: 0; left: 0; height: 2px; border-radius: 2px; background: #c9a27c; opacity: 0; animation: viento-m 1.9s linear infinite; }
+.m-v1 { top: 28%; width: 22%; }
+.m-v2 { top: 46%; width: 28%; background: #8c1c34; }
+.m-v3 { top: 64%; width: 18%; }
+.sidebar .mascota { filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .3)); }
+.marca:hover .m-canguro, .marca:hover .m-sombra, .marca:hover .m-viento { animation-duration: .95s; }
+
+/* cuadros: 100% = planta apoyada, 66.7% y 33.3% = pie girando, 0% = pie extendido en el aire */
+@keyframes pies-m {
+  0%   { background-position: 100% 0; }
+  22%  { background-position: 66.667% 0; }
+  25%  { background-position: 33.333% 0; }
+  28%  { background-position: 0% 0; }
+  58%  { background-position: 33.333% 0; }
+  61%  { background-position: 66.667% 0; }
+  64%  { background-position: 100% 0; }
+  100% { background-position: 100% 0; }
+}
+@keyframes salto-m {
+  0%, 8% { transform: translateY(0) rotate(0deg) scale(1, 1); }
+  18% { transform: translateY(0) rotate(-3deg) scale(1.08, .88); }
+  27% { transform: translateY(-4%) rotate(2deg) scale(.95, 1.08); }
+  36% { transform: translateY(-16%) rotate(4deg) scale(.97, 1.04); }
+  47% { transform: translateY(-34%) rotate(7deg) scale(1, 1); }
+  58% { transform: translateY(-15%) rotate(-2deg) scale(1, 1); }
+  66% { transform: translateY(-2%) rotate(0deg) scale(1.02, .98); }
+  72% { transform: translateY(0) rotate(0deg) scale(1.1, .86); }
+  82% { transform: translateY(0) rotate(0deg) scale(.98, 1.03); }
+  90%, 100% { transform: translateY(0) rotate(0deg) scale(1, 1); }
+}
+@keyframes sombra-m {
+  0%, 8%, 72%, 100% { transform: scaleX(1); opacity: .9; }
+  18% { transform: scaleX(1.1); opacity: 1; }
+  47% { transform: scaleX(.5); opacity: .3; }
+  60% { transform: scaleX(.8); opacity: .6; }
+}
+@keyframes viento-m {
+  0%, 28% { opacity: 0; transform: translateX(8px) scaleX(.3); }
+  38% { opacity: .9; }
+  64%, 100% { opacity: 0; transform: translateX(-12px) scaleX(1); }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
