@@ -1,6 +1,7 @@
 // Piezas visuales reutilizables: campo con icono, alerta, aviso emergente, logo.
 import { useEffect, useState } from 'react'
 import Icon from './Icon.jsx'
+import { estadoVisibleViaje } from '../utils/estadoViaje.js'
 
 // Mascota de ComiTrack: el canguro repartidor con su cajita (salta, deja viento y una sombrita).
 export function Mascota({ ancho = 56, className = '' }) {
@@ -113,10 +114,12 @@ export const ESTADOS_VIAJE = {
   en_curso: { texto: 'En curso', clase: 'ambar' },
   finalizado: { texto: 'Finalizado', clase: 'verde' },
   cancelado: { texto: 'Cancelado', clase: 'rojo' },
+  vencido: { texto: 'Vencido', clase: 'ambar' },
 }
 
-export function BadgeEstado({ estado }) {
-  const e = ESTADOS_VIAJE[estado] ?? { texto: estado, clase: 'gris' }
+export function BadgeEstado({ estado, fecha, ahora }) {
+  const estadoVisible = estadoVisibleViaje(estado, fecha, ahora)
+  const e = ESTADOS_VIAJE[estadoVisible] ?? { texto: estadoVisible, clase: 'gris' }
   return <span className={`badge punto ${e.clase}`}>{e.texto}</span>
 }
 

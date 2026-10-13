@@ -3,8 +3,9 @@ import { useState, useEffect } from 'react'
 import { api } from '../../api/client.js'
 import { Modal, Alerta, BadgeEstado, formatoFecha, textoRepeticion } from '../ui.jsx'
 import { codigoViaje } from '../../pages/ViajeNuevo.jsx'
+import { estadoVisibleViaje } from '../../utils/estadoViaje.js'
 
-export default function ViajeDetalleModal({ viajeId, onClose, onCancelar, onModificar }) {
+export default function ViajeDetalleModal({ viajeId, onClose, onCancelar, onModificar, ahora }) {
   const [viaje, setViaje] = useState(null)
   const [error, setError] = useState(null)
   const [cargando, setCargando] = useState(true)
@@ -34,7 +35,7 @@ export default function ViajeDetalleModal({ viajeId, onClose, onCancelar, onModi
           <div className="resumen-fila"><span>Hora de llegada (aprox.)</span><strong>{viaje.hora_llegada ? viaje.hora_llegada.slice(0, 5) : '-'}</strong></div>
           <div className="resumen-fila"><span>Repetición</span><strong>{textoRepeticion(viaje.repeticion_dias, viaje.serie_id)}</strong></div>
           <div className="resumen-fila"><span>Cupo de pasajeros</span><strong>{viaje.ocupados} / {viaje.cupo_total ?? '-'}</strong></div>
-          <div className="resumen-fila"><span>Estado</span><BadgeEstado estado={viaje.estado} /></div>
+          <div className="resumen-fila"><span>Estado</span><BadgeEstado estado={viaje.estado} fecha={viaje.fecha} ahora={ahora} /></div>
           <div className="resumen-fila"><span>Creado</span><strong>{formatoFecha(viaje.creado_en)}</strong></div>
           <h3 style={{ marginTop: 18 }}>Pasajeros aceptados</h3>
           {viaje.pasajeros.length === 0 ? (
@@ -48,10 +49,10 @@ export default function ViajeDetalleModal({ viajeId, onClose, onCancelar, onModi
       )}
 
       <div className="modal-acciones">
-        {viaje?.estado === 'programado' && onModificar && (
+        {viaje && estadoVisibleViaje(viaje.estado, viaje.fecha, ahora) === 'programado' && onModificar && (
           <button type="button" className="btn" onClick={() => onModificar(viaje)}>Modificar viaje</button>
         )}
-        {viaje?.estado === 'programado' && onCancelar && (
+        {viaje && estadoVisibleViaje(viaje.estado, viaje.fecha, ahora) === 'programado' && onCancelar && (
           <button type="button" className="btn btn-peligro" onClick={() => onCancelar(viaje)}>Cancelar viaje</button>
         )}
         <button type="button" className="btn" onClick={onClose}>Cerrar</button>
