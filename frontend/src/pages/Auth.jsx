@@ -51,6 +51,8 @@ export default function Auth({ onAuthenticated }) {
   const [form, setForm] = useState(formularioInicial)
   const [errores, setErrores] = useState({})
   const [error, setError] = useState(null)
+  const [bloqueoHasta, setBloqueoHasta] = useState(null)
+  const [ahora, setAhora] = useState(Date.now())
   const [cargando, setCargando] = useState(false)
   const [registroExitoso, setRegistroExitoso] = useState(null) // rol con el que se registro
   const [recuperacionEnviada, setRecuperacionEnviada] = useState(false)
@@ -61,6 +63,23 @@ export default function Auth({ onAuthenticated }) {
   const [errorReenvio, setErrorReenvio] = useState('')
 
   const registrando = modo === 'register'
+  const segundosBloqueo = bloqueoHasta
+    ? Math.max(0, Math.ceil((bloqueoHasta - ahora) / 1000))
+    : 0
+
+  useEffect(() => {
+    if (!bloqueoHasta) return undefined
+
+    const temporizador = window.setInterval(() => setAhora(Date.now()), 1000)
+    return () => window.clearInterval(temporizador)
+  }, [bloqueoHasta])
+
+  useEffect(() => {
+    if (bloqueoHasta && segundosBloqueo === 0) {
+      setBloqueoHasta(null)
+      setError(null)
+    }
+  }, [bloqueoHasta, segundosBloqueo])
 
   // Una vez que leímos el token de la URL, lo sacamos de la barra de direcciones
   // (prolijidad: que no quede pegado ahí después de usarlo).
@@ -158,6 +177,10 @@ function cambiarModo(nuevo) {
       }
     } catch (err) {
       setError(err.message)
+      if (err.codigo === 'CUENTA_BLOQUEADA' && Number.isFinite(err.retryAfterSeconds)) {
+        setBloqueoHasta(Date.now() + err.retryAfterSeconds * 1000)
+        setAhora(Date.now())
+      }
       setRequiereVerificacion(err.codigo === 'EMAIL_NO_VERIFICADO')
     } finally {
       setCargando(false)
@@ -313,7 +336,9 @@ function cambiarModo(nuevo) {
             </div>
           )}
 
-          {error && <Alerta tipo="error" titulo={registrando ? 'No pudimos crear la cuenta' : 'No pudimos iniciar sesión'}>{error}</Alerta>}
+          {!registrando && segundosBloqueo > 0
+            ? <Alerta tipo="error" titulo="Cuenta bloqueada">Volvé a intentar en {segundosBloqueo} {segundosBloqueo === 1 ? 'segundo' : 'segundos'}.</Alerta>
+            : error && <Alerta tipo="error" titulo={registrando ? 'No pudimos crear la cuenta' : 'No pudimos iniciar sesión'}>{error}</Alerta>}
           {!registrando && requiereVerificacion && (
             <button type="button" className="btn" onClick={reenviarVerificacion} disabled={cargandoReenvio}>
               {cargandoReenvio ? 'Enviando...' : 'Reenviar enlace de verificación'}
@@ -362,7 +387,7 @@ function cambiarModo(nuevo) {
             </>
           )}
 
-          <button type="submit" className="btn btn-primario btn-bloque" disabled={cargando}>
+          <button type="submit" className="btn btn-primario btn-bloque" disabled={cargando || (!registrando && segundosBloqueo > 0)}>
             {cargando ? 'Procesando...' : registrando ? 'Crear cuenta' : 'Ingresar'}
           </button>
         </div>

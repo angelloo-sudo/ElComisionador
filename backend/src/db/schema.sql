@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS usuarios (
   reset_token         VARCHAR(255),
   reset_token_expira  TIMESTAMP,
   email_verificado    BOOLEAN NOT NULL DEFAULT true,
+  login_failed_attempts INTEGER NOT NULL DEFAULT 0,
+  login_lock_level     INTEGER NOT NULL DEFAULT 0,
+  login_locked_until   TIMESTAMPTZ,
   creado_en     TIMESTAMP DEFAULT NOW()
 );
 
@@ -23,6 +26,9 @@ CREATE TABLE IF NOT EXISTS usuarios (
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS email_verificado BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255);
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS reset_token_expira TIMESTAMP;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS login_failed_attempts INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS login_lock_level INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS login_locked_until TIMESTAMPTZ;
 -- Actualiza bases existentes sin afectar los datos.
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS apellido VARCHAR(120);
 ALTER TABLE usuarios

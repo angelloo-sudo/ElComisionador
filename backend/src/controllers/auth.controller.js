@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
-import { query } from '../config/db.js'
+import { pool, query } from '../config/db.js'
 import { enviarEmailVerificacion } from '../services/email.service.js'
 import {
   validarNombrePropio, validarDni, validarTelefono, validarPresentacion, validarFotoPerfil,
@@ -384,14 +384,89 @@ export async function reenviarVerificacion(req, res, next) {
 }
 
 export async function login(req, res, next) {
+  let client
+  let transaccionAbierta = false
+
   try {
+    client = await pool.connect()
     const { email, password } = req.body
-    const resultado = await query('SELECT * FROM usuarios WHERE email = $1', [email?.trim().toLowerCase()])
+    await client.query('BEGIN')
+    transaccionAbierta = true
+    const resultado = await client.query(
+      'SELECT * FROM usuarios WHERE email = $1 FOR UPDATE',
+      [email?.trim().toLowerCase()],
+    )
     const usuario = resultado.rows[0]
 
-    if (!usuario || !password || !(await bcrypt.compare(password, usuario.password_hash))) {
+    if (!usuario) {
+      await client.query('COMMIT')
+      transaccionAbierta = false
       return res.status(401).json({ mensaje: 'Email o contraseña incorrectos' })
     }
+
+    const { rows: tiempos } = await client.query('SELECT clock_timestamp() AS ahora')
+    const ahora = tiempos[0].ahora
+    if (usuario.login_locked_until && new Date(usuario.login_locked_until) > new Date(ahora)) {
+      const retryAfterSeconds = Math.max(
+        1,
+        Math.ceil((new Date(usuario.login_locked_until) - new Date(ahora)) / 1000),
+      )
+      await client.query('COMMIT')
+      transaccionAbierta = false
+      return res.status(429).json({
+        codigo: 'CUENTA_BLOQUEADA',
+        mensaje: `Cuenta bloqueada. Volvé a intentar en ${retryAfterSeconds} segundos.`,
+        retryAfterSeconds,
+      })
+    }
+
+    const credencialesValidas = typeof password === 'string'
+      && password.length > 0
+      && await bcrypt.compare(password, usuario.password_hash)
+
+    if (!credencialesValidas) {
+      const intentosFallidos = Number(usuario.login_failed_attempts) + 1
+      if (intentosFallidos < 3) {
+        await client.query(
+          `UPDATE usuarios
+           SET login_failed_attempts = $1, login_locked_until = NULL
+           WHERE id = $2`,
+          [intentosFallidos, usuario.id],
+        )
+        await client.query('COMMIT')
+        transaccionAbierta = false
+        return res.status(401).json({ mensaje: 'Email o contraseña incorrectos' })
+      }
+
+      const nivelBloqueo = Math.min(Number(usuario.login_lock_level) + 1, 2)
+      const duracionBloqueo = nivelBloqueo === 1 ? 30 : 120
+      const bloqueo = await client.query(
+        `UPDATE usuarios
+         SET login_failed_attempts = 0,
+             login_lock_level = $1,
+             login_locked_until = clock_timestamp() + ($2 * INTERVAL '1 second')
+         WHERE id = $3
+         RETURNING GREATEST(1, CEIL(EXTRACT(EPOCH FROM login_locked_until - clock_timestamp()))::int) AS retry_after_seconds`,
+        [nivelBloqueo, duracionBloqueo, usuario.id],
+      )
+      const retryAfterSeconds = bloqueo.rows[0].retry_after_seconds
+      await client.query('COMMIT')
+      transaccionAbierta = false
+      return res.status(429).json({
+        codigo: 'CUENTA_BLOQUEADA',
+        mensaje: `Cuenta bloqueada. Volvé a intentar en ${retryAfterSeconds} segundos.`,
+        retryAfterSeconds,
+      })
+    }
+
+    await client.query(
+      `UPDATE usuarios
+       SET login_failed_attempts = 0, login_lock_level = 0, login_locked_until = NULL
+       WHERE id = $1`,
+      [usuario.id],
+    )
+    await client.query('COMMIT')
+    transaccionAbierta = false
 
     if (!usuario.activo) {
       return res.status(403).json({ mensaje: 'Esta cuenta fue dada de baja' })
@@ -406,7 +481,19 @@ export async function login(req, res, next) {
 
     const perfil = await buscarPerfilPorId(usuario.id)
     res.json({ usuario: datosPerfil(perfil), token: crearToken(perfil) })
-  } catch (e) { next(e) }
+  } catch (e) {
+    if (transaccionAbierta) {
+      try {
+        await client.query('ROLLBACK')
+      } catch (errorRollback) {
+        next(errorRollback)
+        return
+      }
+    }
+    next(e)
+  } finally {
+    if (client) client.release()
+  }
 }
 
 const TOKEN_RECUPERACION_VALIDEZ_MINUTOS = 60

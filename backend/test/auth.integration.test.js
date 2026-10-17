@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import bcrypt from 'bcryptjs'
 import { randomUUID } from 'node:crypto'
 import { after, afterEach, before, describe, it } from 'node:test'
 import request from 'supertest'
@@ -109,6 +110,69 @@ describe('autenticacion de clientes', () => {
     assert.equal(response.body.usuario.email, email)
     assert.equal('password_hash' in response.body.usuario, false)
     assert.ok(response.body.token)
+  })
+
+  it('bloquea el acceso tras tres errores, amplía el segundo bloqueo y reinicia el contador al entrar', async () => {
+    const email = emailFor('bloqueo')
+    const passwordHash = await bcrypt.hash(password, 10)
+    await query(
+      `INSERT INTO usuarios (nombre, apellido, email, password_hash, rol, email_verificado)
+       VALUES ('Usuario', 'De Prueba', $1, $2, 'cliente', true)`,
+      [email, passwordHash],
+    )
+
+    for (let intento = 1; intento <= 2; intento += 1) {
+      const response = await api.post('/api/auth/login').send({ email, password: 'incorrecta' })
+      assert.equal(response.status, 401)
+    }
+
+    const primerBloqueo = await api.post('/api/auth/login').send({ email, password: 'incorrecta' })
+    assert.equal(primerBloqueo.status, 429)
+    assert.equal(primerBloqueo.body.codigo, 'CUENTA_BLOQUEADA')
+    assert.ok(primerBloqueo.body.retryAfterSeconds >= 1 && primerBloqueo.body.retryAfterSeconds <= 30)
+
+    const intentoDuranteBloqueo = await api.post('/api/auth/login').send({ email, password })
+    assert.equal(intentoDuranteBloqueo.status, 429)
+
+    await query(
+      `UPDATE usuarios
+       SET login_locked_until = NOW() - INTERVAL '1 second', login_failed_attempts = 0
+       WHERE email = $1`,
+      [email],
+    )
+
+    for (let intento = 1; intento <= 2; intento += 1) {
+      const response = await api.post('/api/auth/login').send({ email, password: 'incorrecta' })
+      assert.equal(response.status, 401)
+    }
+
+    const accesoValido = await api.post('/api/auth/login').send({ email, password })
+    assert.equal(accesoValido.status, 200)
+    const estadoReiniciado = await query(
+      `SELECT login_failed_attempts, login_lock_level, login_locked_until
+       FROM usuarios WHERE email = $1`,
+      [email],
+    )
+    assert.deepEqual(estadoReiniciado.rows[0], {
+      login_failed_attempts: 0,
+      login_lock_level: 0,
+      login_locked_until: null,
+    })
+
+    await query(
+      `UPDATE usuarios
+       SET login_failed_attempts = 2,
+           login_lock_level = 1,
+           login_locked_until = NOW() - INTERVAL '1 second'
+       WHERE email = $1`,
+      [email],
+    )
+    const segundoBloqueo = await api.post('/api/auth/login').send({ email, password: 'incorrecta' })
+    assert.equal(segundoBloqueo.status, 429)
+    assert.ok(segundoBloqueo.body.retryAfterSeconds >= 119 && segundoBloqueo.body.retryAfterSeconds <= 120)
+
+    const intentoDuranteSegundoBloqueo = await api.post('/api/auth/login').send({ email, password })
+    assert.equal(intentoDuranteSegundoBloqueo.status, 429)
   })
 
   it('consulta el perfil público y el perfil autenticado sin filtrar secretos', async () => {

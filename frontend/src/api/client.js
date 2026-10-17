@@ -20,6 +20,7 @@ async function request(path, options = {}) {
       const mensaje = cuerpo.mensaje ?? (Array.isArray(cuerpo.errores) ? cuerpo.errores.join(' | ') : null)
       const error = new Error(mensaje || texto || `Error ${res.status}`)
       error.codigo = cuerpo.codigo
+      error.retryAfterSeconds = cuerpo.retryAfterSeconds
       throw error
     } catch (e) {
       if (e instanceof SyntaxError) {
