@@ -567,4 +567,4 @@ export async function restablecerPassword(req, res, next) {
 
     res.json({ mensaje: 'Tu contraseña fue actualizada correctamente. Ya podés iniciar sesión.' })
   } catch (e) { next(e) }
-}
+}

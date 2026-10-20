@@ -6,11 +6,6 @@ export async function registrarIngreso(req, res, next) {
   catch (e) { next(e) }
 }
 
-export async function registrarGasto(req, res, next) {
-  try { res.status(501).json({ mensaje: 'registrar gasto: pendiente', body: req.body }) }
-  catch (e) { next(e) }
-}
-
 export async function gananciaViaje(req, res, next) {
   try { res.status(501).json({ mensaje: `ganancia del viaje ${req.params.viajeId}: pendiente` }) }
   catch (e) { next(e) }

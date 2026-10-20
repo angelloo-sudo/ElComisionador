@@ -226,4 +226,4 @@ export const down = (pgm) => {
   pgm.sql(`DROP TABLE IF EXISTS gastos, ingresos, viaje_pasajero, pasajeros,
     historial_encomiendas, encomiendas, viajes, comisionistas, clientes, usuarios CASCADE;
     DROP FUNCTION IF EXISTS registrar_historial_estado_encomienda();`)
-}
+}

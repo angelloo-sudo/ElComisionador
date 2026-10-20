@@ -263,4 +263,4 @@ after(async () => {
     await query('DELETE FROM usuarios WHERE email = ANY($1::text[])', [Array.from(createdEmails)])
   }
   await pool.end()
-})
+})

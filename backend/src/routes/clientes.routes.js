@@ -7,4 +7,4 @@ const router = Router()
 router.get('/', autenticar, permitirRoles('comisionista'), listar)
 router.get('/:id', autenticar, permitirRoles('comisionista'), obtener)
 
-export default router
+export default router

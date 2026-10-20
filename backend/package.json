@@ -19,12 +19,13 @@
     "migrate:baseline": "node scripts/migrate.js baseline",
     "test:auth": "node --test test/auth.integration.test.js",
     "test:encomiendas": "node --test test/encomiendas.integration.test.js",
+    "test:gastos": "node --test test/gasto-validador.test.js test/gastos.integration.test.js",
     "test:auth:10": "node test/run-auth-10.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
+    "dotenv": "^16.6.1",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.0",

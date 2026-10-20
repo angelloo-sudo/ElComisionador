@@ -22,4 +22,4 @@ export async function enviarEmailVerificacion({ email, token }) {
     text: `Para verificar tu correo, abrí este enlace dentro de la próxima hora: ${enlace}`,
     html: `<p>Verificá tu correo de ComiTrack abriendo este enlace:</p><p><a href="${enlace}">Verificar correo</a></p><p>El enlace vence en una hora.</p>`,
   })
-}
+}

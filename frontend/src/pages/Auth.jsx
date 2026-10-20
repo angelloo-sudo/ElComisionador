@@ -401,4 +401,4 @@ function cambiarModo(nuevo) {
       </form>
     </main>
   )
-}
+}

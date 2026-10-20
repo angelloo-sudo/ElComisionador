@@ -24,4 +24,4 @@ export async function enviarEmailRecuperacion(destinatario, link) {
       <p>Este enlace vence en 1 hora. Si vos no lo pediste, podés ignorar este mensaje.</p>
     `,
   })
-}
+}
