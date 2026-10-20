@@ -2,7 +2,7 @@
 
 ABMC sin estados: la baja **elimina** el registro. Todo es privado de cada comisionista (rol `comisionista`).
 El **tipo de gasto es el concepto** del gasto: cada gasto se registra eligiendo un tipo.
-Migraciones: `20261018000000_gastos_y_tipos_gasto.js` y `20261019000000_gastos_abmc_sin_estados.js` (`npm --prefix backend run migrate:up`).
+La estructura de estas tablas está definida en `backend/db/schema.sql`.
 Pantalla: menú **Gastos** (pestañas *Gastos* y *Tipos de gasto*). Tests: `npm --prefix backend run test:gastos`.
 
 | US | Qué hace | Endpoint (`/api/finanzas`) |
