@@ -48,7 +48,7 @@ export function generarFechas(fecha, repeticion) {
 }
 
 export function validarViaje(req, res, next) {
-  const { origen, destino, fecha, hora_salida, hora_llegada, cupo_total, repeticion } = req.body
+  const { origen, destino, fecha, hora_salida, cupo_total, repeticion } = req.body
 
   const errores = []
 
@@ -80,11 +80,8 @@ export function validarViaje(req, res, next) {
     }
   }
 
-  const salidaOk = validarHora(hora_salida, 'hora de salida', errores)
-  const llegadaOk = validarHora(hora_llegada, 'hora de llegada', errores)
-  if (salidaOk && llegadaOk && hora_llegada <= hora_salida) {
-    errores.push('La hora de llegada debe ser posterior a la hora de salida')
-  }
+  // La hora de llegada y la duracion ya no se cargan: las calcula el sistema con la ruta del mapa.
+  validarHora(hora_salida, 'hora de salida', errores)
 
   if (cupo_total === undefined || cupo_total === null || cupo_total === '') {
     errores.push('El cupo total es obligatorio')

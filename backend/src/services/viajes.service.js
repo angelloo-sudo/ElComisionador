@@ -9,8 +9,8 @@ export const SQL_OCUPADOS = `COALESCE((SELECT SUM(s.cantidad_pasajeros)::int FRO
   WHERE s.viaje_id = v.id AND s.tipo = 'pasajero' AND s.estado = 'aceptada'), 0)`
 
 // Superposicion de horarios: cada viaje ocupa el bloque [hora_salida, hora_llegada].
-// Los viajes viejos (cargados antes de existir hora_llegada) no tienen ese dato, asi
-// que para ellos se asume un bloque de DURACION_POR_DEFECTO_MINUTOS desde la salida.
+// hora_llegada = salida + duracion de la ruta (la calcula el sistema). Si no se pudo calcular
+// (o es un viaje viejo) se asume un bloque de DURACION_POR_DEFECTO_MINUTOS desde la salida.
 const DURACION_POR_DEFECTO_MINUTOS = 60
 
 function aMinutos(hora) {
@@ -69,7 +69,7 @@ async function extenderSerie(serieId, hasta) {
 
     const { rows } = await cliente.query(
       `SELECT usuario_id, origen, destino, fecha::text AS fecha, hora_salida, hora_llegada,
-              cupo_total, repeticion_dias
+              distancia_km, duracion_min, cupo_total, repeticion_dias
        FROM viajes WHERE serie_id = $1
        ORDER BY fecha DESC, hora_salida DESC LIMIT 1`,
       [serieId]
@@ -111,10 +111,10 @@ async function extenderSerie(serieId, hasta) {
     if (libres.length > 0) {
       await cliente.query(
         `INSERT INTO viajes (usuario_id, origen, destino, fecha, hora_salida, hora_llegada,
-                             cupo_total, serie_id, repeticion_dias)
-         SELECT $1, $2, $3, f, $4, $5, $6, $7, $8 FROM unnest($9::date[]) AS f`,
+                             distancia_km, duracion_min, cupo_total, serie_id, repeticion_dias)
+         SELECT $1, $2, $3, f, $4, $5, $6, $7, $8, $9, $10 FROM unnest($11::date[]) AS f`,
         [ultimo.usuario_id, ultimo.origen, ultimo.destino, ultimo.hora_salida, ultimo.hora_llegada,
-         ultimo.cupo_total, serieId, ultimo.repeticion_dias, libres]
+         ultimo.distancia_km, ultimo.duracion_min, ultimo.cupo_total, serieId, ultimo.repeticion_dias, libres]
       )
     }
     await cliente.query('COMMIT')

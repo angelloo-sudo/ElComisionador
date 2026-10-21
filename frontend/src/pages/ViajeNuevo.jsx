@@ -1,10 +1,12 @@
-// US10 - Registrar viaje (pantalla completa, con hora de llegada y repeticion).
-import { useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+// US10 - Registrar viaje (pantalla completa, con mapa de la ruta, duracion automatica y repeticion).
+import { useState, useCallback, useEffect } from 'react'
+import { useNavigate, Link } from 'react-router-dom'
 import { api } from '../api/client.js'
 import LocalidadSelect from '../components/LocalidadSelect.jsx'
 import useLocalidades from '../hooks/useLocalidades.js'
 import Icon from '../components/Icon.jsx'
+import MapaRuta from '../components/MapaRuta.jsx'
+import { formatoDuracion, formatoKm, formatoPesos, horaDeLlegada, calcularMonto } from '../utils/tarifa.js'
 import { Campo, Alerta, Toast, BadgeEstado, formatoFecha } from '../components/ui.jsx'
 
 const HORAS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
@@ -56,7 +58,8 @@ export default function ViajeNuevo() {
 
   const [form, setForm] = useState(FORM_VACIO)
   const [salida, setSalida] = useState(['', ''])
-  const [llegada, setLlegada] = useState(['', ''])
+  const [ruta, setRuta] = useState(null) // ruta calculada por el mapa: { distancia_km, duracion_min, aproximada }
+  const [precioKm, setPrecioKm] = useState(undefined) // tarifa del comisionista (undefined = cargando)
   // Repeticion: 'unico' | 'diario' | 'semanal'
   const [tipoRepeticion, setTipoRepeticion] = useState('unico')
   const [diasSel, setDiasSel] = useState([])
@@ -65,6 +68,9 @@ export default function ViajeNuevo() {
   const [guardando, setGuardando] = useState(false)
   const [registrado, setRegistrado] = useState(null) // { cantidad, primero, resumen }
   const [claveForm, setClaveForm] = useState(0) // remonta el formulario al "registrar otro viaje"
+  useEffect(() => {
+    api.get('/tarifa').then((t) => setPrecioKm(t.precio_km)).catch(() => setPrecioKm(null))
+  }, [])
   const cerrarToast = useCallback(() => setRegistrado((r) => (r ? { ...r, toast: false } : r)), [])
 
   function cambiar(campo, valor) {
@@ -91,7 +97,10 @@ export default function ViajeNuevo() {
   }
 
   const horaSalida = salida[0] && salida[1] ? `${salida[0]}:${salida[1]}` : ''
-  const horaLlegada = llegada[0] && llegada[1] ? `${llegada[0]}:${llegada[1]}` : ''
+  const recorridoElegido = Boolean(form.origen && form.destino)
+  const duracionMin = ruta && !ruta.aproximada ? ruta.duracion_min : null
+  const horaLlegada = horaDeLlegada(horaSalida, duracionMin) ?? ''
+  const montoPorPasajero = calcularMonto({ precioKm, distanciaKm: ruta && !ruta.aproximada ? ruta.distancia_km : null })
 
   function validar() {
     const e = {}
@@ -100,8 +109,6 @@ export default function ViajeNuevo() {
     if (!form.fecha) e.fecha = 'Indica la fecha del viaje'
     else if (form.fecha < hoyISO()) e.fecha = 'La fecha del viaje no puede ser anterior a hoy'
     if (!horaSalida) e.salida = 'Ingresa un horario válido (hh:mm)'
-    if (!horaLlegada) e.llegada = 'Ingresa un horario válido (hh:mm)'
-    else if (horaSalida && horaLlegada <= horaSalida) e.llegada = 'La hora de llegada debe ser posterior a la de salida'
     const cupo = Number(form.cupo_total)
     if (!form.cupo_total || !Number.isInteger(cupo) || cupo < 1) e.cupo = 'Indica el cupo de pasajeros (mínimo 1)'
     if (tipoRepeticion === 'semanal' && diasSel.length === 0) e.dias = 'Elegí al menos un día de la semana para repetir el viaje'
@@ -125,7 +132,6 @@ export default function ViajeNuevo() {
         ...form,
         cupo_total: Number(form.cupo_total),
         hora_salida: horaSalida,
-        hora_llegada: horaLlegada,
         repeticion:
           tipoRepeticion === 'unico'
             ? { tipo: 'unico' }
@@ -154,7 +160,7 @@ export default function ViajeNuevo() {
   function registrarOtro() {
     setForm(FORM_VACIO)
     setSalida(['', ''])
-    setLlegada(['', ''])
+    setRuta(null)
     setTipoRepeticion('unico')
     setDiasSel([])
     setErrores({})
@@ -224,7 +230,7 @@ export default function ViajeNuevo() {
           <div className="card-cabecera">
             <div>
               <h2>Datos del viaje</h2>
-              <p>Indica el recorrido, la fecha y el horario de salida y llegada.</p>
+              <p>Indica el recorrido, la fecha y la hora de salida. La duración la calcula el sistema con el mapa.</p>
             </div>
           </div>
           <div className="card-cuerpo">
@@ -234,6 +240,9 @@ export default function ViajeNuevo() {
                 <LocalidadSelect label="Origen" value={form.origen} onChange={(v) => cambiar('origen', v)} localidades={localidades} deshabilitado={cargandoLocalidades} error={errores.origen} />
                 <LocalidadSelect label="Destino" value={form.destino} onChange={(v) => cambiar('destino', v)} localidades={localidades} deshabilitado={cargandoLocalidades} error={errores.destino} />
               </div>
+              {recorridoElegido && form.origen !== form.destino && (
+                <MapaRuta origen={form.origen} destino={form.destino} alto={300} onRuta={setRuta} />
+              )}
             </div>
 
             <div className="seccion">
@@ -245,8 +254,8 @@ export default function ViajeNuevo() {
                 <Campo label="Hora de salida" requerido icono="clock" error={errores.salida}>
                   <SelectorHora etiqueta="Hora de salida" hora={salida[0]} minuto={salida[1]} onHora={(h) => { setSalida([h, salida[1]]); setErrores((e) => ({ ...e, salida: undefined })) }} onMinuto={(m) => { setSalida([salida[0], m]); setErrores((e) => ({ ...e, salida: undefined })) }} />
                 </Campo>
-                <Campo label="Hora de llegada (aprox.)" requerido icono="clock" error={errores.llegada}>
-                  <SelectorHora etiqueta="Hora de llegada" hora={llegada[0]} minuto={llegada[1]} onHora={(h) => { setLlegada([h, llegada[1]]); setErrores((e) => ({ ...e, llegada: undefined })) }} onMinuto={(m) => { setLlegada([llegada[0], m]); setErrores((e) => ({ ...e, llegada: undefined })) }} />
+                <Campo label="Duración" icono="clock" soloLectura ayuda={duracionMin == null ? 'Se calcula sola al elegir origen y destino' : 'Calculada por el sistema'}>
+                  <input type="text" readOnly tabIndex={-1} value={recorridoElegido ? (duracionMin != null ? formatoDuracion(duracionMin) : (ruta ? 'No disponible' : 'Calculando...')) : ''} placeholder="Automática" aria-label="Duración del viaje (calculada)" />
                 </Campo>
               </div>
             </div>
@@ -302,9 +311,16 @@ export default function ViajeNuevo() {
             <div className="resumen-fila"><span>Estado inicial</span><BadgeEstado estado="programado" /></div>
             <div className="resumen-fila"><span>Recorrido</span><strong>{form.origen && form.destino ? `${form.origen} → ${form.destino}` : '—'}</strong></div>
             <div className="resumen-fila"><span>Salida</span><strong>{form.fecha && horaSalida ? `${formatoFecha(`${form.fecha}T00:00:00`)} · ${horaSalida}` : '—'}</strong></div>
+            <div className="resumen-fila"><span>Distancia</span><strong>{ruta && !ruta.aproximada ? formatoKm(ruta.distancia_km) : '—'}</strong></div>
+            <div className="resumen-fila"><span>Duración</span><strong>{formatoDuracion(duracionMin)}</strong></div>
             <div className="resumen-fila"><span>Llegada (aprox.)</span><strong>{horaLlegada || '—'}</strong></div>
             <div className="resumen-fila"><span>Cupo</span><strong>{Number(form.cupo_total) > 0 ? `${form.cupo_total} pasajero${Number(form.cupo_total) === 1 ? '' : 's'}` : '—'}</strong></div>
             <div className="resumen-fila"><span>Repetición</span><strong>{textoRepeticion}</strong></div>
+            <div className="resumen-fila"><span>Tu precio por km</span><strong>{precioKm ? formatoPesos(precioKm) : '—'}</strong></div>
+            <div className="resumen-fila"><span>Precio por pasajero</span><strong>{formatoPesos(montoPorPasajero)}</strong></div>
+            {precioKm === null && (
+              <p className="nota-resumen">Todavía no configuraste tu precio por km, así que los clientes no van a ver un precio. <Link to="/tarifa">Configurarlo ahora</Link></p>
+            )}
             <p className="nota-resumen">Al registrarlo, el viaje quedará <strong>Programado</strong> y visible para que los clientes puedan asociarse.</p>
           </div>
         </aside>

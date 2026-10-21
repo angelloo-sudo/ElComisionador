@@ -98,6 +98,28 @@ async function buscarPerfilPorId(usuarioId) {
   return rows[0] ?? null
 }
 
+// DNI y telefono identifican a una persona: no pueden repetirse entre cuentas (clientes y
+// comisionistas juntos). El telefono se compara solo por sus digitos, asi "351 555-1234" y
+// "3515551234" cuentan como el mismo. usuarioId = la cuenta que se esta editando (se ignora a si
+// misma); null al registrar. Devuelve el mensaje de error, o null si no hay conflicto.
+async function buscarConflictoContacto(usuarioId, dni, telefono) {
+  const dniLimpio = dni.trim()
+  const digitos = telefono.replace(/\D/g, '')
+  const { rows } = await query(
+    `SELECT (dni = $2) AS dni_igual,
+            ($3 <> '' AND regexp_replace(COALESCE(telefono, ''), '\\D', '', 'g') = $3) AS telefono_igual
+     FROM (SELECT usuario_id, dni, telefono FROM clientes
+           UNION ALL
+           SELECT usuario_id, dni, telefono FROM comisionistas) t
+     WHERE usuario_id <> $1
+       AND (dni = $2 OR ($3 <> '' AND regexp_replace(COALESCE(telefono, ''), '\\D', '', 'g') = $3))`,
+    [usuarioId ?? 0, dniLimpio, digitos],
+  )
+  if (rows.some((r) => r.dni_igual)) return 'Ya existe una cuenta registrada con ese DNI'
+  if (rows.some((r) => r.telefono_igual)) return 'Ya existe una cuenta registrada con ese teléfono'
+  return null
+}
+
 // Inserta/actualiza la fila de "clientes" con los datos de contacto. Solo se usa
 // cuando el usuario en cuestion tiene rol = 'cliente' (dni/telefono ya validados
 // como obligatorios antes de llegar aca).
@@ -184,6 +206,11 @@ export async function actualizarMiPerfil(req, res, next) {
       return res.status(409).json({ mensaje: 'El email ya está registrado' })
     }
 
+    if (esCliente || esComisionista) {
+      const conflicto = await buscarConflictoContacto(req.usuario.id, dni, telefono)
+      if (conflicto) return res.status(409).json({ mensaje: conflicto })
+    }
+
     const passwordHash = password ? await bcrypt.hash(password, 10) : null
     const { rows } = await query(
       `UPDATE usuarios
@@ -262,6 +289,11 @@ async function registrarConRol(req, res, next, rolFijo) {
     const existente = await query('SELECT id FROM usuarios WHERE email = $1', [emailNormalizado])
     if (existente.rows.length > 0) {
       return res.status(409).json({ mensaje: 'El email ya está registrado' })
+    }
+
+    const conflictoContacto = await buscarConflictoContacto(null, dni, telefono)
+    if (conflictoContacto) {
+      return res.status(409).json({ mensaje: conflictoContacto })
     }
 
     const passwordHash = await bcrypt.hash(password, 10)

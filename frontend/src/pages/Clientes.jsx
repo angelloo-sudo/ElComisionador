@@ -11,7 +11,7 @@ function direccionSolicitud(solicitud, extremo) {
   const partes = [
     solicitud[`${extremo}_calle`],
     solicitud[`${extremo}_altura`],
-    solicitud[`${extremo}_barrio`],
+    solicitud[`${extremo}_codigo_postal`] ? `(CP ${solicitud[`${extremo}_codigo_postal`]})` : solicitud[`${extremo}_barrio`],
   ].filter(Boolean)
   return partes.join(' ') || 'No informada'
 }

@@ -5,9 +5,16 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api/client.js'
 import Icon from '../components/Icon.jsx'
 import { Alerta, Campo, formatoFecha, Modal, Toast } from '../components/ui.jsx'
+import { formatoDuracion, formatoPesos } from '../utils/tarifa.js'
 
 const fechaLocal = (fecha) => formatoFecha(`${fecha}T12:00:00`)
 const hora = (h) => (h ? h.slice(0, 5) : '-')
+
+// Precio de una persona en ese viaje (lo calcula el sistema), o "A convenir" si no hay tarifa.
+function precioPorPasajero(v) {
+  const monto = v.precio_pasajero == null ? null : Number(v.precio_pasajero)
+  return monto == null ? <span className="campo-ayuda">A convenir</span> : formatoPesos(monto)
+}
 
 const ESTADOS_SOLICITUD = {
   pendiente: { texto: 'Pendiente', clase: 'ambar' },
@@ -141,7 +148,7 @@ export default function MisTraslados() {
           ) : (
             <table className="tabla">
               <thead>
-                <tr><th>Recorrido</th><th>Fecha</th><th>Salida</th><th>Llegada</th><th>Comisionista</th><th>Cupos pasajeros</th><th></th></tr>
+                <tr><th>Recorrido</th><th>Fecha</th><th>Salida</th><th>Duración</th><th>Comisionista</th><th>Precio por pasajero</th><th>Cupos pasajeros</th><th></th></tr>
               </thead>
               <tbody>
                 {viajes.map((v) => (
@@ -149,8 +156,9 @@ export default function MisTraslados() {
                     <td className="col-recorrido">{v.origen}<span className="flecha">→</span>{v.destino}</td>
                     <td>{fechaLocal(v.fecha)}</td>
                     <td>{hora(v.hora_salida)}</td>
-                    <td>{hora(v.hora_llegada)}</td>
+                    <td>{formatoDuracion(v.duracion_min)}</td>
                     <td>{`${v.comisionista_nombre} ${v.comisionista_apellido ?? ''}`.trim()}</td>
+                    <td>{precioPorPasajero(v)}</td>
                     <td>
                       {v.ocupados} / {v.cupo_total}
                       {v.cupos_disponibles === 0 && <span className="badge punto rojo" style={{ marginLeft: 8 }}>Completo</span>}
@@ -223,16 +231,22 @@ export default function MisTraslados() {
           ) : (
             <table className="tabla">
               <thead>
-                <tr><th>Recorrido</th><th>Fecha</th><th>Salida</th><th>Tipo</th><th>Comisionista</th><th>Estado</th><th></th></tr>
+                <tr><th>Recorrido</th><th>Fecha</th><th>Salida</th><th>Tipo</th><th>Comisionista</th><th>Monto</th><th>Estado</th><th></th></tr>
               </thead>
               <tbody>
                 {solicitudesVisibles.map((s) => (
                   <tr key={s.id}>
-                    <td className="col-recorrido">{s.origen}<span className="flecha">→</span>{s.destino}</td>
+                    <td className="col-recorrido">
+                      {s.origen_localidad ?? s.origen}<span className="flecha">→</span>{s.destino_localidad ?? s.destino}
+                      {((s.origen_localidad ?? s.origen) !== s.origen || (s.destino_localidad ?? s.destino) !== s.destino) && (
+                        <div className="campo-ayuda">Viaje completo: {s.origen} → {s.destino}</div>
+                      )}
+                    </td>
                     <td>{fechaLocal(s.fecha)}</td>
                     <td>{hora(s.hora_salida)}</td>
                     <td><TipoSolicitud solicitud={s} /></td>
                     <td>{`${s.comisionista_nombre ?? ''} ${s.comisionista_apellido ?? ''}`.trim() || '-'}</td>
+                    <td>{s.monto == null ? <span className="campo-ayuda">A convenir</span> : formatoPesos(s.monto)}</td>
                     <td>
                       <BadgeSolicitud estado={s.estado} />
                       {s.estado === 'rechazada' && s.motivo_rechazo && <div className="campo-ayuda" style={{ marginTop: 6, maxWidth: 260 }}>Motivo: {s.motivo_rechazo}</div>}

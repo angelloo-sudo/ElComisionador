@@ -5,6 +5,9 @@
 import { pool, query } from '../config/db.js'
 import { validarSolicitud } from '../validators/solicitud.validador.js'
 import { SQL_OCUPADOS } from '../services/viajes.service.js'
+import { validarDireccion } from '../services/geo.service.js'
+import { asegurarRutaDeViaje, calcularMonto } from '../services/tarifa.service.js'
+import { calcularTramo } from '../services/tramo.service.js'
 
 const TZ = "NOW() AT TIME ZONE 'America/Argentina/Cordoba'"
 const INICIO = "(v.fecha + COALESCE(v.hora_salida, TIME '00:00'))"
@@ -52,6 +55,8 @@ const SQL_MIS_SOLICITUDES = (n) => `COALESCE((SELECT json_agg(json_build_object(
 
 const CAMPOS_VIAJE_DISPONIBLE = `
   v.id AS viaje_id, v.origen, v.destino, v.fecha::text AS fecha, v.hora_salida, v.hora_llegada,
+  v.duracion_min,
+  CASE WHEN cm.precio_km IS NOT NULL AND v.distancia_km IS NOT NULL THEN ROUND(cm.precio_km * v.distancia_km, 2) END AS precio_pasajero,
   v.cupo_total, ${SQL_OCUPADOS} AS ocupados,
   GREATEST(v.cupo_total - ${SQL_OCUPADOS}, 0) AS cupos_disponibles,
   u.nombre AS comisionista_nombre, u.apellido AS comisionista_apellido`
@@ -77,6 +82,7 @@ export async function listarViajesDisponibles(req, res, next) {
       `SELECT ${CAMPOS_VIAJE_DISPONIBLE},
               ${SQL_MIS_SOLICITUDES(1)}
        FROM viajes v JOIN usuarios u ON u.id = v.usuario_id
+       LEFT JOIN comisionistas cm ON cm.usuario_id = v.usuario_id
        WHERE ${FILTRO_VIAJE_DISPONIBLE} ${filtros}
        ORDER BY v.fecha, v.hora_salida, v.id
        LIMIT 200`,
@@ -93,6 +99,7 @@ export async function obtenerViajeDisponible(req, res, next) {
     const { rows } = await query(
       `SELECT ${CAMPOS_VIAJE_DISPONIBLE}, ${SQL_MIS_SOLICITUDES(2)}
        FROM viajes v JOIN usuarios u ON u.id = v.usuario_id
+       LEFT JOIN comisionistas cm ON cm.usuario_id = v.usuario_id
        WHERE v.id = $1 AND ${FILTRO_VIAJE_DISPONIBLE}`,
       [id, req.usuario.id],
     )
@@ -102,18 +109,148 @@ export async function obtenerViajeDisponible(req, res, next) {
 }
 
 const COLUMNAS_SOLICITUD = [
-  'tipo', 'origen_calle', 'origen_altura', 'origen_barrio', 'origen_descripcion',
-  'destino_calle', 'destino_altura', 'destino_barrio',
+  'tipo', 'origen_localidad', 'destino_localidad', 'origen_calle', 'origen_altura', 'origen_codigo_postal', 'origen_descripcion',
+  'destino_calle', 'destino_altura', 'destino_codigo_postal',
   'nombre', 'apellido', 'dni', 'telefono', 'lleva_equipaje', 'equipaje_detalle', 'cantidad_pasajeros', 'forma_pago',
   'peso_kg', 'ancho_cm', 'largo_cm', 'fragil', 'tipo_contenido', 'contenido_descripcion',
   'emisor_nombre', 'emisor_apellido', 'emisor_telefono', 'receptor_nombre', 'receptor_apellido', 'receptor_telefono',
 ]
+
+// Verifica que las direcciones existan (Georef) en la localidad elegida para cada una (subida/retiro y
+// bajada/entrega). Solo se rechaza si la calle no existe en toda la provincia; si el servicio no responde
+// o no puede confirmar la altura, se deja pasar. Devuelve el mensaje de error o null.
+async function direccionesInexistentes(datos) {
+  for (const [prefijo, etiqueta] of [['origen', 'de retiro'], ['destino', 'de destino']]) {
+    const calle = datos[`${prefijo}_calle`]
+    const altura = datos[`${prefijo}_altura`]
+    const r = await validarDireccion({ calle, altura, localidad: datos[`${prefijo}_localidad`], codigoPostal: datos[`${prefijo}_codigo_postal`] }, { conCodigoPostal: false })
+    if (r.estado === 'no_encontrada') {
+      return `No encontramos la dirección ${etiqueta} (${calle} ${altura}). Revisá que la calle esté bien escrita`
+    }
+  }
+  return null
+}
+
+// Coordenadas reales (Georef) de la calle y altura de cada parada, para medir el tramo con mayor precision.
+// Solo se usan las que se pudieron confirmar y que no son los extremos del viaje; si el servicio no responde
+// o no ubica la altura, esa parada se mide con el centro de su localidad.
+async function puntosDeParadas(viaje, { desde, hasta, desdeCalle, desdeAltura, desdeCp, hastaCalle, hastaAltura, hastaCp }) {
+  const buscar = async (localidad, calle, altura, codigoPostal) => {
+    if (!calle || !altura || localidad === viaje.origen || localidad === viaje.destino) return undefined
+    const r = await validarDireccion({ calle, altura, localidad, codigoPostal }, { conCodigoPostal: false })
+    return r.estado === 'ok' ? { lat: r.lat, lon: r.lon } : undefined
+  }
+  const [d, h] = await Promise.all([buscar(desde, desdeCalle, desdeAltura, desdeCp), buscar(hasta, hastaCalle, hastaAltura, hastaCp)])
+  return { desde: d, hasta: h }
+}
+
+const precioDePersona = (precioKm, km) => calcularMonto({ precioKm, distanciaKm: km })
+
+// Datos del viaje + tarifa del comisionista.
+async function datosDeViaje(viajeId) {
+  const { rows } = await query(
+    `SELECT v.id, v.origen, v.destino, v.hora_salida, v.distancia_km, v.duracion_min, cm.precio_km
+     FROM viajes v LEFT JOIN comisionistas cm ON cm.usuario_id = v.usuario_id WHERE v.id = $1`,
+    [viajeId],
+  )
+  return rows[0] ?? null
+}
+
+// Km del tramo que hace el cliente y tarifa. Si sube en el origen y baja en el destino son los km del viaje;
+// si no, se calcula sobre la ruta (ver services/tramo.service.js).
+// Devuelve { precio_km, distancia_km, tramo } o { error: { status, mensaje } }.
+async function tramoDeSolicitud(viaje, desde, hasta, direcciones = {}) {
+  const precioKm = viaje.precio_km != null ? Number(viaje.precio_km) : null
+  if (desde === viaje.origen && hasta === viaje.destino) {
+    const ruta = await asegurarRutaDeViaje(viaje)
+    return { precio_km: precioKm, distancia_km: ruta.distancia_km, tramo: null }
+  }
+  const puntos = await puntosDeParadas(viaje, { desde, hasta, ...direcciones })
+  const tramo = await calcularTramo(viaje, desde, hasta, puntos)
+  if (tramo.estado === 'invalido') return { error: { status: 400, mensaje: tramo.mensaje } }
+  if (tramo.estado === 'no_disponible') {
+    return { error: { status: 503, mensaje: 'No pudimos calcular el tramo en este momento. Probá de nuevo en unos minutos' } }
+  }
+  return { precio_km: precioKm, distancia_km: tramo.km, tramo }
+}
+
+// GET /api/solicitudes/viajes-disponibles/:viajeId/tramo?desde=Localidad&hasta=Localidad  (cliente)
+// Responde el precio por persona del tramo y la parte de la ruta para dibujarla en el mapa. No expone la tarifa ni los km.
+export async function tramoDeViaje(req, res, next) {
+  try {
+    const viajeId = Number(req.params.viajeId)
+    if (!Number.isSafeInteger(viajeId) || viajeId < 1) return res.status(400).json({ mensaje: 'El viaje solicitado no es válido' })
+    const viaje = await datosDeViaje(viajeId)
+    if (!viaje) return res.status(404).json({ mensaje: 'El viaje no está disponible para solicitar' })
+    const desde = String(req.query.desde ?? viaje.origen).trim()
+    const hasta = String(req.query.hasta ?? viaje.destino).trim()
+    const q = (c) => String(req.query[c] ?? '').trim().slice(0, 120)
+    const r = await tramoDeSolicitud(viaje, desde, hasta, {
+      desdeCalle: q('desde_calle'), desdeAltura: q('desde_altura'), hastaCalle: q('hasta_calle'), hastaAltura: q('hasta_altura'),
+      desdeCp: q('desde_cp'), hastaCp: q('hasta_cp'),
+    })
+    if (r.error) return res.json({ estado: r.error.status === 400 ? 'invalido' : 'no_disponible', mensaje: r.error.mensaje })
+    const precio = precioDePersona(r.precio_km, r.distancia_km)
+    // Sin tramo calculado (viaje completo) el mapa usa la ruta completa del viaje.
+    res.json({
+      estado: 'ok',
+      precio_persona: precio,
+      completo: r.tramo === null,
+      desde: r.tramo?.desde ?? null,
+      hasta: r.tramo?.hasta ?? null,
+      geometria: r.tramo?.geometria ?? null,
+    })
+  } catch (e) { next(e) }
+}
+
+// GET /api/solicitudes/:id/tramo  (comisionista): el tramo de una solicitud recibida, para verlo en el mapa.
+export async function tramoDeSolicitudRecibida(req, res, next) {
+  try {
+    const id = Number(req.params.id)
+    if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ mensaje: 'La solicitud indicada no es válida' })
+    const { rows } = await query(
+      `SELECT s.origen_localidad, s.destino_localidad, s.origen_calle, s.origen_altura, s.origen_codigo_postal, s.destino_calle, s.destino_altura, s.destino_codigo_postal, v.origen, v.destino
+       FROM solicitudes_viaje s JOIN viajes v ON v.id = s.viaje_id WHERE s.id = $1 AND v.usuario_id = $2`,
+      [id, req.usuario.id],
+    )
+    const s = rows[0]
+    if (!s) return res.status(404).json({ mensaje: 'No se encontró la solicitud' })
+    const desde = s.origen_localidad ?? s.origen
+    const hasta = s.destino_localidad ?? s.destino
+    if (desde === s.origen && hasta === s.destino) return res.json({ estado: 'ok', completo: true, desde: null, hasta: null, geometria: null })
+    const puntos = await puntosDeParadas(s, {
+      desde, hasta, desdeCalle: s.origen_calle, desdeAltura: s.origen_altura, desdeCp: s.origen_codigo_postal, hastaCalle: s.destino_calle, hastaAltura: s.destino_altura, hastaCp: s.destino_codigo_postal,
+    })
+    const tramo = await calcularTramo(s, desde, hasta, puntos)
+    if (tramo.estado !== 'ok') return res.json({ estado: tramo.estado, mensaje: tramo.mensaje ?? null })
+    res.json({ estado: 'ok', completo: false, desde: tramo.desde, hasta: tramo.hasta, geometria: tramo.geometria })
+  } catch (e) { next(e) }
+}
 
 export async function crear(req, res, next) {
   const viajeId = Number(req.body?.viaje_id)
   if (!Number.isSafeInteger(viajeId) || viajeId < 1) return res.status(400).json({ mensaje: 'El viaje solicitado no es válido' })
   const { errores, datos } = validarSolicitud(req.body)
   if (errores.length > 0) return res.status(400).json({ errores })
+
+  // Localidad de subida/retiro y de bajada/entrega: si no se eligio otra, las del viaje (recorrido completo).
+  let tarifa
+  try {
+    const viaje = await datosDeViaje(viajeId)
+    if (!viaje) return res.status(404).json({ mensaje: 'No se encontró el viaje solicitado' })
+    datos.origen_localidad = datos.origen_localidad ?? viaje.origen
+    datos.destino_localidad = datos.destino_localidad ?? viaje.destino
+
+    const direccionMala = await direccionesInexistentes(datos)
+    if (direccionMala) return res.status(400).json({ mensaje: direccionMala })
+
+    // Km del tramo y tarifa del comisionista (si el viaje no tenia ruta calculada, se completa ahora).
+    tarifa = await tramoDeSolicitud(viaje, datos.origen_localidad, datos.destino_localidad, {
+      desdeCalle: datos.origen_calle, desdeAltura: datos.origen_altura, desdeCp: datos.origen_codigo_postal,
+      hastaCalle: datos.destino_calle, hastaAltura: datos.destino_altura, hastaCp: datos.destino_codigo_postal,
+    })
+    if (tarifa.error) return res.status(tarifa.error.status).json({ mensaje: tarifa.error.mensaje })
+  } catch (e) { return next(e) }
 
   await conTransaccion(res, next, async (db) => {
     const { rows: viajes } = await db.query(
@@ -152,12 +289,18 @@ export async function crear(req, res, next) {
       }
     }
 
-    const columnas = ['viaje_id', 'cliente_id', ...COLUMNAS_SOLICITUD]
-    const valores = [viajeId, clienteId, ...COLUMNAS_SOLICITUD.map((c) => datos[c] ?? null)]
+    // Monto = precio por km del comisionista x distancia (x cantidad de pasajeros). Se guarda con la
+    // tarifa vigente: si despues la cambia, esta solicitud no cambia de precio.
+    const monto = calcularMonto({
+      precioKm: tarifa.precio_km, distanciaKm: tarifa.distancia_km, tipo: datos.tipo, cantidad: datos.cantidad_pasajeros,
+    })
+    const columnas = ['viaje_id', 'cliente_id', ...COLUMNAS_SOLICITUD, 'distancia_km', 'precio_km', 'monto']
+    const valores = [viajeId, clienteId, ...COLUMNAS_SOLICITUD.map((c) => datos[c] ?? null),
+      tarifa.distancia_km, monto == null ? null : tarifa.precio_km, monto]
     const marcadores = columnas.map((_, i) => `$${i + 1}`)
     const { rows } = await db.query(
       `INSERT INTO solicitudes_viaje (${columnas.join(', ')}) VALUES (${marcadores.join(', ')})
-       RETURNING id, viaje_id, tipo, estado`,
+       RETURNING id, viaje_id, tipo, estado, monto`,
       valores,
     )
     return { status: 201, body: rows[0] }
@@ -168,8 +311,9 @@ export async function listarMias(req, res, next) {
   try {
     const { rows } = await query(
       `SELECT s.id, s.tipo, s.estado, s.motivo_rechazo, s.cantidad_pasajeros, s.forma_pago, s.creado_en,
-              s.origen_calle, s.origen_altura, s.origen_barrio, s.destino_calle, s.destino_altura, s.destino_barrio,
-              v.id AS viaje_id, v.origen, v.destino, v.fecha::text AS fecha, v.hora_salida, v.hora_llegada,
+              s.monto, s.origen_localidad, s.destino_localidad,
+              s.origen_calle, s.origen_altura, s.origen_barrio, s.origen_codigo_postal, s.destino_calle, s.destino_altura, s.destino_barrio, s.destino_codigo_postal,
+              v.id AS viaje_id, v.origen, v.destino, v.fecha::text AS fecha, v.hora_salida, v.hora_llegada, v.duracion_min,
               v.estado AS estado_viaje,
               u.nombre AS comisionista_nombre, u.apellido AS comisionista_apellido,
               (s.estado IN ('pendiente', 'aceptada') AND v.estado = 'programado' AND ${INICIO} > (${TZ})) AS puede_cancelar
@@ -235,7 +379,7 @@ export async function listarRecibidas(req, res, next) {
 
     const { rows } = await query(
       `SELECT s.*, cu.email AS cliente_email,
-              v.origen, v.destino, v.fecha::text AS fecha, v.hora_salida, v.hora_llegada,
+              v.origen, v.destino, v.fecha::text AS fecha, v.hora_salida, v.hora_llegada, v.duracion_min,
               v.cupo_total, v.estado AS estado_viaje, ${SQL_OCUPADOS} AS ocupados
        FROM solicitudes_viaje s
        JOIN viajes v ON v.id = s.viaje_id

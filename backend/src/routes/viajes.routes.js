@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import * as viajes from '../controllers/viajes.controller.js'
+import { paradasDelComisionista } from '../controllers/paradas.controller.js'
 import { validarViaje } from '../validators/viaje.validador.js'
 import { autenticar, permitirRoles } from '../middlewares/auth.middleware.js'
 
@@ -9,6 +10,7 @@ const router = Router()
 router.use(autenticar, permitirRoles('comisionista'))
 
 router.get('/', viajes.listar)                // Consultar / filtrar viajes
+router.get('/:id/paradas', paradasDelComisionista) // paradas de los pasajeros aceptados + ruta sugerida
 router.get('/:id', viajes.obtener)            // Consultar un viaje
 router.post('/', validarViaje, viajes.crear)  // Registrar viaje
 router.patch('/:id/cancelar', viajes.cancelar) // US16: registrar cancelacion de viaje

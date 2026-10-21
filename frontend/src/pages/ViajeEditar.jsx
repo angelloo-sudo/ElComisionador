@@ -1,10 +1,12 @@
 // US18 - Modificar la definicion de un viaje (fecha, horario, recorrido y cupo) en estado Programado.
 import { useState, useEffect, useMemo } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, Link } from 'react-router-dom'
 import { api } from '../api/client.js'
 import LocalidadSelect from '../components/LocalidadSelect.jsx'
 import useLocalidades from '../hooks/useLocalidades.js'
 import Icon from '../components/Icon.jsx'
+import MapaRuta from '../components/MapaRuta.jsx'
+import { formatoDuracion, formatoKm, formatoPesos, horaDeLlegada, calcularMonto } from '../utils/tarifa.js'
 import { Campo, Alerta, BadgeEstado, ESTADOS_VIAJE, formatoFecha, textoRepeticion } from '../components/ui.jsx'
 import { codigoViaje, hoyISO, SelectorHora } from './ViajeNuevo.jsx'
 
@@ -20,7 +22,8 @@ export default function ViajeEditar() {
   const [errorCarga, setErrorCarga] = useState(null)
   const [form, setForm] = useState({ origen: '', destino: '', fecha: '', cupo_total: '' })
   const [salida, setSalida] = useState(['', ''])
-  const [llegada, setLlegada] = useState(['', ''])
+  const [ruta, setRuta] = useState(null) // ruta calculada por el mapa para el recorrido elegido
+  const [precioKm, setPrecioKm] = useState(undefined)
   const [alcance, setAlcance] = useState('este')
   const [errores, setErrores] = useState({})
   const [errorGeneral, setErrorGeneral] = useState(null)
@@ -33,14 +36,23 @@ export default function ViajeEditar() {
         setOriginal(v)
         setForm({ origen: v.origen, destino: v.destino, fecha: String(v.fecha).slice(0, 10), cupo_total: String(v.cupo_total) })
         setSalida(partirHora(v.hora_salida))
-        setLlegada(partirHora(v.hora_llegada))
       })
       .catch((err) => setErrorCarga(err.message))
       .finally(() => setCargando(false))
   }, [id])
 
+  useEffect(() => {
+    api.get('/tarifa').then((t) => setPrecioKm(t.precio_km)).catch(() => setPrecioKm(null))
+  }, [])
+
   const horaSalida = salida[0] && salida[1] ? `${salida[0]}:${salida[1]}` : ''
-  const horaLlegada = llegada[0] && llegada[1] ? `${llegada[0]}:${llegada[1]}` : ''
+  // Duracion y distancia: las del mapa para el recorrido elegido; mientras carga, las que ya tenia el viaje.
+  const mismoRecorrido = original && form.origen === original.origen && form.destino === original.destino
+  const rutaExacta = ruta && !ruta.aproximada ? ruta : null
+  const duracionMin = rutaExacta ? rutaExacta.duracion_min : (mismoRecorrido ? original.duracion_min : null)
+  const distanciaKm = rutaExacta ? rutaExacta.distancia_km : (mismoRecorrido && original.distancia_km != null ? Number(original.distancia_km) : null)
+  const horaLlegada = horaDeLlegada(horaSalida, duracionMin) ?? ''
+  const montoPorPasajero = calcularMonto({ precioKm, distanciaKm })
   const ocupados = original?.ocupados ?? 0
   const esSerie = Boolean(original?.serie_id)
   const aplicaASerie = esSerie && alcance === 'siguientes'
@@ -60,9 +72,9 @@ export default function ViajeEditar() {
     if (!original) return true
     return form.origen === original.origen && form.destino === original.destino &&
       form.fecha === String(original.fecha).slice(0, 10) &&
-      horaSalida === original.hora_salida?.slice(0, 5) && horaLlegada === original.hora_llegada?.slice(0, 5) &&
+      horaSalida === original.hora_salida?.slice(0, 5) &&
       Number(form.cupo_total) === original.cupo_total
-  }, [original, form, horaSalida, horaLlegada])
+  }, [original, form, horaSalida])
 
   function validar() {
     const e = {}
@@ -71,8 +83,6 @@ export default function ViajeEditar() {
     if (!form.fecha) e.fecha = 'Indica la fecha del viaje'
     else if (form.fecha < hoyISO()) e.fecha = 'La fecha del viaje no puede ser anterior a hoy'
     if (!horaSalida) e.salida = 'Ingresa un horario válido (hh:mm)'
-    if (!horaLlegada) e.llegada = 'Ingresa un horario válido (hh:mm)'
-    else if (horaSalida && horaLlegada <= horaSalida) e.llegada = 'La hora de llegada debe ser posterior a la de salida'
     const cupo = Number(form.cupo_total)
     if (!form.cupo_total || !Number.isInteger(cupo) || cupo < 1) e.cupo = 'Indica el cupo de pasajeros (mínimo 1)'
     else if (cupo < ocupados) e.cupo = `El cupo no puede ser menor que los ${ocupados} pasajeros que ya tiene el viaje`
@@ -98,7 +108,6 @@ export default function ViajeEditar() {
         ...form,
         cupo_total: Number(form.cupo_total),
         hora_salida: horaSalida,
-        hora_llegada: horaLlegada,
         alcance,
       })
       const afectados = respuesta.pasajerosAfectados ?? 0
@@ -171,7 +180,7 @@ export default function ViajeEditar() {
           <div className="card-cabecera">
             <div>
               <h2>Datos del viaje</h2>
-              <p>Modificá el recorrido, la fecha, el horario o el cupo del viaje.</p>
+              <p>Modificá el recorrido, la fecha, la hora de salida o el cupo del viaje. La duración se recalcula sola.</p>
             </div>
           </div>
           <div className="card-cuerpo">
@@ -196,6 +205,9 @@ export default function ViajeEditar() {
                 <LocalidadSelect label="Origen" value={form.origen} onChange={(v) => cambiar('origen', v)} localidades={localidades} deshabilitado={cargandoLocalidades} error={errores.origen} />
                 <LocalidadSelect label="Destino" value={form.destino} onChange={(v) => cambiar('destino', v)} localidades={localidades} deshabilitado={cargandoLocalidades} error={errores.destino} />
               </div>
+              {form.origen && form.destino && form.origen !== form.destino && (
+                <MapaRuta origen={form.origen} destino={form.destino} alto={300} onRuta={setRuta} />
+              )}
             </div>
 
             <div className="seccion">
@@ -207,8 +219,8 @@ export default function ViajeEditar() {
                 <Campo label="Hora de salida" requerido icono="clock" error={errores.salida}>
                   <SelectorHora etiqueta="Hora de salida" hora={salida[0]} minuto={salida[1]} onHora={(h) => { setSalida([h, salida[1]]); setErrores((e) => ({ ...e, salida: undefined })) }} onMinuto={(m) => { setSalida([salida[0], m]); setErrores((e) => ({ ...e, salida: undefined })) }} />
                 </Campo>
-                <Campo label="Hora de llegada (aprox.)" requerido icono="clock" error={errores.llegada}>
-                  <SelectorHora etiqueta="Hora de llegada" hora={llegada[0]} minuto={llegada[1]} onHora={(h) => { setLlegada([h, llegada[1]]); setErrores((e) => ({ ...e, llegada: undefined })) }} onMinuto={(m) => { setLlegada([llegada[0], m]); setErrores((e) => ({ ...e, llegada: undefined })) }} />
+                <Campo label="Duración" icono="clock" soloLectura ayuda="Calculada por el sistema">
+                  <input type="text" readOnly tabIndex={-1} value={duracionMin != null ? formatoDuracion(duracionMin) : (ruta ? 'No disponible' : 'Calculando...')} aria-label="Duración del viaje (calculada)" />
                 </Campo>
               </div>
             </div>
@@ -241,9 +253,14 @@ export default function ViajeEditar() {
             <div className="resumen-fila"><span>Estado</span><BadgeEstado estado={original.estado} fecha={original.fecha} /></div>
             <div className="resumen-fila"><span>Recorrido</span><strong>{form.origen && form.destino ? `${form.origen} → ${form.destino}` : '—'}</strong></div>
             <div className="resumen-fila"><span>Salida</span><strong>{form.fecha && horaSalida ? `${formatoFecha(`${form.fecha}T00:00:00`)} · ${horaSalida}` : '—'}</strong></div>
+            <div className="resumen-fila"><span>Distancia</span><strong>{formatoKm(distanciaKm)}</strong></div>
+            <div className="resumen-fila"><span>Duración</span><strong>{formatoDuracion(duracionMin)}</strong></div>
             <div className="resumen-fila"><span>Llegada (aprox.)</span><strong>{horaLlegada || '—'}</strong></div>
             <div className="resumen-fila"><span>Cupo</span><strong>{Number(form.cupo_total) > 0 ? `${ocupados} / ${form.cupo_total}` : '—'}</strong></div>
             {esSerie && <div className="resumen-fila"><span>Repetición</span><strong>{textoRepeticion(original.repeticion_dias, original.serie_id)}</strong></div>}
+            <div className="resumen-fila"><span>Tu precio por km</span><strong>{precioKm ? formatoPesos(precioKm) : '—'}</strong></div>
+            <div className="resumen-fila"><span>Precio por pasajero</span><strong>{formatoPesos(montoPorPasajero)}</strong></div>
+            {precioKm === null && <p className="nota-resumen">Todavía no configuraste tu precio por km. <Link to="/tarifa">Configurarlo ahora</Link></p>}
             <p className="nota-resumen">Los cambios se validan contra tus otros viajes activos para evitar superposiciones.</p>
           </div>
         </aside>

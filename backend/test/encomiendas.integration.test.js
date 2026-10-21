@@ -19,6 +19,13 @@ function newEmail(role) {
   return email
 }
 
+// DNI y telefono son unicos: cada registro de prueba necesita los suyos.
+let contacto = Date.now() % 10000000
+function datosContactoUnicos() {
+  contacto += 1
+  return { dni: String(10000000 + (contacto % 89999999)), telefono: `351${String(1000000 + (contacto % 8999999))}` }
+}
+
 async function registerCustomer() {
   const email = newEmail('cliente')
   const response = await api.post('/api/auth/register').send({
@@ -27,8 +34,7 @@ async function registerCustomer() {
     email,
     password,
     confirmarPassword: password,
-    dni: '12345678',
-    telefono: '3511234567',
+    ...datosContactoUnicos(),
   })
 
   assert.equal(response.status, 201, JSON.stringify(response.body))
@@ -46,8 +52,7 @@ async function registerCommissionaire() {
     email,
     password,
     confirmarPassword: password,
-    dni: '87654321',
-    telefono: '3517654321',
+    ...datosContactoUnicos(),
   })
   assert.equal(response.status, 201, JSON.stringify(response.body))
   await query('UPDATE usuarios SET email_verificado = true WHERE email = $1', [email])
@@ -85,7 +90,7 @@ describe('CU27: solicitud de envío de encomienda por un cliente', () => {
 
   it('crea la solicitud y deriva el remitente del cliente autenticado', async () => {
     const cliente = await registerCustomer()
-    const clienteDb = await query('SELECT id FROM clientes WHERE usuario_id = $1', [cliente.usuario.id])
+    const clienteDb = await query('SELECT id, telefono FROM clientes WHERE usuario_id = $1', [cliente.usuario.id])
     const estadoInicial = await api.get('/api/encomiendas/mis-solicitudes')
       .set('Authorization', `Bearer ${cliente.token}`)
 
@@ -100,7 +105,7 @@ describe('CU27: solicitud de envío de encomienda por un cliente', () => {
     assert.equal(response.status, 201, JSON.stringify(response.body))
     assert.equal(response.body.encomienda.cliente_remitente_id, clienteDb.rows[0].id)
     assert.equal(response.body.encomienda.remitente_nombre, 'Ana Cliente')
-    assert.equal(response.body.encomienda.remitente_telefono, '3511234567')
+    assert.equal(response.body.encomienda.remitente_telefono, clienteDb.rows[0].telefono)
     assert.equal(response.body.encomienda.direccion_retiro, shipmentDetails.direccion_retiro)
     assert.equal(response.body.encomienda.destinatario_nombre, shipmentDetails.destinatario_nombre)
     assert.equal(response.body.encomienda.destinatario_telefono, shipmentDetails.destinatario_telefono)

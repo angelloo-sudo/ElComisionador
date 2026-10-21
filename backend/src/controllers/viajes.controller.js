@@ -4,6 +4,7 @@ import { query, pool } from '../config/db.js'
 import { generarFechas } from '../validators/viaje.validador.js'
 import { rangoViaje, seSuperponen, extenderSeries, SQL_OCUPADOS } from '../services/viajes.service.js'
 import { hoyEnCordoba, obtenerEstadoViaje } from '../services/estado-viaje.js'
+import { datosDeViaje } from '../services/tarifa.service.js'
 
 // US16 - Listar viajes del comisionista logueado, con filtros opcionales por
 // query string: ?fecha=YYYY-MM-DD&origen=texto&destino=texto&estado=programado
@@ -82,6 +83,7 @@ export async function obtener(req, res, next) {
       `SELECT v.*,
               v.fecha::text AS fecha_iso,
               ${SQL_OCUPADOS} AS ocupados,
+              (SELECT cm.precio_km FROM comisionistas cm WHERE cm.usuario_id = v.usuario_id) AS precio_km,
               COALESCE((
                 SELECT json_agg(s.nombre || ' ' || s.apellido || CASE WHEN s.cantidad_pasajeros > 1 THEN ' (' || s.cantidad_pasajeros || ' pasajeros)' ELSE '' END ORDER BY s.id)
                 FROM solicitudes_viaje s
@@ -106,8 +108,11 @@ export async function obtener(req, res, next) {
 
 export async function crear(req, res, next) {
   try {
-    const { origen, destino, fecha, hora_salida, hora_llegada, cupo_total, repeticion } = req.body
+    const { origen, destino, fecha, hora_salida, cupo_total, repeticion } = req.body
     const usuarioId = req.usuario?.id
+
+    // Distancia, duracion y hora de llegada: las calcula el sistema con la ruta en auto del mapa.
+    const { distancia_km, duracion_min, hora_llegada } = await datosDeViaje(origen.trim(), destino.trim(), hora_salida)
 
     // Fechas a crear: una sola si el viaje es unico, o todas las ocurrencias si se repite.
     const fechas = generarFechas(fecha, repeticion)
@@ -157,11 +162,11 @@ export async function crear(req, res, next) {
       for (const f of fechas) {
         const { rows } = await cliente.query(
           `INSERT INTO viajes (usuario_id, origen, destino, fecha, hora_salida, hora_llegada,
-                               cupo_total, serie_id, repeticion_dias)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                               distancia_km, duracion_min, cupo_total, serie_id, repeticion_dias)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
            RETURNING *`,
           [usuarioId, origen.trim(), destino.trim(), f, hora_salida, hora_llegada,
-           cupo_total ?? 0, serieId, repeticionDias]
+           distancia_km, duracion_min, cupo_total ?? 0, serieId, repeticionDias]
         )
         creados.push(rows[0])
       }
@@ -274,7 +279,7 @@ export async function actualizar(req, res, next) {
   try {
     const { id } = req.params
     const usuarioId = req.usuario?.id
-    const { origen, destino, fecha, hora_salida, hora_llegada, cupo_total } = req.body
+    const { origen, destino, fecha, hora_salida, cupo_total } = req.body
     const alcance = req.body.alcance ?? 'este'
 
     if (!ALCANCES_EDICION.includes(alcance)) {
@@ -334,6 +339,7 @@ export async function actualizar(req, res, next) {
          AND id <> ALL($3::int[])`,
       [usuarioId, fechas, ids]
     )
+    const { distancia_km, duracion_min, hora_llegada } = await datosDeViaje(origen.trim(), destino.trim(), hora_salida)
     const rangoNuevo = rangoViaje(hora_salida, hora_llegada)
     const fechasConflicto = [...new Set(
       existentes
@@ -354,11 +360,14 @@ export async function actualizar(req, res, next) {
       })
     }
 
-    const valores = [origen.trim(), destino.trim(), hora_salida, hora_llegada, Number(cupo_total), ids, usuarioId]
+    const valores = [origen.trim(), destino.trim(), hora_salida, hora_llegada, Number(cupo_total), ids, usuarioId, distancia_km, duracion_min]
     if (!aplicaASerie) valores.push(fecha)
     const { rows: actualizados } = await query(
       `UPDATE viajes
-       SET origen = $1, destino = $2, hora_salida = $3, hora_llegada = $4, cupo_total = $5${aplicaASerie ? '' : ', fecha = $8'}
+       SET hora_llegada = COALESCE($4::time, CASE WHEN origen = $1 AND destino = $2 AND hora_salida = $3::time THEN hora_llegada END),
+           distancia_km = COALESCE($8::numeric, CASE WHEN origen = $1 AND destino = $2 THEN distancia_km END),
+           duracion_min = COALESCE($9::int, CASE WHEN origen = $1 AND destino = $2 THEN duracion_min END),
+           origen = $1, destino = $2, hora_salida = $3, cupo_total = $5${aplicaASerie ? '' : ', fecha = $10'}
        WHERE id = ANY($6::int[]) AND usuario_id = $7 AND estado = 'programado'
        RETURNING *`,
       valores

@@ -1,21 +1,26 @@
 // US19 - Validacion del formulario con el que un cliente solicita un viaje
 // (como pasajero o para enviar una encomienda).
 import { validarNombrePropio, validarDni, validarTelefono } from './comunes.validador.js'
+import { esLocalidadValida } from '../services/localidades.service.js'
 
 export const TIPOS_SOLICITUD = ['pasajero', 'encomienda']
 export const TIPOS_CONTENIDO = ['electronica', 'ropa', 'alimentos', 'libros', 'hogar', 'documentacion', 'juguetes', 'otro']
 export const FORMAS_PAGO = ['efectivo', 'transferencia']
 export const MAX_PASAJEROS_POR_SOLICITUD = 20
 
+// Codigo postal argentino: 4 digitos (5000) o CPA de 8 caracteres (X5000ABC).
+export const normalizarCodigoPostal = (v) => (typeof v === 'string' ? v.replace(/\s+/g, '').toUpperCase() : '')
+const CODIGO_POSTAL = /^(\d{4}|[A-Z]\d{4}[A-Z]{3})$/
+
 const texto = (v) => (typeof v === 'string' ? v.trim() : '')
 
 function validarUbicacion(d, prefijo, etiqueta, errores) {
   const calle = texto(d[`${prefijo}_calle`])
   const altura = texto(d[`${prefijo}_altura`])
-  const barrio = texto(d[`${prefijo}_barrio`])
+  const codigoPostal = normalizarCodigoPostal(d[`${prefijo}_codigo_postal`])
   if (calle.length < 2 || calle.length > 100) errores.push(`La calle de ${etiqueta} es obligatoria (hasta 100 caracteres)`)
   if (!/^\d{1,6}$/.test(altura)) errores.push(`La altura de ${etiqueta} debe ser un número (hasta 6 dígitos)`)
-  if (barrio.length < 2 || barrio.length > 100) errores.push(`El barrio de ${etiqueta} es obligatorio (hasta 100 caracteres)`)
+  if (!CODIGO_POSTAL.test(codigoPostal)) errores.push(`El código postal de ${etiqueta} es obligatorio (4 dígitos, por ejemplo 5000)`)
 }
 
 function numeroPositivo(valor, max) {
@@ -38,12 +43,19 @@ export function validarSolicitud(body = {}) {
   validarUbicacion(body, 'destino', 'destino', errores)
   datos.origen_calle = texto(body.origen_calle)
   datos.origen_altura = texto(body.origen_altura)
-  datos.origen_barrio = texto(body.origen_barrio)
+  datos.origen_codigo_postal = normalizarCodigoPostal(body.origen_codigo_postal)
   datos.origen_descripcion = texto(body.origen_descripcion) || null
   if (datos.origen_descripcion && datos.origen_descripcion.length > 300) errores.push('La descripción del lugar no puede superar los 300 caracteres')
   datos.destino_calle = texto(body.destino_calle)
   datos.destino_altura = texto(body.destino_altura)
-  datos.destino_barrio = texto(body.destino_barrio)
+  datos.destino_codigo_postal = normalizarCodigoPostal(body.destino_codigo_postal)
+
+  // Localidad donde sube / baja (o donde se retira / entrega el paquete). Si no viene, se usa la del viaje.
+  for (const [prefijo, etiqueta] of [['origen', 'de subida o retiro'], ['destino', 'de bajada o entrega']]) {
+    const loc = texto(body[`${prefijo}_localidad`])
+    if (loc && esLocalidadValida(loc) === false) errores.push(`La localidad ${etiqueta} debe ser una de la lista de Córdoba`)
+    datos[`${prefijo}_localidad`] = loc || null
+  }
 
   if (tipo === 'pasajero') {
     agregar(validarNombrePropio(body.nombre, { etiqueta: 'El nombre' }))

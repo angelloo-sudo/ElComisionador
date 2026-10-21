@@ -4,8 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api/client.js'
 import Icon from '../components/Icon.jsx'
 import { Alerta, Campo, formatoFecha, Modal, Toast } from '../components/ui.jsx'
+import MapaRuta from '../components/MapaRuta.jsx'
 import { BadgeSolicitud } from './MisTraslados.jsx'
 import { codigoViaje } from './ViajeNuevo.jsx'
+import { formatoDuracion, formatoKm, formatoPesos } from '../utils/tarifa.js'
 
 const ESTADOS = [
   { valor: 'pendiente', texto: 'Pendientes' },
@@ -30,7 +32,22 @@ const TEXTOS = {
 }
 
 const fecha = (f) => formatoFecha(`${f}T12:00:00`)
-const direccion = (s, p) => `${s[`${p}_calle`]} ${s[`${p}_altura`]}, ${s[`${p}_barrio`]}`
+const direccion = (s, p) => `${s[`${p}_calle`]} ${s[`${p}_altura`]}, ${s[`${p}_codigo_postal`] ? `CP ${s[`${p}_codigo_postal`]}` : s[`${p}_barrio`]} (${s[`${p}_localidad`] ?? s[p]})`
+
+// Mapa del tramo de una solicitud: ruta completa del viaje con las paradas de subida y bajada marcadas.
+function MapaSolicitud({ s }) {
+  const [tramo, setTramo] = useState(undefined) // undefined = cargando, null = sin tramo (viaje completo / no disponible)
+  useEffect(() => {
+    let vigente = true
+    setTramo(undefined)
+    api.get(`/solicitudes/${s.id}/tramo`)
+      .then((r) => { if (vigente) setTramo(r.estado === 'ok' && !r.completo ? r : null) })
+      .catch(() => { if (vigente) setTramo(null) })
+    return () => { vigente = false }
+  }, [s.id])
+  if (tramo === undefined) return <p className="campo-ayuda">Cargando mapa...</p>
+  return <MapaRuta origen={s.origen} destino={s.destino} alto={420} tramo={tramo} />
+}
 
 function Fila({ etiqueta, children }) {
   return <div className="resumen-fila"><span>{etiqueta}</span><strong>{children}</strong></div>
@@ -41,6 +58,11 @@ function DetalleSolicitud({ s }) {
     <div className="viaje-detalle">
       <Fila etiqueta="Viaje">{codigoViaje(s.viaje_id)} · {s.origen} → {s.destino}</Fila>
       <Fila etiqueta="Salida">{fecha(s.fecha)} · {s.hora_salida?.slice(0, 5)}</Fila>
+      <Fila etiqueta="Duración">{formatoDuracion(s.duracion_min)}</Fila>
+      <Fila etiqueta={s.tipo === 'pasajero' ? 'Sube en' : 'Se retira en (localidad)'}>{s.origen_localidad ?? s.origen}</Fila>
+      <Fila etiqueta={s.tipo === 'pasajero' ? 'Baja en' : 'Se entrega en (localidad)'}>{s.destino_localidad ?? s.destino}</Fila>
+      <Fila etiqueta="Distancia del tramo">{formatoKm(s.distancia_km)}</Fila>
+      <Fila etiqueta="Monto a cobrar">{s.monto == null ? 'A convenir' : `${formatoPesos(s.monto)} (${formatoPesos(s.precio_km)} por km)`}</Fila>
       <Fila etiqueta="Cliente (cuenta)">{s.cliente_email}</Fila>
       {s.tipo === 'pasajero' ? (
         <>
@@ -174,7 +196,7 @@ export default function Postulaciones() {
         ) : (
           <table className="tabla">
             <thead>
-              <tr><th>Cliente</th><th>Solicitud</th><th>Viaje</th>{tipoFijo === 'pasajero' && <th>Cupo</th>}<th>Estado</th><th></th></tr>
+              <tr><th>Cliente</th><th>Solicitud</th><th>Viaje</th>{tipoFijo === 'pasajero' && <th>Cupo</th>}<th>Monto</th><th>Estado</th><th></th></tr>
             </thead>
             <tbody>
               {lista.map((s) => {
@@ -184,8 +206,12 @@ export default function Postulaciones() {
                   <tr key={s.id}>
                     <td><strong>{quien(s)}</strong><div className="campo-ayuda">{s.tipo === 'pasajero' ? s.telefono : s.emisor_telefono}</div></td>
                     <td>{resumen(s)}</td>
-                    <td className="col-recorrido"><span className="codigo">{codigoViaje(s.viaje_id)}</span> {s.origen}<span className="flecha">→</span>{s.destino}<div className="campo-ayuda">{fecha(s.fecha)} · {s.hora_salida?.slice(0, 5)}</div></td>
+                    <td className="col-recorrido"><span className="codigo">{codigoViaje(s.viaje_id)}</span> {s.origen}<span className="flecha">→</span>{s.destino}<div className="campo-ayuda">{fecha(s.fecha)} · {s.hora_salida?.slice(0, 5)}</div>
+                      {((s.origen_localidad ?? s.origen) !== s.origen || (s.destino_localidad ?? s.destino) !== s.destino) && (
+                        <div className="campo-ayuda">Tramo: {s.origen_localidad ?? s.origen} → {s.destino_localidad ?? s.destino}</div>
+                      )}</td>
                     {tipoFijo === 'pasajero' && <td>{s.ocupados} / {s.cupo_total}</td>}
+                    <td>{s.monto == null ? <span className="campo-ayuda">A convenir</span> : formatoPesos(s.monto)}</td>
                     <td><BadgeSolicitud estado={s.estado} /></td>
                     <td>
                       <div className="acciones-fila">
@@ -209,9 +235,12 @@ export default function Postulaciones() {
       </div>
 
       {detalle && (
-        <Modal onClose={() => setDetalle(null)}>
+        <Modal onClose={() => setDetalle(null)} ancho="extra">
           <h2>{textos.modal}</h2>
-          <DetalleSolicitud s={detalle} />
+          <div className="detalle-2col">
+            <DetalleSolicitud s={detalle} />
+            <div className="detalle-mapa"><MapaSolicitud s={detalle} /></div>
+          </div>
           <div className="modal-acciones">
             {detalle.estado === 'pendiente' && (
               <>

@@ -62,8 +62,8 @@ export async function obtener(req, res, next) {
 
     const [solicitudes, encomiendas] = await Promise.all([
       query(
-        `SELECT s.id, s.tipo, s.estado, s.origen_calle, s.origen_altura, s.origen_barrio,
-                s.origen_descripcion, s.destino_calle, s.destino_altura, s.destino_barrio,
+        `SELECT s.id, s.tipo, s.estado, s.origen_calle, s.origen_altura, s.origen_barrio, s.origen_codigo_postal,
+                s.origen_descripcion, s.destino_calle, s.destino_altura, s.destino_barrio, s.destino_codigo_postal,
                 s.nombre, s.apellido, s.dni, s.telefono, s.cantidad_pasajeros,
                 s.emisor_nombre, s.emisor_apellido, s.emisor_telefono,
                 s.receptor_nombre, s.receptor_apellido, s.receptor_telefono,

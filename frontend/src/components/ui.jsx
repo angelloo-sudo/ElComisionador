@@ -106,7 +106,7 @@ export function Toast({ titulo, texto, onClose, ms = 4000 }) {
 export function Modal({ children, onClose, ancho = false, cerrarAlClickFuera = true }) {
   return (
     <div className="modal-overlay" onMouseDown={(e) => { if (cerrarAlClickFuera && e.target === e.currentTarget) onClose?.() }}>
-      <div className={`modal${ancho ? ' modal-ancho' : ''}`} role="dialog" aria-modal="true">{children}</div>
+      <div className={`modal${ancho === 'extra' ? ' modal-extra' : ancho ? ' modal-ancho' : ''}`} role="dialog" aria-modal="true">{children}</div>
     </div>
   )
 }

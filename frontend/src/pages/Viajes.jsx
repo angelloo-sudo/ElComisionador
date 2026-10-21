@@ -8,6 +8,7 @@ import Icon from '../components/Icon.jsx'
 import { Campo, Alerta, Toast, BadgeEstado, ESTADOS_VIAJE, formatoFecha, textoRepeticion } from '../components/ui.jsx'
 import { codigoViaje } from './ViajeNuevo.jsx'
 import { estadoVisibleViaje, hoyEnCordoba } from '../utils/estadoViaje.js'
+import { formatoDuracion } from '../utils/tarifa.js'
 
 const FILTROS_VACIOS = { fecha: '', origen: '', destino: '', estado: '' }
 
@@ -159,7 +160,7 @@ export default function Viajes() {
                 <th>Recorrido</th>
                 <th>Fecha</th>
                 <th>Salida</th>
-                <th>Llegada</th>
+                <th>Duración</th>
                 <th>Cupo</th>
                 <th>Estado</th>
                 <th></th>
@@ -179,7 +180,7 @@ export default function Viajes() {
                   </td>
                   <td>{formatoFecha(viaje.fecha)}</td>
                   <td>{viaje.hora_salida ? viaje.hora_salida.slice(0, 5) : '-'}</td>
-                  <td>{viaje.hora_llegada ? viaje.hora_llegada.slice(0, 5) : '-'}</td>
+                  <td>{formatoDuracion(viaje.duracion_min)}</td>
                   <td>{viaje.ocupados ?? 0} / {viaje.cupo_total ?? '-'}</td>
                   <td><BadgeEstado estado={viaje.estado} fecha={viaje.fecha} ahora={ahora} /></td>
                   <td>

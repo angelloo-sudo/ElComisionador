@@ -1,0 +1,79 @@
+/* Mapa de la ruta del viaje y verificacion de direcciones. Archivo aparte para no pisar index.css. */
+.mapa-ruta { margin-top: 18px; }
+.mapa-leyenda { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-bottom: 8px; font-size: .88rem; color: var(--texto-2, inherit); }
+.mapa-leyenda span { display: inline-flex; align-items: center; gap: 6px; }
+.mapa-lienzo, .mapa-estado {
+  width: 100%; border-radius: var(--radio, 12px); overflow: hidden;
+  border: 1px solid var(--borde, #ddd); position: relative; z-index: 0;
+}
+.mapa-estado { display: flex; align-items: center; justify-content: center; text-align: center; padding: 12px; background: var(--hover, #f4f0eb); color: var(--texto-2, inherit); font-size: .9rem; }
+.mapa-estado.error { color: var(--rojo-texto, #9b1c1c); background: var(--rojo-fondo, #fdecec); }
+.mapa-info { margin: 8px 2px 0; font-size: .88rem; color: var(--texto-2, inherit); }
+.mapa-pin-contenedor { background: none; border: 0; }
+.mapa-pin {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 50%; border: 3px solid #fff;
+  color: #fff; font: 700 .85rem/1 system-ui, sans-serif; font-style: normal;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .4);
+}
+.mapa-pin.origen { background: #3f7d58; }
+.mapa-pin.destino { background: #7a2a3a; }
+.mapa-pin.chico { width: 20px; height: 20px; border-width: 2px; font-size: .68rem; box-shadow: none; }
+.leaflet-container { font-family: inherit; }
+
+/* Resultado de la verificacion de una direccion (calle + altura) */
+.verif { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; font-size: .88rem; line-height: 1.35; }
+.verif.ok { color: var(--verde-texto, #1f6b3a); }
+.verif.aviso { color: var(--ambar-texto, #8a5a00); }
+.verif.error { color: var(--rojo-texto, #9b1c1c); }
+.verif.neutro { color: var(--texto-3, #777); }
+
+/* Ventana de detalle ancha: detalle a la izquierda, mapa grande a la derecha */
+.modal.modal-extra { max-width: min(1140px, 96vw); padding: 28px 32px; }
+.detalle-2col { display: grid; grid-template-columns: minmax(280px, 400px) minmax(0, 1fr); gap: 32px; align-items: start; margin-top: 12px; }
+.detalle-2col .detalle-mapa { position: sticky; top: 0; }
+.detalle-2col .detalle-mapa .mapa-ruta { margin-top: 0; }
+@media (max-width: 860px) {
+  .modal.modal-extra { padding: 20px; }
+  .detalle-2col { grid-template-columns: 1fr; gap: 20px; }
+  .detalle-2col .detalle-mapa { position: static; }
+}
+
+/* Pagina "Mi tarifa" y bloques de precio */
+.tarifa-grilla { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 20px; align-items: start; }
+@media (max-width: 1000px) { .tarifa-grilla { grid-template-columns: 1fr; } }
+.tarifa-entrada { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+.tarifa-entrada .campo { flex: 1 1 220px; margin: 0; }
+.tarifa-ejemplo { display: grid; gap: 0; }
+.precio-total { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-top: 8px; padding: 14px 16px; border-radius: var(--radio, 12px); background: var(--activo, #f4ece4); }
+.precio-total span { color: var(--texto-2, inherit); }
+.precio-total strong { font-size: 1.35rem; color: var(--primario, inherit); }
+.detalle-solicitud { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); gap: 24px; align-items: start; }
+.detalle-solicitud .mapa-ruta { margin-top: 0; }
+@media (max-width: 860px) { .detalle-solicitud { grid-template-columns: 1fr; } }
+
+/* Paradas (donde sube / baja el cliente) */
+.mapa-pin.parada { width: 22px; height: 22px; border-width: 4px; background: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, .45); }
+.mapa-pin.parada.sube { border-color: #3f7d58; }
+.mapa-pin.parada.baja { border-color: #7a2a3a; }
+.leaflet-tooltip.mapa-etiqueta { font-weight: 600; color: #3a2318; border: 1px solid #c9b6a8; border-radius: 8px; box-shadow: 0 2px 6px rgba(0, 0, 0, .25); }
+.leyenda-tramo, .leyenda-resto { display: inline-block; width: 22px; height: 0; vertical-align: middle; margin-right: 4px; border-top: 4px solid #7a2a3a; }
+.leyenda-resto { border-top: 4px dashed #b9a79b; margin-left: 10px; }
+.paradas-aviso { margin: 12px 0 0; }
+.paradas-ayuda { color: var(--texto-2, inherit); font-size: .88rem; margin: 6px 0 0; }
+
+/* Paradas de otras solicitudes y ruta sugerida */
+.mapa-pin.parada.otra { width: 22px; height: 22px; font-size: .72rem; font-weight: 700; color: #3b2a22; display: flex; align-items: center; justify-content: center; }
+.mapa-pin.parada.otra.pendiente { opacity: .6; border-style: dashed; }
+.leyenda-sugerida { display: inline-block; width: 22px; height: 0; border-top: 4px dashed #3f7d58; vertical-align: middle; margin: 0 6px 0 2px; }
+.paradas-lista { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+.paradas-lista li { display: flex; gap: 10px; align-items: flex-start; font-size: .92rem; }
+.paradas-lista .num { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 3px solid #3f7d58; background: #fff; font-size: .72rem; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.paradas-lista .num.baja { border-color: #7a2a3a; }
+.paradas-lista .num.pendiente { opacity: .6; border-style: dashed; }
+.paradas-lista small { display: block; color: var(--texto-2, inherit); }
+.sugerencia-ruta { margin-top: 14px; padding: 12px 14px; border-radius: 10px; border: 1px solid #cfe0d3; background: #f1f7f2; }
+.sugerencia-ruta h4 { margin: 0 0 4px; }
+.sugerencia-ruta p { margin: 4px 0 0; font-size: .9rem; }
+.paradas-cliente { margin: 12px 0 0; padding: 10px 14px; border-radius: 10px; background: #f7f1ee; font-size: .9rem; }
+.paradas-cliente ul { margin: 6px 0 0; padding-left: 20px; }
