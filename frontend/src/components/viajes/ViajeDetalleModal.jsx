@@ -4,17 +4,27 @@ import { useState, useEffect, useMemo } from 'react'
 import { api } from '../../api/client.js'
 import { Modal, Alerta, BadgeEstado, formatoFecha, textoRepeticion } from '../ui.jsx'
 import MapaRuta from '../MapaRuta.jsx'
+import PasajerosViaje from './PasajerosViaje.jsx'
 import ParadasViaje, { pinesDeParadas } from './ParadasViaje.jsx'
 import { codigoViaje } from '../../pages/ViajeNuevo.jsx'
-import { estadoVisibleViaje } from '../../utils/estadoViaje.js'
+import { estadoVisibleViaje, puedeIniciarViaje } from '../../utils/estadoViaje.js'
 import { calcularMonto, formatoDuracion, formatoKm, formatoPesos } from '../../utils/tarifa.js'
 
-export default function ViajeDetalleModal({ viajeId, onClose, onCancelar, onModificar, ahora }) {
+function formatoFechaHora(valor) {
+  return new Date(valor).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })
+}
+
+export default function ViajeDetalleModal({ viajeId, onClose, onCancelar, onModificar, onIniciar, onFinalizar, ahora }) {
   const [viaje, setViaje] = useState(null)
   const [error, setError] = useState(null)
   const [cargando, setCargando] = useState(true)
   const [paradas, setParadas] = useState(null) // { paradas, sugerencia }
   const [verSugerida, setVerSugerida] = useState(false)
+
+  const recargar = () => {
+    api.get(`/viajes/${viajeId}`).then(setViaje).catch(() => {})
+    api.get(`/viajes/${viajeId}/paradas`).then(setParadas).catch(() => {})
+  }
 
   useEffect(() => {
     setCargando(true)
@@ -53,16 +63,11 @@ export default function ViajeDetalleModal({ viajeId, onClose, onCancelar, onModi
             <div className="resumen-fila"><span>Repetición</span><strong>{textoRepeticion(viaje.repeticion_dias, viaje.serie_id)}</strong></div>
             <div className="resumen-fila"><span>Cupo de pasajeros</span><strong>{viaje.ocupados} / {viaje.cupo_total ?? '-'}</strong></div>
             <div className="resumen-fila"><span>Estado</span><BadgeEstado estado={viaje.estado} fecha={viaje.fecha} ahora={ahora} /></div>
+            {viaje.iniciado_en && <div className="resumen-fila"><span>Iniciado</span><strong>{formatoFechaHora(viaje.iniciado_en)}</strong></div>}
+            {viaje.finalizado_en && <div className="resumen-fila"><span>Finalizado</span><strong>{formatoFechaHora(viaje.finalizado_en)}</strong></div>}
             <div className="resumen-fila"><span>Creado</span><strong>{formatoFecha(viaje.creado_en)}</strong></div>
             <ParadasViaje datos={paradas} verSugerida={verSugerida} onVerSugerida={setVerSugerida} />
-            <h3 style={{ marginTop: 18 }}>Pasajeros aceptados</h3>
-            {viaje.pasajeros.length === 0 ? (
-              <p className="campo-ayuda">Todavía no hay reservas activas para este viaje.</p>
-            ) : (
-              <ul style={{ margin: '12px 0 0', paddingLeft: 22 }}>
-                {viaje.pasajeros.map((nombre, indice) => <li key={`${nombre}-${indice}`}>{nombre}</li>)}
-              </ul>
-            )}
+            <PasajerosViaje viajeId={viaje.id} estadoViaje={viaje.estado} onCambio={recargar} />
           </div>
           <div className="detalle-mapa">
             <MapaRuta origen={viaje.origen} destino={viaje.destino} alto={460}
@@ -72,6 +77,12 @@ export default function ViajeDetalleModal({ viajeId, onClose, onCancelar, onModi
       )}
 
       <div className="modal-acciones">
+        {viaje && onIniciar && puedeIniciarViaje(viaje, ahora) && (
+          <button type="button" className="btn btn-primario" onClick={() => onIniciar(viaje)}>Iniciar viaje</button>
+        )}
+        {viaje && onFinalizar && viaje.estado === 'en_curso' && (
+          <button type="button" className="btn btn-primario" onClick={() => onFinalizar(viaje)}>Finalizar viaje</button>
+        )}
         {viaje && estadoVisibleViaje(viaje.estado, viaje.fecha, ahora) === 'programado' && onModificar && (
           <button type="button" className="btn" onClick={() => onModificar(viaje)}>Modificar viaje</button>
         )}

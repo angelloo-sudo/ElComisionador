@@ -223,6 +223,32 @@ ALTER TABLE solicitudes_viaje ADD COLUMN IF NOT EXISTS distancia_km NUMERIC(8,1)
 ALTER TABLE solicitudes_viaje ADD COLUMN IF NOT EXISTS precio_km    NUMERIC(10,2);
 ALTER TABLE solicitudes_viaje ADD COLUMN IF NOT EXISTS monto        NUMERIC(12,2);
 
+-- US28 (flujo de solicitudes): momento en que el comisionista retiro la encomienda.
+ALTER TABLE solicitudes_viaje ADD COLUMN IF NOT EXISTS retirada_en TIMESTAMPTZ;
+-- US33: momento en que el comisionista entrego la encomienda al destinatario.
+ALTER TABLE solicitudes_viaje ADD COLUMN IF NOT EXISTS entregada_en TIMESTAMPTZ;
+
+-- US22 / US24 / US25: avance operativo del pasajero (NULL = todavia no subio).
+ALTER TABLE solicitudes_viaje ADD COLUMN IF NOT EXISTS estado_pasajero VARCHAR(24)
+  CHECK (estado_pasajero IN ('a_bordo', 'en_destino', 'ausente', 'cancelado_comisionista'));
+ALTER TABLE solicitudes_viaje ADD COLUMN IF NOT EXISTS subio_en TIMESTAMPTZ;
+ALTER TABLE solicitudes_viaje ADD COLUMN IF NOT EXISTS llego_en TIMESTAMPTZ;
+
+-- US35 / US37 / US38 / US39: ingresos por cobro de pasajeros y encomiendas. Se amplia la tabla
+-- "ingresos" existente (no se pierden datos). Un cobro por solicitud: lo registra el sistema solo
+-- cuando el pasajero llega a destino o cuando se retira la encomienda.
+ALTER TABLE ingresos ADD COLUMN IF NOT EXISTS usuario_id       INTEGER REFERENCES usuarios(id) ON DELETE CASCADE;
+ALTER TABLE ingresos ADD COLUMN IF NOT EXISTS solicitud_id     INTEGER REFERENCES solicitudes_viaje(id) ON DELETE SET NULL;
+ALTER TABLE ingresos ADD COLUMN IF NOT EXISTS tipo_servicio    VARCHAR(12) CHECK (tipo_servicio IN ('pasajero', 'encomienda'));
+ALTER TABLE ingresos ADD COLUMN IF NOT EXISTS forma_pago       VARCHAR(15) CHECK (forma_pago IN ('efectivo', 'transferencia'));
+ALTER TABLE ingresos ADD COLUMN IF NOT EXISTS estado           VARCHAR(10) NOT NULL DEFAULT 'activo' CHECK (estado IN ('activo', 'anulado'));
+ALTER TABLE ingresos ADD COLUMN IF NOT EXISTS motivo_anulacion VARCHAR(300);
+ALTER TABLE ingresos ADD COLUMN IF NOT EXISTS anulado_en       TIMESTAMPTZ;
+ALTER TABLE ingresos ADD COLUMN IF NOT EXISTS creado_en        TIMESTAMPTZ NOT NULL DEFAULT NOW();
+ALTER TABLE ingresos ADD COLUMN IF NOT EXISTS actualizado_en   TIMESTAMPTZ NOT NULL DEFAULT NOW();
+CREATE UNIQUE INDEX IF NOT EXISTS ingresos_solicitud_activo_uq ON ingresos (solicitud_id) WHERE estado = 'activo' AND solicitud_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS ingresos_usuario_fecha_idx ON ingresos (usuario_id, fecha DESC);
+
 -- Paradas: localidad donde el cliente sube / se retira el paquete y donde baja / se entrega.
 -- distancia_km de la solicitud pasa a ser los km de ese tramo (no del viaje completo).
 -- Codigo postal de las direcciones (reemplaza al barrio; las columnas de barrio quedan para las solicitudes viejas, ahora sin NOT NULL).
@@ -232,3 +258,10 @@ ALTER TABLE solicitudes_viaje ALTER COLUMN origen_barrio  DROP NOT NULL;
 ALTER TABLE solicitudes_viaje ALTER COLUMN destino_barrio DROP NOT NULL;
 ALTER TABLE solicitudes_viaje ADD COLUMN IF NOT EXISTS origen_localidad  VARCHAR(120);
 ALTER TABLE solicitudes_viaje ADD COLUMN IF NOT EXISTS destino_localidad VARCHAR(120);
+
+-- US20 / US21: momento en que el comisionista inicio y finalizo el viaje.
+ALTER TABLE viajes ADD COLUMN IF NOT EXISTS iniciado_en   TIMESTAMPTZ;
+ALTER TABLE viajes ADD COLUMN IF NOT EXISTS finalizado_en TIMESTAMPTZ;
+
+-- US28: momento en que el comisionista retiro la encomienda (confirmacion de recepcion inicial).
+ALTER TABLE encomiendas ADD COLUMN IF NOT EXISTS retirado_en TIMESTAMPTZ;

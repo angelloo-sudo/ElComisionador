@@ -380,6 +380,102 @@ export async function actualizar(req, res, next) {
   } catch (e) { next(e) }
 }
 
+// US20 - Iniciar viaje.
+// Marca formalmente el comienzo del trayecto: el viaje pasa de "Programado" a "En curso".
+// Reglas: el viaje debe ser del comisionista, estar programado (no cancelado, vencido ni ya
+// iniciado), corresponder al dia de hoy (zona horaria de Cordoba) y el comisionista no puede
+// tener otro viaje en curso. El UPDATE es condicional para evitar dobles inicios concurrentes.
+export async function iniciar(req, res, next) {
+  try {
+    const { id } = req.params
+    const usuarioId = req.usuario?.id
+
+    const { rows } = await query(
+      'SELECT id, estado, fecha::text AS fecha FROM viajes WHERE id = $1 AND usuario_id = $2',
+      [id, usuarioId]
+    )
+    if (rows.length === 0) {
+      return res.status(404).json({ mensaje: `Viaje ${id} no encontrado` })
+    }
+
+    const viaje = rows[0]
+    const estadoVisible = obtenerEstadoViaje(viaje.estado, viaje.fecha)
+    if (estadoVisible === 'en_curso') {
+      return res.status(409).json({ mensaje: 'El viaje ya fue iniciado' })
+    }
+    if (estadoVisible !== 'programado') {
+      const motivo = estadoVisible === 'vencido'
+        ? 'El viaje está vencido: su fecha ya pasó'
+        : 'Solo se pueden iniciar viajes en estado Programado'
+      return res.status(409).json({ mensaje: motivo })
+    }
+    if (viaje.fecha !== hoyEnCordoba()) {
+      return res.status(409).json({ mensaje: 'Solo se puede iniciar un viaje el día en que está programado' })
+    }
+
+    const { rows: enCurso } = await query(
+      `SELECT id FROM viajes WHERE usuario_id = $1 AND estado = 'en_curso' AND id <> $2 LIMIT 1`,
+      [usuarioId, id]
+    )
+    if (enCurso.length > 0) {
+      return res.status(409).json({
+        mensaje: `Ya tenés un viaje en curso (N° ${String(enCurso[0].id).padStart(4, '0')}). Finalizalo antes de iniciar otro`,
+        viaje_en_curso_id: enCurso[0].id,
+      })
+    }
+
+    const { rows: actualizados } = await query(
+      `UPDATE viajes SET estado = 'en_curso', iniciado_en = NOW()
+       WHERE id = $1 AND usuario_id = $2 AND estado = 'programado'
+       RETURNING *`,
+      [id, usuarioId]
+    )
+    if (actualizados.length === 0) {
+      return res.status(409).json({ mensaje: 'El viaje ya no está en estado Programado' })
+    }
+
+    res.status(200).json({ ...actualizados[0], fecha: viaje.fecha, mensaje: 'Viaje iniciado correctamente' })
+  } catch (e) { next(e) }
+}
+
+// US21 - Finalizar viaje.
+// Da por concluido el recorrido: el viaje pasa de "En curso" a "Finalizado" y queda registrada
+// la fecha y hora de finalizacion. Solo se puede finalizar un viaje que fue iniciado.
+export async function finalizar(req, res, next) {
+  try {
+    const { id } = req.params
+    const usuarioId = req.usuario?.id
+
+    const { rows } = await query(
+      'SELECT id, estado, fecha::text AS fecha FROM viajes WHERE id = $1 AND usuario_id = $2',
+      [id, usuarioId]
+    )
+    if (rows.length === 0) {
+      return res.status(404).json({ mensaje: `Viaje ${id} no encontrado` })
+    }
+
+    const viaje = rows[0]
+    if (viaje.estado === 'finalizado') {
+      return res.status(409).json({ mensaje: 'El viaje ya fue finalizado' })
+    }
+    if (viaje.estado !== 'en_curso') {
+      return res.status(409).json({ mensaje: 'Solo se pueden finalizar viajes en estado En curso. Iniciá el viaje primero' })
+    }
+
+    const { rows: actualizados } = await query(
+      `UPDATE viajes SET estado = 'finalizado', finalizado_en = NOW()
+       WHERE id = $1 AND usuario_id = $2 AND estado = 'en_curso'
+       RETURNING *`,
+      [id, usuarioId]
+    )
+    if (actualizados.length === 0) {
+      return res.status(409).json({ mensaje: 'El viaje ya no está en estado En curso' })
+    }
+
+    res.status(200).json({ ...actualizados[0], fecha: viaje.fecha, mensaje: 'Viaje finalizado correctamente' })
+  } catch (e) { next(e) }
+}
+
 export async function eliminar(req, res, next) {
   try {
     res.status(501).json({ mensaje: `eliminar viaje ${req.params.id}: pendiente (US11)` })

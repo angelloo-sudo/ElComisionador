@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import * as finanzas from '../controllers/finanzas.controller.js'
 import * as gastos from '../controllers/gastos.controller.js'
+import * as ingresos from '../controllers/ingresos.controller.js'
 import * as tiposGasto from '../controllers/tipos-gasto.controller.js'
 import { validarGasto, validarTipoGasto } from '../validators/gasto.validador.js'
 import { autenticar, permitirRoles } from '../middlewares/auth.middleware.js'
@@ -10,7 +11,12 @@ const router = Router()
 // Los gastos y sus tipos los administra el comisionista y son privados de cada uno.
 const soloComisionista = [autenticar, permitirRoles('comisionista')]
 
-router.post('/ingresos', finanzas.registrarIngreso) // Epica 6 (pendiente)
+// Epica 6 - Ingresos. El cobro (US35) lo registra el sistema solo al llegar el pasajero a destino
+// o al retirarse la encomienda; aca se consulta (US37), modifica (US38) y anula (US39).
+router.get('/ingresos', soloComisionista, ingresos.listar)
+router.get('/ingresos/:id', soloComisionista, ingresos.obtener)                              // US37
+router.put('/ingresos/:id', soloComisionista, ingresos.modificar)                            // US38
+router.patch('/ingresos/:id/anular', soloComisionista, ingresos.anular)                      // US39
 router.get('/viaje/:viajeId/ganancia', finanzas.gananciaViaje) // Epica 8 (pendiente)
 router.get('/rentabilidad', finanzas.rentabilidad)  // Epica 8 (pendiente)
 

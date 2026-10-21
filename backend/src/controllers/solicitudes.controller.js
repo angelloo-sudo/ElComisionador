@@ -4,6 +4,7 @@
 // Solo las solicitudes de pasajero ACEPTADAS ocupan cupo (suma de cantidad_pasajeros).
 import { pool, query } from '../config/db.js'
 import { validarSolicitud } from '../validators/solicitud.validador.js'
+import { registrarIngresoDeSolicitud } from '../services/ingresos.service.js'
 import { SQL_OCUPADOS } from '../services/viajes.service.js'
 import { validarDireccion } from '../services/geo.service.js'
 import { asegurarRutaDeViaje, calcularMonto } from '../services/tarifa.service.js'
@@ -311,12 +312,13 @@ export async function listarMias(req, res, next) {
   try {
     const { rows } = await query(
       `SELECT s.id, s.tipo, s.estado, s.motivo_rechazo, s.cantidad_pasajeros, s.forma_pago, s.creado_en,
-              s.monto, s.origen_localidad, s.destino_localidad,
+              s.monto, s.retirada_en, s.entregada_en, s.estado_pasajero, s.subio_en, s.llego_en,
+              EXISTS (SELECT 1 FROM ingresos i WHERE i.solicitud_id = s.id AND i.estado = 'activo') AS cobrado, s.origen_localidad, s.destino_localidad,
               s.origen_calle, s.origen_altura, s.origen_barrio, s.origen_codigo_postal, s.destino_calle, s.destino_altura, s.destino_barrio, s.destino_codigo_postal,
               v.id AS viaje_id, v.origen, v.destino, v.fecha::text AS fecha, v.hora_salida, v.hora_llegada, v.duracion_min,
               v.estado AS estado_viaje,
               u.nombre AS comisionista_nombre, u.apellido AS comisionista_apellido,
-              (s.estado IN ('pendiente', 'aceptada') AND v.estado = 'programado' AND ${INICIO} > (${TZ})) AS puede_cancelar
+              (s.estado IN ('pendiente', 'aceptada') AND s.retirada_en IS NULL AND s.estado_pasajero IS NULL AND v.estado = 'programado' AND ${INICIO} > (${TZ})) AS puede_cancelar
        FROM solicitudes_viaje s
        JOIN clientes c ON c.id = s.cliente_id
        JOIN viajes v ON v.id = s.viaje_id
@@ -336,7 +338,7 @@ export async function cancelar(req, res, next) {
 
   await conTransaccion(res, next, async (db) => {
     const { rows } = await db.query(
-      `SELECT s.estado, s.viaje_id FROM solicitudes_viaje s
+      `SELECT s.estado, s.viaje_id, s.retirada_en, s.estado_pasajero FROM solicitudes_viaje s
        JOIN clientes c ON c.id = s.cliente_id
        WHERE s.id = $1 AND c.usuario_id = $2 FOR UPDATE OF s`,
       [id, req.usuario.id],
@@ -345,6 +347,8 @@ export async function cancelar(req, res, next) {
     if (!solicitud) return abortar(404, 'No se encontró la solicitud')
     if (solicitud.estado === 'cancelada') return abortar(409, 'Esta solicitud ya está cancelada')
     if (solicitud.estado === 'rechazada') return abortar(409, 'El comisionista rechazó esta solicitud')
+    if (solicitud.retirada_en) return abortar(409, 'La encomienda ya fue retirada por el comisionista')
+    if (solicitud.estado_pasajero) return abortar(409, 'El comisionista ya registró novedades de tu traslado, no se puede cancelar')
 
     const { rows: viajes } = await db.query(
       `SELECT v.estado, ${INICIO} > (${TZ}) AS antes_del_inicio FROM viajes v WHERE v.id = $1 FOR UPDATE`,
@@ -379,6 +383,7 @@ export async function listarRecibidas(req, res, next) {
 
     const { rows } = await query(
       `SELECT s.*, cu.email AS cliente_email,
+              EXISTS (SELECT 1 FROM ingresos i WHERE i.solicitud_id = s.id AND i.estado = 'activo') AS cobrado,
               v.origen, v.destino, v.fecha::text AS fecha, v.hora_salida, v.hora_llegada, v.duracion_min,
               v.cupo_total, v.estado AS estado_viaje, ${SQL_OCUPADOS} AS ocupados
        FROM solicitudes_viaje s
@@ -448,3 +453,51 @@ function resolver(nuevoEstado) {
 
 export const aceptar = resolver('aceptada')
 export const rechazar = resolver('rechazada')
+
+// US28 - Registrar retiro de una encomienda aceptada (el comisionista confirma que la recibio).
+export async function retirar(req, res, next) {
+  const id = Number(req.params.id)
+  if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ mensaje: 'La solicitud indicada no es válida' })
+  await conTransaccion(res, next, async (db) => {
+    const { rows } = await db.query(
+      `SELECT s.tipo, s.estado, s.retirada_en, v.estado AS estado_viaje
+       FROM solicitudes_viaje s JOIN viajes v ON v.id = s.viaje_id
+       WHERE s.id = $1 AND v.usuario_id = $2 FOR UPDATE OF s`,
+      [id, req.usuario.id],
+    )
+    const s = rows[0]
+    if (!s) return abortar(404, 'No se encontró la solicitud')
+    if (s.tipo !== 'encomienda') return abortar(409, 'Solo se puede registrar el retiro de una encomienda')
+    if (s.estado !== 'aceptada') return abortar(409, 'Solo se puede registrar el retiro de una encomienda aceptada')
+    if (s.retirada_en) return abortar(409, 'La encomienda ya fue retirada')
+    if (['cancelado', 'finalizado'].includes(s.estado_viaje)) return abortar(409, 'El viaje ya no admite retiros')
+    const { rows: r } = await db.query(
+      `UPDATE solicitudes_viaje SET retirada_en = NOW() WHERE id = $1 RETURNING retirada_en`, [id])
+    // US35: al retirar la encomienda se registra el cobro del servicio.
+    const ingreso = await registrarIngresoDeSolicitud(db, id)
+    return { status: 200, body: { id, retirada_en: r[0].retirada_en, ingreso, mensaje: 'Retiro registrado' } }
+  })
+}
+
+// US33 - Registrar entrega de una encomienda retirada (confirma que llego al destinatario).
+export async function entregar(req, res, next) {
+  const id = Number(req.params.id)
+  if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ mensaje: 'La solicitud indicada no es válida' })
+  await conTransaccion(res, next, async (db) => {
+    const { rows } = await db.query(
+      `SELECT s.tipo, s.estado, s.retirada_en, s.entregada_en, v.estado AS estado_viaje
+       FROM solicitudes_viaje s JOIN viajes v ON v.id = s.viaje_id
+       WHERE s.id = $1 AND v.usuario_id = $2 FOR UPDATE OF s`,
+      [id, req.usuario.id],
+    )
+    const s = rows[0]
+    if (!s) return abortar(404, 'No se encontró la solicitud')
+    if (s.tipo !== 'encomienda' || s.estado !== 'aceptada') return abortar(409, 'Solo se puede registrar la entrega de una encomienda aceptada')
+    if (s.entregada_en) return abortar(409, 'La encomienda ya fue entregada')
+    if (!s.retirada_en) return abortar(409, 'Primero hay que registrar el retiro de la encomienda')
+    if (s.estado_viaje === 'cancelado') return abortar(409, 'El viaje fue cancelado')
+    const { rows: r } = await db.query(
+      `UPDATE solicitudes_viaje SET entregada_en = NOW() WHERE id = $1 RETURNING entregada_en`, [id])
+    return { status: 200, body: { id, entregada_en: r[0].entregada_en, mensaje: 'Entrega registrada' } }
+  })
+}

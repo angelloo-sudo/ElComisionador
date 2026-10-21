@@ -19,12 +19,25 @@ const VERBOS = {
   encomienda: { origen: 'retira', destino: 'entrega' },
 }
 
+// Nombre de quien sube/baja (pasajero) o de quien entrega/recibe el paquete (encomienda: el emisor en el
+// retiro y el receptor en la entrega). Las encomiendas no tienen nombre/apellido propios.
+function quienEs(s, lado) {
+  const completo = (n, a) => `${n ?? ''} ${a ?? ''}`.trim()
+  if (s.tipo === 'encomienda') {
+    const persona = lado === 'origen' ? completo(s.emisor_nombre, s.emisor_apellido) : completo(s.receptor_nombre, s.receptor_apellido)
+    if (persona) return persona
+  }
+  return completo(s.nombre, s.apellido) || 'Sin nombre'
+}
+
 // Solicitudes del viaje con sus paradas intermedias. detalle=true agrega nombre, direccion y coordenadas exactas.
 export async function paradasDeViaje(viaje, { estados = ['aceptada'], detalle = false } = {}) {
   const { rows } = await query(
     `SELECT id, tipo, estado, nombre, apellido, cantidad_pasajeros,
+            emisor_nombre, emisor_apellido, receptor_nombre, receptor_apellido,
             origen_localidad, destino_localidad, origen_calle, origen_altura, origen_codigo_postal, destino_calle, destino_altura, destino_codigo_postal
-     FROM solicitudes_viaje WHERE viaje_id = $1 AND estado = ANY($2) ORDER BY id`,
+     FROM solicitudes_viaje WHERE viaje_id = $1 AND estado = ANY($2)
+       AND COALESCE(estado_pasajero, '') NOT IN ('ausente', 'cancelado_comisionista') ORDER BY id`,
     [viaje.id, estados],
   )
   const paradas = []
@@ -58,7 +71,7 @@ export async function paradasDeViaje(viaje, { estados = ['aceptada'], detalle = 
         localidad,
         lat,
         lon,
-        ...(detalle ? { persona: `${s.nombre} ${s.apellido}`.trim(), direccion: `${calle} ${altura}`.trim(), exacta, cantidad: s.tipo === 'pasajero' ? s.cantidad_pasajeros : 1 } : {}),
+        ...(detalle ? { persona: quienEs(s, lado), direccion: `${calle} ${altura}`.trim(), exacta, cantidad: s.tipo === 'pasajero' ? s.cantidad_pasajeros : 1 } : {}),
       })
     }
   }

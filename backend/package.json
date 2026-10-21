@@ -19,6 +19,10 @@
     "test:geo": "node --test test/geo.service.test.js",
     "test:auth": "node --test test/auth.integration.test.js",
     "test:encomiendas": "node --test test/encomiendas.integration.test.js",
+    "test:viajes-estado": "node --test test/viajes-estado.integration.test.js",
+    "test:retiro": "node --test test/solicitud-retiro.integration.test.js",
+    "test:pasajero": "node --test test/pasajero-estado.integration.test.js",
+    "test:ingresos": "node --test test/ingresos.integration.test.js",
     "test:gastos": "node --test test/gasto-validador.test.js test/gastos.integration.test.js",
     "test:auth:10": "node test/run-auth-10.mjs"
   },

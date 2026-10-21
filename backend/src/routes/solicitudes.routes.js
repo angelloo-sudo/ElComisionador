@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import * as solicitudes from '../controllers/solicitudes.controller.js'
+import { actualizarEstadoPasajero } from '../controllers/pasajeros-viaje.controller.js'
 import { paradasParaCliente } from '../controllers/paradas.controller.js'
 import { autenticar, permitirRoles } from '../middlewares/auth.middleware.js'
 
@@ -19,6 +20,9 @@ router.patch('/:id/cancelar', permitirRoles('cliente'), solicitudes.cancelar)
 router.get('/recibidas', permitirRoles('comisionista'), solicitudes.listarRecibidas)
 router.get('/:id/tramo', permitirRoles('comisionista'), solicitudes.tramoDeSolicitudRecibida)
 router.patch('/:id/aceptar', permitirRoles('comisionista'), solicitudes.aceptar)
+router.patch('/:id/retirar', permitirRoles('comisionista'), solicitudes.retirar)
+router.patch('/:id/entregar', permitirRoles('comisionista'), solicitudes.entregar)
+router.patch('/:id/pasajero', permitirRoles('comisionista'), actualizarEstadoPasajero) // US22/24/25
 router.patch('/:id/rechazar', permitirRoles('comisionista'), solicitudes.rechazar)
 
 export default router

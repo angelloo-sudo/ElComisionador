@@ -9,6 +9,7 @@ import clientesRoutes from './clientes.routes.js'
 import solicitudesRoutes from './solicitudes.routes.js'
 import geoRoutes from './geo.routes.js'
 import tarifaRoutes from './tarifa.routes.js'
+import resumenRoutes from './resumen.routes.js'
 
 const router = Router()
 
@@ -22,5 +23,6 @@ router.use('/clientes', clientesRoutes)
 router.use('/solicitudes', solicitudesRoutes)
 router.use('/geo', geoRoutes)
 router.use('/tarifa', tarifaRoutes)
+router.use('/resumen', resumenRoutes)
 
 export default router

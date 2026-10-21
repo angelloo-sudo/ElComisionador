@@ -3,11 +3,8 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client.js'
 import Icon from '../components/Icon.jsx'
-import { Alerta, Campo, Toast, formatoFecha } from '../components/ui.jsx'
-import { codigoViaje } from './ViajeNuevo.jsx'
-import { calcularMonto, formatoDuracion, formatoKm, formatoPesos } from '../utils/tarifa.js'
-
-const KM_EJEMPLO = [10, 50, 100]
+import { Alerta, Campo, Toast } from '../components/ui.jsx'
+import { formatoPesos } from '../utils/tarifa.js'
 
 // "350,5" / "350.5" / "1.250,50" -> 350.5 (null si no es un numero valido)
 function aNumero(texto) {
@@ -25,17 +22,14 @@ export default function Tarifa() {
   const [errorCarga, setErrorCarga] = useState(null)
   const [guardando, setGuardando] = useState(false)
   const [toast, setToast] = useState(null)
-  const [viajes, setViajes] = useState([])
 
   useEffect(() => {
     api.get('/tarifa')
       .then((t) => { setGuardado(t.precio_km); setTexto(t.precio_km ? String(t.precio_km).replace('.', ',') : '') })
       .catch((e) => { setErrorCarga(e.message); setGuardado(null) })
-    api.get('/viajes?estado=programado').then(setViajes).catch(() => setViajes([]))
   }, [])
 
   const numero = aNumero(texto)
-  const precioVigente = numero && !Number.isNaN(numero) && numero > 0 ? numero : (guardado ?? null)
   const sinCambios = (numero ?? null) === (guardado ?? null)
 
   async function guardar(e) {
@@ -66,7 +60,7 @@ export default function Tarifa() {
         </Alerta>
       )}
 
-      <div className="tarifa-grilla">
+      <div className="tarifa-grilla" style={{ gridTemplateColumns: 'minmax(0, 760px)' }}>
         <form className="card" onSubmit={guardar} noValidate>
           <div className="card-cabecera">
             <div>
@@ -93,45 +87,6 @@ export default function Tarifa() {
           </div>
         </form>
 
-        <aside className="card">
-          <div className="card-cabecera"><h2>Ejemplos</h2></div>
-          <div className="card-cuerpo tarifa-ejemplo">
-            {KM_EJEMPLO.map((km) => (
-              <div className="resumen-fila" key={km}><span>{km} km, 1 pasajero</span><strong>{formatoPesos(calcularMonto({ precioKm: precioVigente, distanciaKm: km }))}</strong></div>
-            ))}
-            <div className="resumen-fila"><span>100 km, 3 pasajeros</span><strong>{formatoPesos(calcularMonto({ precioKm: precioVigente, distanciaKm: 100, cantidad: 3 }))}</strong></div>
-          </div>
-        </aside>
-      </div>
-
-      <div className="card" style={{ marginTop: 20 }}>
-        <div className="card-cabecera">
-          <div>
-            <h2>Así quedan tus próximos viajes</h2>
-            <p>Precio por pasajero de cada viaje programado, con la tarifa que ingresaste.</p>
-          </div>
-        </div>
-        <div className="tabla-wrap">
-          {viajes.length === 0 ? (
-            <p className="vacio">No tenés viajes programados.</p>
-          ) : (
-            <table className="tabla">
-              <thead><tr><th>N°</th><th>Recorrido</th><th>Fecha</th><th>Distancia</th><th>Duración</th><th>Precio por pasajero</th></tr></thead>
-              <tbody>
-                {viajes.map((v) => (
-                  <tr key={v.id}>
-                    <td className="codigo">{codigoViaje(v.id)}</td>
-                    <td className="col-recorrido">{v.origen}<span className="flecha">→</span>{v.destino}</td>
-                    <td>{formatoFecha(v.fecha)}</td>
-                    <td>{formatoKm(v.distancia_km)}</td>
-                    <td>{formatoDuracion(v.duracion_min)}</td>
-                    <td>{v.distancia_km == null ? <span className="campo-ayuda">Sin ruta calculada</span> : formatoPesos(calcularMonto({ precioKm: precioVigente, distanciaKm: v.distancia_km }))}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
       </div>
 
       {toast && <Toast titulo={toast.titulo} texto={toast.texto} onClose={() => setToast(null)} />}

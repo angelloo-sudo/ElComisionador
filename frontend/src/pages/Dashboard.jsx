@@ -1,28 +1,24 @@
+// Resumen / Inicio: cada rol ve lo importante para su dia (ver controllers/resumen.controller.js).
 import { useEffect, useState } from 'react'
 import { api } from '../api/client.js'
-import Icon from '../components/Icon.jsx'
+import { Alerta } from '../components/ui.jsx'
+import ResumenComisionista from '../components/resumen/ResumenComisionista.jsx'
+import ResumenCliente from '../components/resumen/ResumenCliente.jsx'
+
+function nombreGuardado() {
+  try { return JSON.parse(localStorage.getItem('comitrack_usuario') ?? 'null')?.nombre ?? '' } catch { return '' }
+}
 
 export default function Dashboard() {
-  const [estado, setEstado] = useState('conectando...')
+  const [datos, setDatos] = useState(null)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
-    api.get('/health')
-      .then((data) => setEstado(data.status))
-      .catch(() => setEstado('sin conexion con la API'))
+    api.get('/resumen').then(setDatos).catch((e) => setError(e.message))
   }, [])
 
-  return (
-    <section className="card">
-      <div className="card-cabecera">
-        <div>
-          <h2>Panel de ComiTrack</h2>
-          <p>Desde acá vas a gestionar viajes, encomiendas, pasajeros, clientes y finanzas.</p>
-        </div>
-        <span className={`badge punto ${estado === 'ok' ? 'verde' : 'gris'}`}>API: {estado}</span>
-      </div>
-      <div className="card-cuerpo">
-        <p className="campo-ayuda"><Icon nombre="logo" tamano={16} /> Elegí una sección en el menú de la izquierda para empezar.</p>
-      </div>
-    </section>
-  )
+  if (error) return <Alerta tipo="error" titulo="No se pudo cargar el resumen">{error}</Alerta>
+  if (!datos) return <p className="campo-ayuda">Cargando...</p>
+  const nombre = nombreGuardado()
+  return datos.rol === 'cliente' ? <ResumenCliente datos={datos} nombre={nombre} /> : <ResumenComisionista datos={datos} nombre={nombre} />
 }

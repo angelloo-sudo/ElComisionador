@@ -167,15 +167,20 @@ export default function Encomiendas({ usuario }) {
     }
   }
 
-  async function cambiarEstadoSolicitud(id, estado) {
+  // US28: registrar el retiro confirma la recepcion inicial de la encomienda (aceptado -> retirado).
+  async function registrarRetiro(id) {
+    if (!window.confirm(`¿Confirmás que retiraste la encomienda #${id}?`)) return
     setError('')
+    setMensaje('')
     try {
-      const respuesta = await api.patch(`/encomiendas/${id}/estado`, { estado })
+      const respuesta = await api.patch(`/encomiendas/${id}/retirar`, {})
+      const retiro = { id: `retiro-${id}`, estado: respuesta.encomienda.estado, fecha_hora: respuesta.encomienda.retirado_en }
       setSolicitudes((actuales) => actuales.map((solicitud) => (
-        solicitud.id === id ? { ...solicitud, ...respuesta.encomienda } : solicitud
+        solicitud.id === id
+          ? { ...solicitud, ...respuesta.encomienda, historial: [...(solicitud.historial ?? []), retiro] }
+          : solicitud
       )))
-      setMenuSolicitudId(null)
-      setMensaje(`Solicitud #${id}: estado ${etiquetasEstado[estado]}.`)
+      setMensaje(`Retiro de la encomienda #${id} registrado. Quedó recibida en el sistema.`)
     } catch (err) {
       setError(err.message)
     }
@@ -446,22 +451,13 @@ export default function Encomiendas({ usuario }) {
                 {mostrandoPendientes ? (
                   <button type="button" onClick={() => aceptarSolicitud(solicitud.id)}>Aceptar</button>
                 ) : (
-                  <div className="solicitud-item-menu">
-                    <button
-                      type="button"
-                      aria-label={`Cambiar estado de la encomienda ${solicitud.id}`}
-                      aria-expanded={menuSolicitudId === solicitud.id}
-                      onClick={() => setMenuSolicitudId(menuSolicitudId === solicitud.id ? null : solicitud.id)}
-                    >
-                      ⋮
-                    </button>
-                    {menuSolicitudId === solicitud.id && (
-                      <div className="solicitud-menu-opciones">
-                        <button type="button" onClick={() => cambiarEstadoSolicitud(solicitud.id, 'aceptado')}>Aceptado</button>
-                        <button type="button" onClick={() => cambiarEstadoSolicitud(solicitud.id, 'retirado')}>Retirado</button>
-                      </div>
-                    )}
-                  </div>
+                  solicitud.estado === 'aceptado' ? (
+                    <button type="button" onClick={() => registrarRetiro(solicitud.id)}>Registrar retiro</button>
+                  ) : (
+                    <span className="campo-ayuda">
+                      Retirada{solicitud.retirado_en ? ` · ${fechaHora(solicitud.retirado_en)}` : ''}
+                    </span>
+                  )
                 )}
               </article>
             ))}

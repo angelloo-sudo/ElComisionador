@@ -364,4 +364,66 @@ describe('tarifa por km y duracion automatica', () => {
     const { rows: [f] } = await query('SELECT origen_codigo_postal, destino_codigo_postal, origen_barrio FROM solicitudes_viaje WHERE id = $1', [ok.body.id])
     assert.deepEqual([f.origen_codigo_postal, f.destino_codigo_postal, f.origen_barrio], ['X5000ABC', '5152', null])
   })
+
+  it('paradas: una encomienda muestra el nombre del emisor (retiro) y del receptor (entrega), no "null null"', async () => {
+    const { body: viaje } = await api.post('/api/viajes').set(comisionista.auth).send(viajeBase({ fecha: fechaFutura(22) }))
+    const enc = await api.post('/api/solicitudes').set(cliente.auth).send({
+      viaje_id: viaje.id, tipo: 'encomienda', origen_localidad: 'Alta Gracia', destino_localidad: 'La Falda',
+      origen_calle: 'Colon', origen_altura: '100', origen_codigo_postal: '5000',
+      destino_calle: 'San Martin', destino_altura: '200', destino_codigo_postal: '5000',
+      peso_kg: 2, ancho_cm: 20, largo_cm: 30, fragil: false, tipo_contenido: 'ropa',
+      emisor_nombre: 'Ana', emisor_apellido: 'Perez', emisor_telefono: '3512345678',
+      receptor_nombre: 'Luis', receptor_apellido: 'Gomez', receptor_telefono: '3519876543', forma_pago: 'transferencia',
+    })
+    assert.equal(enc.status, 201, JSON.stringify(enc.body))
+    const r = await api.get(`/api/viajes/${viaje.id}/paradas`).set(comisionista.auth)
+    assert.deepEqual(r.body.paradas.map((p) => [p.accion, p.persona]), [['retira', 'Ana Perez'], ['entrega', 'Luis Gomez']])
+    assert.ok(!JSON.stringify(r.body).includes('null'))
+  })
+
+  it('resumen: cada rol ve lo suyo (comisionista: proximo viaje, pendientes y cupos; cliente: proximo traslado y total)', async () => {
+    // Usuarios nuevos para que los numeros no dependan de los otros tests.
+    const comi = await crearUsuario('comisionista')
+    const cli = await crearUsuario('cliente')
+    const sinNada = await api.get('/api/resumen').set(comi.auth)
+    assert.equal(sinNada.status, 200)
+    assert.equal(sinNada.body.proximo_viaje, null)
+    assert.equal(sinNada.body.alertas.sin_tarifa, true)
+    assert.equal((await api.get('/api/resumen')).status, 401)
+
+    await api.put('/api/tarifa').set(comi.auth).send({ precio_km: 400 })
+    const v1 = (await api.post('/api/viajes').set(comi.auth).send(viajeBase({ fecha: fechaFutura(1), cupo_total: 4 }))).body
+    const v2 = (await api.post('/api/viajes').set(comi.auth).send(viajeBase({ fecha: fechaFutura(20), cupo_total: 3 }))).body
+    const a = await api.post('/api/solicitudes').set(cli.auth).send(solicitudPasajero(v1.id, { cantidad_pasajeros: 1, origen_localidad: 'Alta Gracia', destino_localidad: 'La Falda' }))
+    assert.equal(a.status, 201, JSON.stringify(a.body))
+    assert.equal((await api.post('/api/solicitudes').set(cli.auth).send(solicitudPasajero(v2.id))).status, 201)
+
+    const r = await api.get('/api/resumen').set(comi.auth)
+    assert.equal(r.body.rol, 'comisionista')
+    assert.equal(r.body.proximo_viaje.id, v1.id)
+    assert.equal(r.body.proximo_viaje.pendientes, 1)
+    assert.equal(r.body.totales.viajes_programados, 2)
+    assert.equal(r.body.totales.solicitudes_pendientes, 2)
+    assert.equal(r.body.totales.cupos_libres, 7)
+    assert.equal(r.body.alertas.sin_tarifa, false)
+    assert.equal(r.body.alertas.pendientes_urgentes.length, 1) // el viaje de manana tiene una solicitud sin responder
+    assert.equal(r.body.pendientes.length, 2)
+
+    assert.equal((await api.patch(`/api/solicitudes/${a.body.id}/aceptar`).set(comi.auth)).status, 200)
+    const r2 = await api.get('/api/resumen').set(comi.auth)
+    assert.equal(r2.body.totales.cupos_libres, 6)
+    assert.equal(r2.body.proximo_viaje.con_paradas, 1)
+    assert.equal(r2.body.totales.solicitudes_pendientes, 1)
+
+    const c = await api.get('/api/resumen').set(cli.auth)
+    assert.equal(c.body.rol, 'cliente')
+    assert.equal(c.body.proximo_traslado.id, a.body.id)
+    assert.equal(c.body.proximo_traslado.sube, 'Alta Gracia')
+    assert.equal(c.body.totales.aceptadas, 1)
+    assert.equal(c.body.totales.pendientes, 1)
+    assert.ok(c.body.totales.a_pagar_aceptadas > 0)
+    assert.ok(c.body.totales.viajes_disponibles >= 2)
+    assert.equal(c.body.ultimas.length, 2)
+    assert.ok(!JSON.stringify(c.body).includes('precio_km')) // el cliente no ve la tarifa
+  })
 })

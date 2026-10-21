@@ -4,9 +4,11 @@ import { fechaFinRepeticion } from '../validators/viaje.validador.js'
 import { obtenerEstadoViaje } from './estado-viaje.js'
 
 // Lugares ocupados de un viaje (la consulta debe tener la tabla viajes con alias "v"):
-// pasajeros de las solicitudes de pasajero ya ACEPTADAS por el comisionista (US19).
+// pasajeros de las solicitudes de pasajero ya ACEPTADAS por el comisionista (US19), salvo los marcados
+// como ausentes o cancelados por el comisionista (US24), que dejan de ocupar lugar.
 export const SQL_OCUPADOS = `COALESCE((SELECT SUM(s.cantidad_pasajeros)::int FROM solicitudes_viaje s
-  WHERE s.viaje_id = v.id AND s.tipo = 'pasajero' AND s.estado = 'aceptada'), 0)`
+  WHERE s.viaje_id = v.id AND s.tipo = 'pasajero' AND s.estado = 'aceptada'
+    AND COALESCE(s.estado_pasajero, '') NOT IN ('ausente', 'cancelado_comisionista')), 0)`
 
 // Superposicion de horarios: cada viaje ocupa el bloque [hora_salida, hora_llegada].
 // hora_llegada = salida + duracion de la ruta (la calcula el sistema). Si no se pudo calcular

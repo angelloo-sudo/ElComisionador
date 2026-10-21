@@ -86,10 +86,20 @@ function DetalleSolicitud({ s }) {
       <Fila etiqueta={s.tipo === 'pasajero' ? 'Lo buscan en' : 'Se retira en'}>{direccion(s, 'origen')}</Fila>
       {s.origen_descripcion && <Fila etiqueta="Referencias">{s.origen_descripcion}</Fila>}
       <Fila etiqueta={s.tipo === 'pasajero' ? 'Se baja en' : 'Se entrega en'}>{direccion(s, 'destino')}</Fila>
-      <Fila etiqueta="Estado"><BadgeSolicitud estado={s.estado} /></Fila>
+      <Fila etiqueta="Estado"><BadgeSolicitud estado={s.estado} retirada={Boolean(s.retirada_en)} entregada={Boolean(s.entregada_en)} estadoPasajero={s.estado_pasajero} /></Fila>
       {s.estado === 'rechazada' && s.motivo_rechazo && <Fila etiqueta="Motivo del rechazo">{s.motivo_rechazo}</Fila>}
     </div>
   )
+}
+
+// US28: una encomienda aceptada, sin retirar y de un viaje que todavia admite retiros.
+function puedeRetirar(s) {
+  return s.tipo === 'encomienda' && s.estado === 'aceptada' && !s.retirada_en && !['cancelado', 'finalizado'].includes(s.estado_viaje)
+}
+
+// US33: encomienda retirada, todavia sin entregar y de un viaje no cancelado.
+function puedeEntregar(s) {
+  return s.tipo === 'encomienda' && s.estado === 'aceptada' && Boolean(s.retirada_en) && !s.entregada_en && s.estado_viaje !== 'cancelado'
 }
 
 export default function Postulaciones() {
@@ -133,7 +143,11 @@ export default function Postulaciones() {
       setARechazar(null)
       setMotivo('')
       setDetalle(null)
-      setToast(accion === 'aceptar'
+      setToast(accion === 'entregar'
+        ? { titulo: 'Entrega registrada', texto: 'La encomienda quedó como entregada.' }
+        : accion === 'retirar'
+        ? { titulo: 'Retiro registrado', texto: `Recibiste la encomienda de ${s.emisor_nombre} ${s.emisor_apellido}.${r.ingreso ? ` Se registró el cobro de $${Number(r.ingreso.monto).toLocaleString('es-AR')}.` : ''}` }
+        : accion === 'aceptar'
         ? { titulo: 'Solicitud aceptada', texto: s.tipo === 'pasajero' ? `Cupo del viaje ${codigoViaje(s.viaje_id)}: ${r.ocupados} / ${r.cupo_total}.` : `Aceptaste la encomienda de ${s.emisor_nombre} ${s.emisor_apellido}.` }
         : { titulo: 'Solicitud rechazada', texto: motivo.trim() ? 'El cliente va a ver tu motivo.' : 'El cliente va a ver la solicitud como rechazada.' })
     } catch (err) {
@@ -212,10 +226,18 @@ export default function Postulaciones() {
                       )}</td>
                     {tipoFijo === 'pasajero' && <td>{s.ocupados} / {s.cupo_total}</td>}
                     <td>{s.monto == null ? <span className="campo-ayuda">A convenir</span> : formatoPesos(s.monto)}</td>
-                    <td><BadgeSolicitud estado={s.estado} /></td>
+                    <td><BadgeSolicitud estado={s.estado} retirada={Boolean(s.retirada_en)} entregada={Boolean(s.entregada_en)} estadoPasajero={s.estado_pasajero} />{(s.entregada_en || s.retirada_en) && <div className="campo-ayuda">{new Date(s.entregada_en ?? s.retirada_en).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>}</td>
                     <td>
                       <div className="acciones-fila">
                         <button type="button" className="btn btn-chico" onClick={() => setDetalle(s)}>Ver detalle</button>
+                        {puedeRetirar(s) && (
+                          <button type="button" className="btn btn-chico btn-primario" disabled={procesando === s.id}
+                            onClick={() => resolver(s, 'retirar')}><Icon nombre="check" tamano={13} /> Registrar retiro</button>
+                        )}
+                        {puedeEntregar(s) && (
+                          <button type="button" className="btn btn-chico btn-primario" disabled={procesando === s.id}
+                            onClick={() => resolver(s, 'entregar')}><Icon nombre="check" tamano={13} /> Registrar entrega</button>
+                        )}
                         {s.estado === 'pendiente' && (
                           <>
                             <button type="button" className="btn btn-chico btn-primario" disabled={procesando === s.id || sinCupo}
@@ -242,6 +264,12 @@ export default function Postulaciones() {
             <div className="detalle-mapa"><MapaSolicitud s={detalle} /></div>
           </div>
           <div className="modal-acciones">
+            {puedeEntregar(detalle) && (
+              <button type="button" className="btn btn-primario" disabled={procesando === detalle.id} onClick={() => resolver(detalle, 'entregar')}>Registrar entrega</button>
+            )}
+            {puedeRetirar(detalle) && (
+              <button type="button" className="btn btn-primario" disabled={procesando === detalle.id} onClick={() => resolver(detalle, 'retirar')}>Registrar retiro</button>
+            )}
             {detalle.estado === 'pendiente' && (
               <>
                 <button type="button" className="btn btn-peligro" onClick={() => { setMotivo(''); setARechazar(detalle); setDetalle(null) }}>Rechazar</button>

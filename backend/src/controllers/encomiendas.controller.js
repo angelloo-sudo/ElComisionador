@@ -152,7 +152,7 @@ export async function listarAceptadas(req, res, next) {
       `SELECT e.id, e.remitente_nombre, e.remitente_telefono, e.direccion_retiro,
               e.destinatario_nombre, e.destinatario_telefono, e.destinatario_direccion,
               e.tipo_contenido, e.peso_kg, e.dimensiones, e.fragil, e.descripcion,
-              e.estado, e.estado_pago, e.fecha_solicitud,
+              e.estado, e.estado_pago, e.fecha_solicitud, e.retirado_en,
               COALESCE((
                 SELECT json_agg(json_build_object('id', h.id, 'estado', h.estado, 'fecha_hora', h.fecha_hora)
                                 ORDER BY h.fecha_hora, h.id)
@@ -289,6 +289,53 @@ export async function cambiarEstado(req, res, next) {
     }
 
     res.json({ encomienda: rows[0], mensaje: 'Estado de la encomienda actualizado correctamente' })
+  } catch (e) { next(e) }
+}
+
+// US28 - Registrar retiro de una encomienda.
+// Confirma la recepcion inicial: la encomienda pasa de "aceptado" a "retirado" y queda registrada
+// la fecha y hora del retiro (tambien en el historial de estados, via trigger). Solo se puede retirar
+// una encomienda aceptada; si esta asociada a un viaje, ese viaje no puede estar cancelado ni finalizado.
+export async function retirar(req, res, next) {
+  try {
+    const id = Number(req.params.id)
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ mensaje: 'El identificador de la encomienda no es válido' })
+    }
+
+    const { rows: previas } = await query(
+      `SELECT e.id, e.estado, v.estado AS viaje_estado
+       FROM encomiendas e LEFT JOIN viajes v ON v.id = e.viaje_id
+       WHERE e.id = $1`,
+      [id],
+    )
+    if (previas.length === 0) {
+      return res.status(404).json({ mensaje: 'No se encontró la encomienda' })
+    }
+
+    const previa = previas[0]
+    if (previa.estado === 'retirado') {
+      return res.status(409).json({ mensaje: 'La encomienda ya fue retirada' })
+    }
+    if (previa.estado !== 'aceptado') {
+      return res.status(409).json({ mensaje: 'Solo se puede registrar el retiro de una encomienda en estado Aceptado' })
+    }
+    if (previa.viaje_estado && ['cancelado', 'finalizado'].includes(previa.viaje_estado)) {
+      return res.status(409).json({ mensaje: 'El viaje asociado a la encomienda ya no admite retiros' })
+    }
+
+    const { rows } = await query(
+      `UPDATE encomiendas
+       SET estado = 'retirado', retirado_en = NOW(), estado_pago = COALESCE(estado_pago, 'pendiente')
+       WHERE id = $1 AND estado = 'aceptado'
+       RETURNING id, estado, estado_pago, retirado_en`,
+      [id],
+    )
+    if (rows.length === 0) {
+      return res.status(409).json({ mensaje: 'La encomienda ya no está en estado Aceptado' })
+    }
+
+    res.json({ encomienda: rows[0], mensaje: 'Retiro registrado. La encomienda quedó recibida en el sistema.' })
   } catch (e) { next(e) }
 }
 

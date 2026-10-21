@@ -4,10 +4,11 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { api } from '../api/client.js'
 import ViajeDetalleModal from '../components/viajes/ViajeDetalleModal.jsx'
 import CancelarViajeModal from '../components/viajes/CancelarViajeModal.jsx'
+import EstadoViajeModal from '../components/viajes/EstadoViajeModal.jsx'
 import Icon from '../components/Icon.jsx'
 import { Campo, Alerta, Toast, BadgeEstado, ESTADOS_VIAJE, formatoFecha, textoRepeticion } from '../components/ui.jsx'
 import { codigoViaje } from './ViajeNuevo.jsx'
-import { estadoVisibleViaje, hoyEnCordoba } from '../utils/estadoViaje.js'
+import { estadoVisibleViaje, hoyEnCordoba, puedeIniciarViaje } from '../utils/estadoViaje.js'
 import { formatoDuracion } from '../utils/tarifa.js'
 
 const FILTROS_VACIOS = { fecha: '', origen: '', destino: '', estado: '' }
@@ -21,6 +22,8 @@ export default function Viajes() {
   // Si venimos de "Ver viaje" (tras registrar uno), se abre su detalle directamente.
   const [viajeDetalleId, setViajeDetalleId] = useState(ubicacion.state?.abrirId ?? null)
   const [viajeACancelar, setViajeACancelar] = useState(null)
+  // US20 / US21: { accion: 'iniciar' | 'finalizar', viaje } mientras se pide la confirmacion.
+  const [cambioEstado, setCambioEstado] = useState(null)
   const [toast, setToast] = useState(() => ubicacion.state?.aviso ?? null)
   // US18: aviso visual para el comisionista cuando el viaje modificado tiene clientes asociados.
   const [alertaClientes, setAlertaClientes] = useState(() => ubicacion.state?.alertaClientes ?? null)
@@ -28,6 +31,7 @@ export default function Viajes() {
   const [filtros, setFiltros] = useState(FILTROS_VACIOS)
   const [filtrosAplicados, setFiltrosAplicados] = useState(FILTROS_VACIOS)
   const [ahora, setAhora] = useState(() => new Date())
+  const [pestana, setPestana] = useState('proximos') // 'proximos' | 'historial'
 
   const hayFiltrosActivos = Object.values(filtrosAplicados).some(Boolean)
 
@@ -86,6 +90,17 @@ export default function Viajes() {
     )
   }
 
+  // US20 / US21: el backend ya cambio el estado; se recarga la lista y se avisa.
+  function handleEstadoCambiado() {
+    const { accion, viaje } = cambioEstado
+    setCambioEstado(null)
+    setViajeDetalleId(null)
+    cargarViajes(filtrosAplicados)
+    setToast(accion === 'iniciar'
+      ? { titulo: 'Viaje iniciado', texto: `El viaje ${codigoViaje(viaje.id)} pasó a estado En curso.` }
+      : { titulo: 'Viaje finalizado', texto: `El viaje ${codigoViaje(viaje.id)} pasó a estado Finalizado.` })
+  }
+
   function handleFiltroChange(e) {
     setFiltros({ ...filtros, [e.target.name]: e.target.value })
   }
@@ -100,12 +115,21 @@ export default function Viajes() {
     setFiltrosAplicados(FILTROS_VACIOS)
   }
 
+  // Próximos: programados desde hoy en adelante y los que están en curso. Historial: el resto
+  // (ya pasaron, finalizados o cancelados), con lo más reciente arriba.
+  const hoy = hoyEnCordoba(ahora)
+  const esProximo = (v) => v.estado === 'en_curso' || (v.estado === 'programado' && String(v.fecha).slice(0, 10) >= hoy)
+  const orden = (a, b) => String(b.fecha).localeCompare(String(a.fecha)) || String(b.hora_salida ?? '').localeCompare(String(a.hora_salida ?? '')) || b.id - a.id
+  const proximos = viajes.filter(esProximo).sort((a, b) => orden(b, a)) // el más cercano a hoy primero
+  const historial = viajes.filter((v) => !esProximo(v)).sort(orden)
+  const visibles = pestana === 'proximos' ? proximos : historial
+
   return (
     <section>
       <div className="barra-pagina">
         <div>
           <h2>Mis viajes</h2>
-          <p>Consultá y filtrá los viajes que tenés programados.</p>
+          <p>Consultá y filtrá tus viajes. Los que ya pasaron están en la pestaña Historial.</p>
         </div>
         <button type="button" className="btn btn-primario" onClick={() => navegar('/viajes/nuevo')}>
           <Icon nombre="plus" tamano={16} /> Registrar viaje
@@ -143,14 +167,25 @@ export default function Viajes() {
 
       {error && <Alerta tipo="error" titulo="No se pudieron cargar los viajes">{error}</Alerta>}
 
+      <div className="pestanas" role="tablist" aria-label="Mis viajes">
+        <button type="button" role="tab" aria-selected={pestana === 'proximos'} className={pestana === 'proximos' ? 'activo' : ''} onClick={() => setPestana('proximos')}>
+          Próximos <span className="pestana-contador">{proximos.length}</span>
+        </button>
+        <button type="button" role="tab" aria-selected={pestana === 'historial'} className={pestana === 'historial' ? 'activo' : ''} onClick={() => setPestana('historial')}>
+          Historial <span className="pestana-contador">{historial.length}</span>
+        </button>
+      </div>
+
       <div className="card tabla-wrap">
         {cargando ? (
           <p className="vacio">Cargando viajes...</p>
-        ) : viajes.length === 0 ? (
+        ) : visibles.length === 0 ? (
           <p className="vacio">
             {hayFiltrosActivos
               ? 'No se encontraron viajes con esos filtros.'
-              : 'Todavía no tenés viajes cargados.'}
+              : pestana === 'proximos'
+                ? (historial.length > 0 ? 'No tenés viajes próximos. Los anteriores están en Historial.' : 'Todavía no tenés viajes cargados.')
+                : 'Todavía no tenés viajes en el historial.'}
           </p>
         ) : (
           <table className="tabla">
@@ -167,7 +202,7 @@ export default function Viajes() {
               </tr>
             </thead>
             <tbody>
-              {viajes.map((viaje) => (
+              {visibles.map((viaje) => (
                 <tr key={viaje.id}>
                   <td className="codigo">{codigoViaje(viaje.id)}</td>
                   <td className="col-recorrido">
@@ -186,6 +221,16 @@ export default function Viajes() {
                   <td>
                     <div className="acciones-fila">
                       <button type="button" className="btn btn-chico" onClick={() => setViajeDetalleId(viaje.id)}>Ver detalle</button>
+                      {puedeIniciarViaje(viaje, ahora) && (
+                        <button type="button" className="btn btn-chico btn-primario" onClick={() => setCambioEstado({ accion: 'iniciar', viaje })}>
+                          Iniciar
+                        </button>
+                      )}
+                      {viaje.estado === 'en_curso' && (
+                        <button type="button" className="btn btn-chico btn-primario" onClick={() => setCambioEstado({ accion: 'finalizar', viaje })}>
+                          Finalizar
+                        </button>
+                      )}
                       {estadoVisibleViaje(viaje.estado, viaje.fecha, ahora) === 'programado' && (
                         <button type="button" className="btn btn-chico" onClick={() => navegar(`/viajes/${viaje.id}/editar`)}>
                           <Icon nombre="pencil" tamano={13} /> Modificar
@@ -209,6 +254,8 @@ export default function Viajes() {
           onClose={() => setViajeDetalleId(null)}
           onCancelar={(viaje) => setViajeACancelar(viaje)}
           onModificar={(viaje) => navegar(`/viajes/${viaje.id}/editar`)}
+          onIniciar={(viaje) => setCambioEstado({ accion: 'iniciar', viaje })}
+          onFinalizar={(viaje) => setCambioEstado({ accion: 'finalizar', viaje })}
           ahora={ahora}
         />
       )}
@@ -218,6 +265,15 @@ export default function Viajes() {
           viaje={viajeACancelar}
           onClose={() => setViajeACancelar(null)}
           onCancelado={handleCancelado}
+        />
+      )}
+
+      {cambioEstado && (
+        <EstadoViajeModal
+          accion={cambioEstado.accion}
+          viaje={cambioEstado.viaje}
+          onClose={() => setCambioEstado(null)}
+          onConfirmado={handleEstadoCambiado}
         />
       )}
 

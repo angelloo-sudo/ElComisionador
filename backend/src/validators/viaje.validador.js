@@ -1,5 +1,6 @@
 // US10 - Validaciones de negocio para el alta de un viaje.
 import { esLocalidadValida } from '../services/localidades.service.js'
+import { hoyEnCordoba } from '../services/estado-viaje.js'
 
 const REGEX_HORA = /^([01]\d|2[0-3]):([0-5]\d)$/
 // Los viajes repetitivos no tienen fecha de fin: se repiten hasta que el comisionista los cancele.
@@ -73,9 +74,8 @@ export function validarViaje(req, res, next) {
     errores.push('La fecha tiene un formato invalido')
   } else {
     fechaValida = true
-    const hoy = new Date()
-    hoy.setHours(0, 0, 0, 0)
-    if (new Date(fecha) < hoy) {
+    // Se compara como texto YYYY-MM-DD contra el "hoy" de Cordoba: hoy y los dias siguientes son validos.
+    if (fecha < hoyEnCordoba()) {
       errores.push('La fecha del viaje no puede ser anterior a hoy')
     }
   }

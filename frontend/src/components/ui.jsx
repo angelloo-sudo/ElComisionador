@@ -126,6 +126,9 @@ export function BadgeEstado({ estado, fecha, ahora }) {
 }
 
 export function formatoFecha(valor) {
+  // Las fechas "YYYY-MM-DD" se muestran tal cual (sin pasar por UTC, que las corre un dia atras).
+  const m = typeof valor === 'string' && /^(\d{4})-(\d{2})-(\d{2})(?:$|T00:00:00(?:\.000)?Z?$)/.exec(valor)
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`
   return new Date(valor).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 

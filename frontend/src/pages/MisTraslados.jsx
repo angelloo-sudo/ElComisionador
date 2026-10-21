@@ -23,8 +23,16 @@ const ESTADOS_SOLICITUD = {
   cancelada: { texto: 'Cancelada', clase: 'gris' },
 }
 
-export function BadgeSolicitud({ estado }) {
-  const e = ESTADOS_SOLICITUD[estado] ?? { texto: estado, clase: 'gris' }
+const ESTADOS_PASAJERO_CLIENTE = {
+  a_bordo: { texto: 'A bordo', clase: 'verde' },
+  en_destino: { texto: 'En destino', clase: 'verde' },
+  ausente: { texto: 'Ausente', clase: 'ambar' },
+  cancelado_comisionista: { texto: 'Cancelada por el comisionista', clase: 'gris' },
+}
+
+export function BadgeSolicitud({ estado, retirada = false, entregada = false, estadoPasajero = null }) {
+  // Una encomienda aceptada que el comisionista ya retiro se muestra como "Retirada".
+  const e = estado === 'aceptada' && ESTADOS_PASAJERO_CLIENTE[estadoPasajero] ? ESTADOS_PASAJERO_CLIENTE[estadoPasajero] : entregada && estado === 'aceptada' ? { texto: 'Entregada', clase: 'verde' } : retirada && estado === 'aceptada' ? { texto: 'Retirada', clase: 'verde' } : ESTADOS_SOLICITUD[estado] ?? { texto: estado, clase: 'gris' }
   return <span className={`badge punto ${e.clase}`}>{e.texto}</span>
 }
 
@@ -248,7 +256,7 @@ export default function MisTraslados() {
                     <td>{`${s.comisionista_nombre ?? ''} ${s.comisionista_apellido ?? ''}`.trim() || '-'}</td>
                     <td>{s.monto == null ? <span className="campo-ayuda">A convenir</span> : formatoPesos(s.monto)}</td>
                     <td>
-                      <BadgeSolicitud estado={s.estado} />
+                      <BadgeSolicitud estado={s.estado} retirada={Boolean(s.retirada_en)} entregada={Boolean(s.entregada_en)} estadoPasajero={s.estado_pasajero} />
                       {s.estado === 'rechazada' && s.motivo_rechazo && <div className="campo-ayuda" style={{ marginTop: 6, maxWidth: 260 }}>Motivo: {s.motivo_rechazo}</div>}
                       {s.estado_viaje === 'cancelado' && s.estado !== 'cancelada' && <span className="badge punto rojo" style={{ marginLeft: 8 }}>Viaje cancelado</span>}
                     </td>
