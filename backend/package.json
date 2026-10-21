@@ -12,20 +12,11 @@
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
     "localidades": "node scripts/generar-localidades.js",
-<<<<<<< Updated upstream
     "seed": "node scripts/seed.js",
     "test:tarifa": "node --test test/tarifa.integration.test.js",
     "test:tramo": "node --test test/tramo.service.test.js",
     "test:paradas": "node --test test/paradas.service.test.js",
     "test:geo": "node --test test/geo.service.test.js",
-=======
-    "migrate": "node scripts/migrate.js up",
-    "migrate:up": "node scripts/migrate.js up",
-    "migrate:down": "node scripts/migrate.js down",
-    "migrate:create": "node scripts/migrate.js create",
-    "migrate:baseline": "node scripts/migrate.js baseline",
-    "seed:demo": "node scripts/seed-demo.js",
->>>>>>> Stashed changes
     "test:auth": "node --test test/auth.integration.test.js",
     "test:encomiendas": "node --test test/encomiendas.integration.test.js",
     "test:viajes-estado": "node --test test/viajes-estado.integration.test.js",
