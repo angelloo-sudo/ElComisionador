@@ -1,5 +1,6 @@
 // Epica 6: Administracion de Ingresos.
 //  - US35: el cobro se registra solo (ver services/ingresos.service.js).
+//  - US36: consultar el historial con filtros y resumen de ingresos vigentes.
 //  - US37: consultar el detalle de un ingreso.   - US38: modificar un ingreso.
 //  - US39: anular un ingreso (baja logica: deja de sumar en totales y reportes).
 import { query } from '../config/db.js'

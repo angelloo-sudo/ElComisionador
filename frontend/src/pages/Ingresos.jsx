@@ -1,4 +1,4 @@
-// Epica 6: Administracion de Ingresos - US37 (detalle), US38 (modificar) y US39 (anular).
+// Epica 6: US36 (historial), US37 (detalle), US38 (modificar) y US39 (anular).
 // Los cobros se registran solos: al llegar el pasajero a destino y al retirarse la encomienda (US35).
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client.js'
@@ -70,7 +70,7 @@ export default function Ingresos() {
             <option value="">Todas</option><option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option>
           </select><Icon nombre="down" />
         </Campo>
-        <Campo label="Servicio">
+        <Campo label="Concepto de viaje">
           <select name="tipo" value={filtros.tipo} onChange={cambiar}>
             <option value="">Todos</option><option value="pasajero">Pasajeros</option><option value="encomienda">Encomiendas</option>
           </select><Icon nombre="down" />
@@ -96,7 +96,7 @@ export default function Ingresos() {
 
       <div className="card tabla-wrap">
         {cargando ? <p className="vacio">Cargando ingresos...</p> : datos.ingresos.length === 0 ? (
-          <p className="vacio">{hayFiltros ? 'No se encontraron ingresos con esos filtros.' : 'Todavía no hay ingresos registrados.'}</p>
+          <p className="vacio">No se encontraron ingresos registrados</p>
         ) : (
           <table className="tabla">
             <thead><tr><th>Fecha</th><th>Concepto</th><th>Cliente</th><th>Pago</th><th className="num">Monto</th><th>Estado</th><th></th></tr></thead>
