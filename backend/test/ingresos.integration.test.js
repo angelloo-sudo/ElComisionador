@@ -93,6 +93,42 @@ describe('Ingresos', () => {
     assert.equal(det.body.viaje_id, v)
   })
 
+  it('filtra por fechas, forma de pago y concepto, ordena cronológicamente y suma los resultados vigentes', async () => {
+    const com = await registrar('comisionista'); const cli = await registrar('cliente')
+    const v = await viaje(com.usuario.id)
+    const encomienda = await solicitud(v, cli.usuario.id, { tipo: 'encomienda', monto: 800 })
+    const pasajero = await solicitud(v, cli.usuario.id, { tipo: 'pasajero', monto: 1500 })
+    const ingresoEncomienda = (await api.patch(`/api/solicitudes/${encomienda}/retirar`).set(auth(com)).send({})).body.ingreso
+
+    await api.patch(`/api/viajes/${v}/iniciar`).set(auth(com)).send({})
+    await api.patch(`/api/solicitudes/${pasajero}/pasajero`).set(auth(com)).send({ estado: 'a_bordo' })
+    const ingresoPasajero = (await api.patch(`/api/solicitudes/${pasajero}/pasajero`).set(auth(com)).send({ estado: 'en_destino' })).body.ingreso
+    const ayer = new Date(`${hoyEnCordoba()}T12:00:00Z`)
+    ayer.setUTCDate(ayer.getUTCDate() - 1)
+    const fechaAyer = ayer.toISOString().slice(0, 10)
+    await api.put(`/api/finanzas/ingresos/${ingresoEncomienda.id}`).set(auth(com)).send({
+      monto: '800',
+      fecha: fechaAyer,
+      forma_pago: 'efectivo',
+    })
+
+    const lista = await api.get('/api/finanzas/ingresos').set(auth(com))
+    assert.equal(lista.status, 200, JSON.stringify(lista.body))
+    assert.deepEqual(lista.body.ingresos.map((i) => i.id), [ingresoPasajero.id, ingresoEncomienda.id])
+    assert.equal(lista.body.resumen.cantidad, 2)
+    assert.equal(lista.body.resumen.total, '2300.00')
+
+    const filtrados = await api.get(`/api/finanzas/ingresos?desde=${hoyEnCordoba()}&hasta=${hoyEnCordoba()}&forma_pago=transferencia&tipo=pasajero`).set(auth(com))
+    assert.equal(filtrados.status, 200, JSON.stringify(filtrados.body))
+    assert.deepEqual(filtrados.body.ingresos.map((i) => i.id), [ingresoPasajero.id])
+    assert.equal(filtrados.body.resumen.total, '1500.00')
+
+    const sinResultados = await api.get('/api/finanzas/ingresos?forma_pago=efectivo&tipo=pasajero').set(auth(com))
+    assert.equal(sinResultados.status, 200, JSON.stringify(sinResultados.body))
+    assert.deepEqual(sinResultados.body.ingresos, [])
+    assert.equal(sinResultados.body.resumen.total, '0.00')
+  })
+
   it('modifica un ingreso con validaciones y recalcula el total', async () => {
     const com = await registrar('comisionista'); const cli = await registrar('cliente')
     const v = await viaje(com.usuario.id)
