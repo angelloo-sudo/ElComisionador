@@ -34,6 +34,7 @@ const etiquetasEstado = {
   pendiente: 'Pendiente',
   aceptado: 'Aceptado',
   retirado: 'Retirado',
+  cancelada: 'Cancelada',
   en_viaje: 'En viaje',
   entregado: 'Entregado',
 }
@@ -143,13 +144,15 @@ export default function Encomiendas({ usuario }) {
     setVista('formulario')
   }
 
-  async function eliminarSolicitud(id) {
-    if (!window.confirm('¿Querés eliminar esta solicitud de envío?')) return
+  async function cancelarSolicitud(id) {
+    if (!window.confirm('¿Querés cancelar esta solicitud de envío?')) return
 
     try {
-      await api.del(`/encomiendas/${id}`)
-      setSolicitudes((actuales) => actuales.filter((solicitud) => solicitud.id !== id))
-      setMensaje('Solicitud eliminada correctamente.')
+      const respuesta = await api.patch(`/encomiendas/${id}/cancelar`, {})
+      setSolicitudes((actuales) => actuales.map((solicitud) => (
+        solicitud.id === id ? respuesta.encomienda : solicitud
+      )))
+      setMensaje(respuesta.mensaje)
       setMenuSolicitudId(null)
     } catch (err) {
       setError(err.message)
@@ -351,22 +354,26 @@ export default function Encomiendas({ usuario }) {
                     </div>
                   )}
                 </div>
-                <div className="solicitud-item-menu">
-                  <button
-                    type="button"
-                    aria-label={`Opciones de la solicitud ${solicitud.id}`}
-                    aria-expanded={menuSolicitudId === solicitud.id}
-                    onClick={() => setMenuSolicitudId(menuSolicitudId === solicitud.id ? null : solicitud.id)}
-                  >
-                    ⋮
-                  </button>
-                  {menuSolicitudId === solicitud.id && (
-                    <div className="solicitud-menu-opciones">
-                      <button type="button" onClick={() => abrirEdicion(solicitud)}>Modificar</button>
-                      <button type="button" onClick={() => eliminarSolicitud(solicitud.id)}>Eliminar</button>
-                    </div>
-                  )}
-                </div>
+                {['pendiente', 'aceptado'].includes(solicitud.estado) && (
+                  <div className="solicitud-item-menu">
+                    <button
+                      type="button"
+                      aria-label={`Opciones de la solicitud ${solicitud.id}`}
+                      aria-expanded={menuSolicitudId === solicitud.id}
+                      onClick={() => setMenuSolicitudId(menuSolicitudId === solicitud.id ? null : solicitud.id)}
+                    >
+                      ⋮
+                    </button>
+                    {menuSolicitudId === solicitud.id && (
+                      <div className="solicitud-menu-opciones">
+                        {solicitud.estado === 'pendiente' && (
+                          <button type="button" onClick={() => abrirEdicion(solicitud)}>Modificar</button>
+                        )}
+                        <button type="button" onClick={() => cancelarSolicitud(solicitud.id)}>Cancelar solicitud</button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </article>
             ))}
           </div>

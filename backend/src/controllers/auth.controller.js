@@ -180,6 +180,38 @@ export async function actualizarMiPerfil(req, res, next) {
     const esCliente = req.usuario.rol === 'cliente'
     const esComisionista = req.usuario.rol === 'comisionista'
 
+    if (esCliente) {
+      // US14 habilita exclusivamente nombre, apellido y teléfono para el cliente.
+      // No confiar en que la interfaz oculte los campos inmutables.
+      if (['email', 'dni', 'password', 'confirmarPassword'].some((campo) => campo in req.body)) {
+        return res.status(400).json({ mensaje: 'Solo se pueden modificar nombre, apellido y teléfono' })
+      }
+
+      const errorNombre = validarNombrePropio(nombre, { etiqueta: 'El nombre' })
+      const errorApellido = validarNombrePropio(apellido, { etiqueta: 'El apellido' })
+      const errorTelefono = validarTelefono(telefono)
+      const errorCliente = errorNombre || errorApellido || errorTelefono
+      if (errorCliente) return res.status(400).json({ mensaje: errorCliente })
+
+      const cliente = await query('SELECT dni FROM clientes WHERE usuario_id = $1', [req.usuario.id])
+      if (cliente.rows.length === 0) return res.status(404).json({ mensaje: 'Perfil de cliente no encontrado' })
+
+      const conflicto = await buscarConflictoContacto(req.usuario.id, cliente.rows[0].dni, telefono)
+      if (conflicto) return res.status(409).json({ mensaje: conflicto })
+
+      await query(
+        'UPDATE usuarios SET nombre = $1, apellido = $2 WHERE id = $3',
+        [nombre.trim(), apellido.trim(), req.usuario.id],
+      )
+      await query('UPDATE clientes SET telefono = $1 WHERE usuario_id = $2', [telefono.trim(), req.usuario.id])
+
+      const perfilActualizado = await buscarPerfilPorId(req.usuario.id)
+      return res.json({
+        usuario: datosPerfil(perfilActualizado, { conPerfilPublico: true }),
+        token: crearToken(perfilActualizado),
+      })
+    }
+
     const errorValidacion = validarDatosPerfil(
       { nombre, apellido, email, password, dni, telefono },
       { pideContacto: esCliente || esComisionista },
@@ -328,7 +360,14 @@ async function registrarConRol(req, res, next, rolFijo) {
       email: perfil.email,
       verificacionEnviada,
     })
-  } catch (e) { next(e) }
+  } catch (e) {
+    // La consulta previa evita colisiones habituales; la restricción UNIQUE resuelve
+    // de forma definitiva dos altas concurrentes con el mismo email normalizado.
+    if (e.code === '23505' && e.constraint === 'usuarios_email_key') {
+      return res.status(409).json({ mensaje: 'El email ya está registrado' })
+    }
+    next(e)
+  }
 }
 
 // US11: autorregistro publico de un cliente.

@@ -224,6 +224,53 @@ describe('CU27: solicitud de envío de encomienda por un cliente', () => {
     assert.equal(attemptedDelete.status, 404)
   })
 
+  it('protege el listado general y limita el detalle al propietario o al comisionista del viaje', async () => {
+    const owner = await registerCustomer()
+    const otherCustomer = await registerCustomer()
+    const assignedCommissionaire = await registerCommissionaire()
+    const otherCommissionaire = await registerCommissionaire()
+    const created = await api.post('/api/encomiendas')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send(shipmentDetails)
+    assert.equal(created.status, 201, JSON.stringify(created.body))
+    const shipmentId = created.body.encomienda.id
+    createdShipmentIds.add(shipmentId)
+
+    const trip = await query(
+      `INSERT INTO viajes (usuario_id, origen, destino, fecha, hora_salida, hora_llegada, cupo_total)
+       VALUES ($1, 'Córdoba', 'Villa Allende', CURRENT_DATE + 5, '10:00', '10:30', 2)
+       RETURNING id`,
+      [assignedCommissionaire.usuario.id],
+    )
+    await query('UPDATE encomiendas SET viaje_id = $1 WHERE id = $2', [trip.rows[0].id, shipmentId])
+
+    const anonymousDetail = await api.get(`/api/encomiendas/${shipmentId}`)
+    const anonymousList = await api.get('/api/encomiendas')
+    const ownerDetail = await api.get(`/api/encomiendas/${shipmentId}`)
+      .set('Authorization', `Bearer ${owner.token}`)
+    const otherCustomerDetail = await api.get(`/api/encomiendas/${shipmentId}`)
+      .set('Authorization', `Bearer ${otherCustomer.token}`)
+    const assignedDetail = await api.get(`/api/encomiendas/${shipmentId}`)
+      .set('Authorization', `Bearer ${assignedCommissionaire.token}`)
+    const otherCommissionaireDetail = await api.get(`/api/encomiendas/${shipmentId}`)
+      .set('Authorization', `Bearer ${otherCommissionaire.token}`)
+    const malformedId = await api.get('/api/encomiendas/no-es-un-id')
+      .set('Authorization', `Bearer ${owner.token}`)
+    const customerList = await api.get('/api/encomiendas')
+      .set('Authorization', `Bearer ${owner.token}`)
+
+    assert.equal(anonymousDetail.status, 401)
+    assert.equal(anonymousList.status, 401)
+    assert.equal(ownerDetail.status, 200)
+    assert.equal(ownerDetail.body.encomienda.id, shipmentId)
+    assert.equal(otherCustomerDetail.status, 404)
+    assert.equal(assignedDetail.status, 200)
+    assert.equal(assignedDetail.body.encomienda.id, shipmentId)
+    assert.equal(otherCommissionaireDetail.status, 404)
+    assert.equal(malformedId.status, 400)
+    assert.equal(customerList.status, 403)
+  })
+
   it('rechaza la solicitud sin autenticación o con un rol distinto de cliente', async () => {
     const anonymous = await api.post('/api/encomiendas').send(shipmentDetails)
     assert.equal(anonymous.status, 401)
@@ -235,6 +282,78 @@ describe('CU27: solicitud de envío de encomienda por un cliente', () => {
       .send(shipmentDetails)
 
     assert.equal(forbidden.status, 403)
+  })
+
+  it('cancela lógicamente una encomienda propia antes del retiro', async () => {
+    const cliente = await registerCustomer()
+    const created = await api.post('/api/encomiendas')
+      .set('Authorization', `Bearer ${cliente.token}`)
+      .send(shipmentDetails)
+    assert.equal(created.status, 201, JSON.stringify(created.body))
+    const id = created.body.encomienda.id
+    createdShipmentIds.add(id)
+
+    const cancelled = await api.patch(`/api/encomiendas/${id}/cancelar`)
+      .set('Authorization', `Bearer ${cliente.token}`)
+      .send({})
+    assert.equal(cancelled.status, 200, JSON.stringify(cancelled.body))
+    assert.equal(cancelled.body.encomienda.estado, 'cancelada')
+    assert.deepEqual(cancelled.body.encomienda.historial.map((item) => item.estado), ['pendiente', 'cancelada'])
+
+    const lookup = await query('SELECT estado FROM encomiendas WHERE id = $1', [id])
+    assert.equal(lookup.rows[0].estado, 'cancelada')
+    const ownList = await api.get('/api/encomiendas/mis-solicitudes')
+      .set('Authorization', `Bearer ${cliente.token}`)
+    assert.equal(ownList.body.solicitudes.find((item) => item.id === id).estado, 'cancelada')
+  })
+
+  it('rechaza cancelación tras retiro y conserva estado e historial', async () => {
+    const cliente = await registerCustomer()
+    const created = await api.post('/api/encomiendas')
+      .set('Authorization', `Bearer ${cliente.token}`)
+      .send(shipmentDetails)
+    assert.equal(created.status, 201, JSON.stringify(created.body))
+    const id = created.body.encomienda.id
+    createdShipmentIds.add(id)
+    await query("UPDATE encomiendas SET estado = 'retirado', retirado_en = NOW() WHERE id = $1", [id])
+    const before = await query('SELECT estado FROM encomiendas WHERE id = $1', [id])
+    const historyBefore = await query('SELECT estado FROM historial_encomiendas WHERE encomienda_id = $1 ORDER BY id', [id])
+
+    const response = await api.patch(`/api/encomiendas/${id}/cancelar`)
+      .set('Authorization', `Bearer ${cliente.token}`)
+      .send({})
+    const after = await query('SELECT estado FROM encomiendas WHERE id = $1', [id])
+    const historyAfter = await query('SELECT estado FROM historial_encomiendas WHERE encomienda_id = $1 ORDER BY id', [id])
+
+    assert.equal(response.status, 409)
+    assert.deepEqual(after.rows, before.rows)
+    assert.deepEqual(historyAfter.rows, historyBefore.rows)
+  })
+
+  it('limita la cancelación al cliente propietario y al rol autorizado', async () => {
+    const owner = await registerCustomer()
+    const otherCustomer = await registerCustomer()
+    const commissionaire = await registerCommissionaire()
+    const created = await api.post('/api/encomiendas')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send(shipmentDetails)
+    assert.equal(created.status, 201, JSON.stringify(created.body))
+    const id = created.body.encomienda.id
+    createdShipmentIds.add(id)
+
+    const anonymous = await api.patch(`/api/encomiendas/${id}/cancelar`).send({})
+    const otherOwner = await api.patch(`/api/encomiendas/${id}/cancelar`)
+      .set('Authorization', `Bearer ${otherCustomer.token}`)
+      .send({})
+    const wrongRole = await api.patch(`/api/encomiendas/${id}/cancelar`)
+      .set('Authorization', `Bearer ${commissionaire.token}`)
+      .send({})
+    const state = await query('SELECT estado FROM encomiendas WHERE id = $1', [id])
+
+    assert.equal(anonymous.status, 401)
+    assert.equal(otherOwner.status, 404)
+    assert.equal(wrongRole.status, 403)
+    assert.equal(state.rows[0].estado, 'pendiente')
   })
 
   it('valida los datos obligatorios y los límites de longitud', async () => {

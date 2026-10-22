@@ -70,7 +70,11 @@ export function validarViaje(req, res, next) {
   let fechaValida = false
   if (!fecha) {
     errores.push('La fecha es obligatoria')
-  } else if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || Number.isNaN(Date.parse(fecha))) {
+  } else if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(fecha)
+    || Number.isNaN(Date.parse(`${fecha}T00:00:00.000Z`))
+    || new Date(`${fecha}T00:00:00.000Z`).toISOString().slice(0, 10) !== fecha
+  ) {
     errores.push('La fecha tiene un formato invalido')
   } else {
     fechaValida = true

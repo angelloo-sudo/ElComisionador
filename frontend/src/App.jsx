@@ -96,7 +96,9 @@ export default function App() {
     setToken(null)
     setUsuario(null)
     setConfirmandoSalida(false)
-    setPantallaFinal(tipo)
+    // El cierre de sesión debe volver directamente al formulario de acceso.
+    // La pantalla final se conserva para confirmar una baja de cuenta.
+    setPantallaFinal(tipo === 'baja' ? 'baja' : null)
     navegar('/')
   }
 

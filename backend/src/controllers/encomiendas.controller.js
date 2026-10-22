@@ -86,7 +86,17 @@ async function obtenerDatosRemitente(usuarioId) {
 
 export async function listar(req, res, next) {
   try {
-    res.status(501).json({ mensaje: 'listar encomiendas: pendiente' })
+    const { rows } = await query(
+      `SELECT e.*,
+              COALESCE((
+                SELECT json_agg(json_build_object('id', h.id, 'estado', h.estado, 'fecha_hora', h.fecha_hora)
+                                ORDER BY h.fecha_hora, h.id)
+                FROM historial_encomiendas h WHERE h.encomienda_id = e.id
+              ), '[]'::json) AS historial
+       FROM encomiendas e
+       ORDER BY e.fecha_solicitud DESC, e.id DESC`,
+    )
+    res.json({ solicitudes: rows })
   } catch (e) { next(e) }
 }
 
@@ -168,7 +178,35 @@ export async function listarAceptadas(req, res, next) {
 
 export async function obtener(req, res, next) {
   try {
-    res.status(501).json({ mensaje: `obtener encomienda ${req.params.id}: pendiente` })
+    const id = Number(req.params.id)
+    if (!Number.isSafeInteger(id) || id < 1) {
+      return res.status(400).json({ mensaje: 'El identificador de la encomienda no es válido' })
+    }
+
+    const { rows } = await query(
+      `SELECT e.*,
+              COALESCE((
+                SELECT json_agg(json_build_object('id', h.id, 'estado', h.estado, 'fecha_hora', h.fecha_hora)
+                                ORDER BY h.fecha_hora, h.id)
+                FROM historial_encomiendas h WHERE h.encomienda_id = e.id
+              ), '[]'::json) AS historial
+       FROM encomiendas e
+       WHERE e.id = $1
+         AND (
+           $2 = 'administrador'
+           OR ($2 = 'cliente' AND e.cliente_remitente_id = (
+             SELECT c.id FROM clientes c WHERE c.usuario_id = $3
+           ))
+           OR ($2 = 'comisionista' AND EXISTS (
+             SELECT 1 FROM viajes v WHERE v.id = e.viaje_id AND v.usuario_id = $3
+           ))
+         )`,
+      [id, req.usuario.rol, req.usuario.id],
+    )
+    if (rows.length === 0) {
+      return res.status(404).json({ mensaje: 'No se encontró la encomienda' })
+    }
+    res.json({ encomienda: rows[0] })
   } catch (e) { next(e) }
 }
 
@@ -354,6 +392,53 @@ export async function aceptar(req, res, next) {
     }
 
     res.json({ encomienda: rows[0], mensaje: 'Solicitud aceptada. El pago queda pendiente.' })
+  } catch (e) { next(e) }
+}
+
+// US29: la cancelacion del cliente es logica para conservar el seguimiento.
+// Solo se permite mientras no se haya registrado el retiro.
+export async function cancelar(req, res, next) {
+  try {
+    const id = Number(req.params.id)
+    if (!Number.isSafeInteger(id) || id < 1) {
+      return res.status(400).json({ mensaje: 'El identificador de la encomienda no es válido' })
+    }
+
+    const clienteId = await obtenerClienteId(req.usuario.id)
+    if (!clienteId) {
+      return res.status(403).json({ mensaje: 'La cuenta no tiene una ficha de cliente activa' })
+    }
+
+    const { rows } = await query(
+      `UPDATE encomiendas
+       SET estado = 'cancelada'
+       WHERE id = $1 AND cliente_remitente_id = $2
+         AND estado IN ('pendiente', 'aceptado') AND retirado_en IS NULL
+       RETURNING id`,
+      [id, clienteId],
+    )
+
+    if (rows.length === 0) {
+      const { rows: existente } = await query(
+        'SELECT id FROM encomiendas WHERE id = $1 AND cliente_remitente_id = $2',
+        [id, clienteId],
+      )
+      if (existente.length === 0) {
+        return res.status(404).json({ mensaje: 'No se encontró la solicitud de envío' })
+      }
+      return res.status(409).json({ mensaje: 'La encomienda ya fue retirada o no admite cancelación' })
+    }
+
+    const { rows: cancelada } = await query(
+      `SELECT e.*, COALESCE((
+         SELECT json_agg(json_build_object('id', h.id, 'estado', h.estado, 'fecha_hora', h.fecha_hora)
+                         ORDER BY h.fecha_hora, h.id)
+         FROM historial_encomiendas h WHERE h.encomienda_id = e.id
+       ), '[]'::json) AS historial
+       FROM encomiendas e WHERE e.id = $1`,
+      [id],
+    )
+    res.json({ encomienda: cancelada[0], mensaje: 'La solicitud de envío fue cancelada' })
   } catch (e) { next(e) }
 }
 

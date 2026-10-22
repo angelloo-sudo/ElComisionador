@@ -65,12 +65,18 @@ export default function Perfil({ onCuentaDadaDeBaja }) {
   function validarFormulario() {
     const e = {}
     if (!form.nombre.trim() || form.nombre.trim().length > 120) e.nombre = 'El nombre es obligatorio'
-    if (form.password && form.password.length < 6) e.password = 'La nueva contraseña debe tener al menos 6 caracteres'
-    if (form.password !== form.confirmarPassword) e.confirmarPassword = 'Las contraseñas no coinciden'
-    if (form.presentacion.length > MAX_PRESENTACION) e.presentacion = `La presentación no puede superar los ${MAX_PRESENTACION} caracteres`
-    if (perfil?.rol === 'cliente' || esComisionista) {
+    if (perfil?.rol === 'cliente' && !form.apellido.trim()) e.apellido = 'El apellido es obligatorio'
+    if (perfil?.rol !== 'cliente') {
+      if (form.password && form.password.length < 6) e.password = 'La nueva contraseña debe tener al menos 6 caracteres'
+      if (form.password !== form.confirmarPassword) e.confirmarPassword = 'Las contraseñas no coinciden'
+    }
+    if (esComisionista && form.presentacion.length > MAX_PRESENTACION) e.presentacion = `La presentación no puede superar los ${MAX_PRESENTACION} caracteres`
+    if (esComisionista) {
       if (!/^\d{7,8}$/.test(form.dni.replace(/\D/g, ''))) e.dni = 'El DNI debe tener 7 u 8 dígitos'
       if (!form.telefono.trim()) e.telefono = 'Ingresa un número de teléfono válido'
+    }
+    if (perfil?.rol === 'cliente' && !/^[0-9+\-\s()]{6,20}$/.test(form.telefono.trim())) {
+      e.telefono = 'Ingresa un número de teléfono válido'
     }
     return e
   }
@@ -87,8 +93,17 @@ export default function Perfil({ onCuentaDadaDeBaja }) {
     setErrorGeneral('')
     setCargando(true)
     try {
-      const { confirmarPassword, ...datosAEnviar } = form
-      datosAEnviar.dni = datosAEnviar.dni.replace(/\D/g, '')
+      const { confirmarPassword, ...datosAEnviarOriginales } = form
+      let datosAEnviar = datosAEnviarOriginales
+      if (perfil?.rol === 'cliente') {
+        datosAEnviar = {
+          nombre: datosAEnviar.nombre,
+          apellido: datosAEnviar.apellido,
+          telefono: datosAEnviar.telefono,
+        }
+      } else {
+        datosAEnviar.dni = datosAEnviar.dni.replace(/\D/g, '')
+      }
       // La presentacion y la foto son solo del comisionista. La foto solo se reenvia si la
       // cambió (o la quitó), para no subir de nuevo la misma imagen en cada guardado.
       if (!esComisionista) {
@@ -223,7 +238,14 @@ export default function Perfil({ onCuentaDadaDeBaja }) {
                 )}
                 {tieneContacto && (
                   <Campo label="DNI" requerido icono="idcard" error={errores.dni}>
-                    <input name="dni" value={form.dni} onChange={handleChange} inputMode="numeric" placeholder="30.456.789" />
+                    <input
+                      name="dni"
+                      value={form.dni}
+                      onChange={esCliente ? undefined : handleChange}
+                      inputMode="numeric"
+                      placeholder="30.456.789"
+                      readOnly={esCliente}
+                    />
                   </Campo>
                 )}
               </div>
@@ -249,13 +271,13 @@ export default function Perfil({ onCuentaDadaDeBaja }) {
               </div>
             )}
 
-            <div className="seccion">
+            {perfil?.rol !== 'cliente' && <div className="seccion">
               <p className="seccion-titulo">Cambiar contraseña (opcional)</p>
               <div className="grilla-2">
                 <CampoPassword label="Nueva contraseña" name="password" value={form.password} onChange={handleChange} autoComplete="new-password" placeholder="Mínimo 6 caracteres" error={errores.password} />
                 <CampoPassword label="Repetir contraseña" name="confirmarPassword" value={form.confirmarPassword} onChange={handleChange} autoComplete="new-password" placeholder="Repite la contraseña" error={errores.confirmarPassword} />
               </div>
-            </div>
+            </div>}
           </div>
           <div className="card-pie">
             <button type="button" className="btn" onClick={cancelarEdicion} disabled={cargando}>Cancelar</button>

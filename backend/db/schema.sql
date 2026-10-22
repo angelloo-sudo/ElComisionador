@@ -265,3 +265,11 @@ ALTER TABLE viajes ADD COLUMN IF NOT EXISTS finalizado_en TIMESTAMPTZ;
 
 -- US28: momento en que el comisionista retiro la encomienda (confirmacion de recepcion inicial).
 ALTER TABLE encomiendas ADD COLUMN IF NOT EXISTS retirado_en TIMESTAMPTZ;
+
+-- US29: conservar las encomiendas canceladas y su historial; no borrarlas fisicamente.
+ALTER TABLE encomiendas DROP CONSTRAINT IF EXISTS encomiendas_estado_check;
+ALTER TABLE encomiendas ADD CONSTRAINT encomiendas_estado_check
+  CHECK (estado IN ('pendiente', 'aceptado', 'retirado', 'recibido', 'en_viaje', 'entregado', 'cancelada'));
+ALTER TABLE historial_encomiendas DROP CONSTRAINT IF EXISTS historial_encomiendas_estado_check;
+ALTER TABLE historial_encomiendas ADD CONSTRAINT historial_encomiendas_estado_check
+  CHECK (estado IN ('pendiente', 'aceptado', 'retirado', 'recibido', 'en_viaje', 'entregado', 'cancelada'));
