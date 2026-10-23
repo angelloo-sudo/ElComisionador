@@ -58,6 +58,9 @@ export default function ViajeNuevo() {
 
   const [form, setForm] = useState(FORM_VACIO)
   const [salida, setSalida] = useState(['', ''])
+  const [modoEstimacion, setModoEstimacion] = useState('mapa') // mapa | llegada | duracion
+  const [llegada, setLlegada] = useState(['', ''])
+  const [duracionManual, setDuracionManual] = useState('')
   const [ruta, setRuta] = useState(null) // ruta calculada por el mapa: { distancia_km, duracion_min, aproximada }
   const [precioKm, setPrecioKm] = useState(undefined) // tarifa del comisionista (undefined = cargando)
   // Repeticion: 'unico' | 'diario' | 'semanal'
@@ -98,8 +101,16 @@ export default function ViajeNuevo() {
 
   const horaSalida = salida[0] && salida[1] ? `${salida[0]}:${salida[1]}` : ''
   const recorridoElegido = Boolean(form.origen && form.destino)
-  const duracionMin = ruta && !ruta.aproximada ? ruta.duracion_min : null
-  const horaLlegada = horaDeLlegada(horaSalida, duracionMin) ?? ''
+  const duracionRuta = ruta && !ruta.aproximada ? ruta.duracion_min : null
+  const horaLlegadaManual = llegada[0] && llegada[1] ? `${llegada[0]}:${llegada[1]}` : ''
+  const duracionMin = modoEstimacion === 'duracion'
+    ? (duracionManual ? Number(duracionManual) : null)
+    : modoEstimacion === 'llegada' && horaLlegadaManual && horaSalida
+      ? (Number(horaLlegadaManual.slice(0, 2)) * 60 + Number(horaLlegadaManual.slice(3)) - Number(horaSalida.slice(0, 2)) * 60 - Number(horaSalida.slice(3)))
+      : duracionRuta
+  const horaLlegada = modoEstimacion === 'llegada'
+    ? horaLlegadaManual
+    : horaDeLlegada(horaSalida, duracionMin) ?? ''
   const montoPorPasajero = calcularMonto({ precioKm, distanciaKm: ruta && !ruta.aproximada ? ruta.distancia_km : null })
 
   function validar() {
@@ -109,6 +120,15 @@ export default function ViajeNuevo() {
     if (!form.fecha) e.fecha = 'Indica la fecha del viaje'
     else if (form.fecha < hoyISO()) e.fecha = 'La fecha del viaje no puede ser anterior a hoy'
     if (!horaSalida) e.salida = 'Ingresa un horario válido (hh:mm)'
+    if (modoEstimacion === 'llegada') {
+      if (!horaLlegadaManual) e.llegada = 'Ingresa la hora estimada de llegada'
+      else if (horaLlegadaManual <= horaSalida) e.llegada = 'La llegada debe ser posterior a la salida y el mismo día'
+    }
+    if (modoEstimacion === 'duracion') {
+      const minutos = Number(duracionManual)
+      if (!duracionManual || !Number.isInteger(minutos) || minutos < 1) e.duracion = 'Ingresa una duración en minutos mayor a cero'
+      else if (horaSalida && (Number(horaSalida.slice(0, 2)) * 60 + Number(horaSalida.slice(3)) + minutos > 1439)) e.duracion = 'El viaje debe terminar antes de la medianoche del mismo día'
+    }
     const cupo = Number(form.cupo_total)
     if (!form.cupo_total || !Number.isInteger(cupo) || cupo < 1) e.cupo = 'Indica el cupo de pasajeros (mínimo 1)'
     if (tipoRepeticion === 'semanal' && diasSel.length === 0) e.dias = 'Elegí al menos un día de la semana para repetir el viaje'
@@ -132,6 +152,8 @@ export default function ViajeNuevo() {
         ...form,
         cupo_total: Number(form.cupo_total),
         hora_salida: horaSalida,
+        ...(modoEstimacion === 'llegada' && { hora_llegada: horaLlegadaManual }),
+        ...(modoEstimacion === 'duracion' && { duracion_min: Number(duracionManual) }),
         repeticion:
           tipoRepeticion === 'unico'
             ? { tipo: 'unico' }
@@ -160,6 +182,9 @@ export default function ViajeNuevo() {
   function registrarOtro() {
     setForm(FORM_VACIO)
     setSalida(['', ''])
+    setModoEstimacion('mapa')
+    setLlegada(['', ''])
+    setDuracionManual('')
     setRuta(null)
     setTipoRepeticion('unico')
     setDiasSel([])
@@ -230,7 +255,7 @@ export default function ViajeNuevo() {
           <div className="card-cabecera">
             <div>
               <h2>Datos del viaje</h2>
-              <p>Indica el recorrido, la fecha y la hora de salida. La duración la calcula el sistema con el mapa.</p>
+              <p>Indica el recorrido, la fecha y la hora de salida. Usa la estimación del mapa o ingresa la llegada o duración.</p>
             </div>
           </div>
           <div className="card-cuerpo">
@@ -254,10 +279,28 @@ export default function ViajeNuevo() {
                 <Campo label="Hora de salida" requerido icono="clock" error={errores.salida}>
                   <SelectorHora etiqueta="Hora de salida" hora={salida[0]} minuto={salida[1]} onHora={(h) => { setSalida([h, salida[1]]); setErrores((e) => ({ ...e, salida: undefined })) }} onMinuto={(m) => { setSalida([salida[0], m]); setErrores((e) => ({ ...e, salida: undefined })) }} />
                 </Campo>
-                <Campo label="Duración" icono="clock" soloLectura ayuda={duracionMin == null ? 'Se calcula sola al elegir origen y destino' : 'Calculada por el sistema'}>
+                {modoEstimacion === 'mapa' && <Campo label="Duración estimada" icono="clock" soloLectura ayuda={duracionMin == null ? 'Se calcula sola al elegir origen y destino' : 'Calculada por el sistema'}>
                   <input type="text" readOnly tabIndex={-1} value={recorridoElegido ? (duracionMin != null ? formatoDuracion(duracionMin) : (ruta ? 'No disponible' : 'Calculando...')) : ''} placeholder="Automática" aria-label="Duración del viaje (calculada)" />
-                </Campo>
+                </Campo>}
               </div>
+              <div className="campo" style={{ marginTop: 14 }}>
+                <span className="campo-label">Estimación de llegada</span>
+                <div className="segmentado" role="radiogroup" aria-label="Método de estimación de llegada">
+                  <button type="button" role="radio" aria-checked={modoEstimacion === 'mapa'} className={modoEstimacion === 'mapa' ? 'activo' : ''} onClick={() => setModoEstimacion('mapa')}>Usar mapa</button>
+                  <button type="button" role="radio" aria-checked={modoEstimacion === 'llegada'} className={modoEstimacion === 'llegada' ? 'activo' : ''} onClick={() => setModoEstimacion('llegada')}>Ingresar llegada</button>
+                  <button type="button" role="radio" aria-checked={modoEstimacion === 'duracion'} className={modoEstimacion === 'duracion' ? 'activo' : ''} onClick={() => setModoEstimacion('duracion')}>Ingresar duración</button>
+                </div>
+              </div>
+              {modoEstimacion === 'llegada' && <div className="grilla-2" style={{ marginTop: 12 }}>
+                <Campo label="Hora estimada de llegada" requerido icono="clock" error={errores.llegada}>
+                  <SelectorHora etiqueta="Hora estimada de llegada" hora={llegada[0]} minuto={llegada[1]} onHora={(h) => { setLlegada([h, llegada[1]]); setErrores((e) => ({ ...e, llegada: undefined })) }} onMinuto={(m) => { setLlegada([llegada[0], m]); setErrores((e) => ({ ...e, llegada: undefined })) }} />
+                </Campo>
+              </div>}
+              {modoEstimacion === 'duracion' && <div className="grilla-2" style={{ marginTop: 12 }}>
+                <Campo label="Duración estimada (minutos)" requerido icono="clock" error={errores.duracion}>
+                  <input type="number" min="1" step="1" value={duracionManual} onChange={(e) => { setDuracionManual(e.target.value); setErrores((actuales) => ({ ...actuales, duracion: undefined })) }} placeholder="Ej.: 45" />
+                </Campo>
+              </div>}
             </div>
 
             <div className="seccion">

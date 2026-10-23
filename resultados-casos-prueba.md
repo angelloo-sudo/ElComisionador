@@ -676,3 +676,381 @@ Estos casos separan lo comprobado por API/tests de lo que requiere correo extern
 - **US30:** el detalle aplica aislamiento y los endpoints dejaron de responder 501; la lista de pendientes de comisionistas sigue global. Falta definir cómo se asigna/vincula cada solicitud a una operación para filtrarla sin romper el flujo actual de aceptación.
 - **Correo:** las pruebas funcionales de tokens se ejecutaron, pero CA de envío de correo de US04/US05 y el correo de verificación de US11 no se pudieron comprobar porque el entorno no tiene `SMTP_HOST`.
 - **Interfaz:** el build pasó, pero no se hicieron pruebas manuales de navegador para US01 CA05 ni el flujo visual de US02/US04.
+
+---
+
+# Validación de criterios de aceptación — US06 a US10 (2026-10-22)
+
+La revisión cubrió código, rutas, persistencia definida en el esquema y pruebas automatizadas. El build se ejecutó correctamente. La suite `npm run test:auth` no pudo completar las comprobaciones de login porque la base QA conectada carece de `login_failed_attempts` y `login_locked_until`; por ello, los casos que requieren sesión autenticada quedan pendientes de reejecución sobre una base con el esquema vigente. No se realizó recorrido manual en navegador.
+
+## US06 — Registrar usuario Comisionista
+
+| Criterio | Resultado de revisión |
+|---|---|
+| CA01–CA04 | Formulario de registro ahora permite foto y presentación; el backend valida ambos campos y los persiste en `comisionistas`. Ambos son opcionales en el alta. |
+| CA02–CA03 | Backend valida datos requeridos/formato y rechaza email/DNI duplicados; rol queda fijado como comisionista por el endpoint. Prueba automatizada añadida para foto, presentación y rol. |
+| CA05 | `POST /api/auth/register-comisionista` conectado al formulario; endpoint persiste datos personales y extras. |
+| CA06 | La interfaz muestra confirmación o error; la creación comunica también si no se pudo enviar el correo de verificación. SMTP no está configurado en QA. |
+| CA07 | Regresión de registro con foto/presentación y casos inválidos añadida. Ejecución integral bloqueada por el esquema desactualizado de la base QA. |
+| Estado | Implementado; verificación automatizada pendiente en base QA actualizada. |
+
+## US07 — Baja de usuario Comisionista
+
+| Criterio | Resultado de revisión |
+|---|---|
+| CA01–CA02 | Perfil ofrece solicitar baja mediante modal y confirmación explícita. |
+| CA03, CA05 | Tras confirmar, `DELETE /api/auth/perfil` elimina la cuenta; la interfaz descarta el token y navega al estado de sesión cerrada. La API informa la eliminación. |
+| CA04 | Baja elimina en una transacción las encomiendas y pasajeros vinculados a operaciones del usuario; los viajes, gastos, ingresos y filas de perfil asociados se eliminan por cascada. |
+| CA06 | Prueba añadida para eliminar usuario, viaje y encomienda, y rechazar un nuevo login. No completó por el fallo de login causado por la base QA desactualizada. |
+| Estado | Implementado; falta reejecutar prueba integral en base QA con esquema vigente. |
+
+## US08 — Consultar información de cliente
+
+| Criterio | Resultado de revisión |
+|---|---|
+| CA01–CA02 | Listado/detalle expone datos de contacto y operaciones vinculadas; ambos endpoints requieren token de comisionista. SQL limita resultados a solicitudes aceptadas o encomiendas de viajes propios. |
+| CA03–CA04 | Pantalla `Clientes` permite buscar por nombre, correo, DNI y teléfono, y cargar el detalle desde API. |
+| CA05–CA06 | El detalle vuelve a comprobar el vínculo; clientes ajenos/no vinculados no aparecen (404). La suite enfocada existente no se ejecutó en este turno. |
+| Estado | Implementado según inspección de código; pruebas de autorización pendientes de reejecución. |
+
+## US09 — Modificar información de usuario Comisionista
+
+| Criterio | Resultado de revisión |
+|---|---|
+| CA01, CA04 | Formulario deja DNI/email en solo lectura. Backend rechaza modificaciones de ambos; nombre, apellido y teléfono actualizan el perfil. |
+| CA02–CA03 | Backend valida nombre, apellido y teléfono requeridos y persiste cambios; conserva la presentación/foto cuando se editan desde perfil. |
+| CA05 | La pantalla presenta toast al guardar y alerta ante error. |
+| CA06 | Prueba de intento de alterar email/DNI sin cambios persistidos añadida; ejecución autenticada pendiente por el esquema de QA. |
+| Estado | Implementado; verificación automatizada pendiente en base QA actualizada. |
+
+## US10 — Consultar información de usuario Comisionista
+
+| Criterio | Resultado de revisión |
+|---|---|
+| CA01–CA04 | `GET /api/auth/perfil` requiere autenticación y consulta la identidad del token; devuelve nombre, apellido, DNI, email, teléfono, foto y presentación. No modifica registros. |
+| CA05 | `Perfil` presenta esos datos y permite editar los datos habilitados. |
+| CA06 | La suite existente incluye consulta de perfil; no completó el login en este entorno por las columnas ausentes de la base QA. |
+| Estado | Implementado según código; prueba integral pendiente en base QA actualizada. |
+
+## Evidencia de esta revisión
+
+| Acción | Resultado |
+|---|---|
+| `npm run build` | Aprobado. Vite generó el build; advirtió un chunk JS mayor a 500 kB. |
+| `npm run test:auth` | Fallido por incompatibilidad de esquema en la base QA (`login_failed_attempts`, `login_locked_until` ausentes); no permite atribuir esos errores a la lógica revisada. |
+| Prueba manual de interfaz | No ejecutada. |
+
+# Validación de criterios de aceptación — US11 a US15 (2026-10-22)
+
+Se revisaron las historias contra la versión actual del código. La base configurada para QA no coincide con el esquema del repositorio: faltan `login_failed_attempts`, `login_locked_until`, `precio_km` y `distancia_km`. Las pruebas de integración dependientes de esas columnas quedan como no concluyentes; no se aplicaron cambios de esquema a QA.
+
+## US11 — Registrar usuario Cliente
+
+| Criterio | Resultado |
+|---|---|
+| CA01–CA05 | Formulario de registro, endpoint `/api/auth/register`, validaciones, rechazo de email/DNI duplicados y mensaje de resultado están implementados. El rol se fija como cliente en servidor. |
+| CA06 | En la ejecución actual, la prueba de alta y normalización de cliente pasó; la suite completa falla luego al iniciar sesión por columnas ausentes en QA. La suite de autenticación anterior ya había verificado formatos y duplicados en QA. |
+| Estado | Implementado; suite integral requiere actualizar la base QA al esquema vigente. El correo de verificación no se envía porque no está configurado `SMTP_HOST`. |
+
+## US12 — Baja de usuario Cliente
+
+| Criterio | Resultado |
+|---|---|
+| CA01–CA03, CA05–CA06 | Perfil ofrece confirmación cancelable. Al confirmar, elimina la cuenta y la interfaz descarta la sesión local. El login posterior se rechaza porque la cuenta ya no existe; no se verificó la revocación de una copia previa del JWT. |
+| CA04 | La baja borra en transacción las encomiendas vinculadas al cliente, además de los datos y solicitudes eliminados por cascada. |
+| CA07 | La prueba de baja no pudo completar la autenticación por las columnas de bloqueo ausentes en QA. |
+| Estado | Implementado por inspección; falta prueba integral en base QA actualizada. |
+
+## US13 — Consultar información de usuario
+
+| Criterio | Resultado |
+|---|---|
+| CA01–CA04 | `GET /api/auth/perfil` consulta la identidad autenticada; la pantalla muestra nombre, apellido, DNI, correo y teléfono. La consulta es de lectura. |
+| CA05 | El endpoint consulta el ID del token y no recibe ID de usuario como selector. Las rutas requieren autenticación. |
+| CA06 | La regresión existente de perfil no completó en la suite actual porque el inicio de sesión falla por el esquema de QA. |
+| Estado | Implementado por inspección; prueba integral pendiente. |
+
+## US14 — Modificar información de usuario
+
+| Criterio | Resultado |
+|---|---|
+| CA01–CA05 | Formulario y endpoint permiten nombre, apellido y teléfono; email/DNI se muestran sin edición y el backend del cliente rechaza que se envíen esos campos. La interfaz confirma éxito con toast y errores con alerta. |
+| CA06 | La prueba de integración de actualización de cliente no llegó a ejecutarse en esta corrida debido al error de login de QA. El documento conserva evidencia de una ejecución anterior aprobada. |
+| Estado | Implementado; reejecución pendiente con esquema QA vigente. |
+
+## US15 — Registrar diagramación de viaje
+
+| Criterio | Resultado |
+|---|---|
+| CA01–CA02 | Formulario ofrece viajes únicos/diarios/semanales y selecciona origen/destino del catálogo local de localidades. |
+| CA03 | El formulario permite usar estimación del mapa, ingresar hora de llegada o ingresar duración. El backend deriva el valor faltante y rechaza horarios inválidos, contradictorios o que cruzan medianoche. |
+| CA04–CA07 | Validación del backend cubre localidad, fecha, salida, cupo y repetición; la creación persiste recorrido, horarios y estado `programado`. |
+| CA05 | El controlador comprueba conflictos de todas las fechas de una serie antes de insertar; los viajes cancelados se excluyen. |
+| CA08 | La pantalla muestra toast y confirmación de alta exitosa. |
+| CA09 | Se añadieron regresiones para hora de llegada, duración, recurrencia y superposición. La suite unitaria del validador pasó 5/5; las pruebas de integración de viajes no pudieron verificar persistencia porque QA carece de `distancia_km` y `precio_km`. Este documento ya contiene resultados QA previos aprobados para viaje único, recurrencia y superposición. |
+| Estado | Implementado; pruebas unitarias aprobadas. Pruebas integrales nuevas pendientes sobre base QA actualizada. |
+
+## Evidencia de esta ejecución
+
+| Acción | Resultado |
+|---|---|
+| `node --test test/viaje.validador.test.js` | 5 aprobadas, 0 fallidas; incluye validación nueva de llegada y duración. |
+| `node --test --test-name-pattern="registra un comisionista" test/auth.integration.test.js` | 1 aprobada, 0 fallidas; foto, presentación, rol fijo y rechazo de extras inválidos comprobados. |
+| `npm run test:auth` | No concluyente para casos autenticados: login devuelve HTTP 500 porque QA no tiene `login_failed_attempts` ni `login_locked_until`. |
+| `npm run test:tarifa` | No concluyente para creación: QA no tiene `precio_km` ni `distancia_km`; se producen HTTP 500 antes de verificar persistencia. |
+| `npm run build` | Aprobado. Vite generó build de producción; advierte que el chunk JavaScript supera 500 kB. |
+| Prueba manual de navegador | No ejecutada. |
+
+---
+
+# Revisión de criterios de aceptación — US16, US17, US18, US19 y US23 — 2026-10-22
+
+La revisión de código confirmó que los flujos principales existen. Las suites de integración se intentaron ejecutar; sus resultados quedan limitados por la base QA desactualizada descrita en la tabla. El build del frontend y el validador unitario sí se ejecutaron correctamente.
+
+## Evidencia de ejecución
+
+| Comando/acción | Resultado observado |
+|---|---|
+| `npm --prefix backend run test:viaje-validador` | 5 pruebas aprobadas, 0 fallidas: fecha inexistente, bisiesta, llegada/duración y estimaciones contradictorias. |
+| `npm run build` (raíz) | Build Vite aprobado; chunk JavaScript de 509.53 kB, con advertencia de tamaño. |
+| `npm run test:viajes-estado` (backend) | No concluyente: la preparación de sesión falla con HTTP 500 porque la base QA carece de `usuarios.login_failed_attempts` y `login_locked_until`. |
+| `npm run test:retiro` y `npm run test:pasajero` (backend) | No concluyentes: las pruebas fallan al preparar sesión por las columnas de login ausentes. |
+| `npm run test:tarifa` (backend) | 19 pruebas, 0 aprobadas; el esquema QA carece también de `viajes.distancia_km`, `viajes.duracion_min` y `comisionistas.precio_km`. No se considera evidencia de defectos funcionales de estas historias. |
+
+## US16 — Registrar cancelación de viaje
+
+| Criterio | Verificación | Estado |
+|---|---|---|
+| CA01 | La vista ofrece cancelación para viajes programados; la ruta exige sesión de comisionista y el controlador rechaza estados no programados. | Implementado; prueba de integración bloqueada por esquema QA. |
+| CA02 | `CancelarViajeModal` pide confirmación y permite cerrar/abortar antes de llamar a la API. | Implementado por inspección; sin recorrido manual. |
+| CA03 | El controlador cambia el estado a `cancelado`, con alcance para viaje o serie. | Implementado; prueba de integración bloqueada por esquema QA. |
+| CA04 | `viajeAdmiteAsociaciones` y el alta de solicitudes verifican que el viaje siga programado. | Implementado por inspección; prueba de integración bloqueada por esquema QA. |
+
+## US17 — Consultar viajes
+
+| Criterio | Verificación | Estado |
+|---|---|---|
+| CA01 | Backend y pantalla aplican filtros de fecha, origen, destino y estado. | Implementado por inspección; integración bloqueada por esquema QA. |
+| CA02 | La pantalla permite abrir detalle con recorrido y horarios. | Implementado por inspección; sin recorrido manual. |
+| CA03 | La vista informa cuando no hay resultados para los filtros. | Implementado por inspección; sin recorrido manual. |
+
+## US18 — Modificar definición de viaje
+
+| Criterio | Verificación | Estado |
+|---|---|---|
+| CA01 | El backend permite editar origen/destino, fecha, horario y cupo solo en viajes programados. No aparece un campo de vehículo en el formulario ni en el modelo de viaje revisado. | Parcial: recorrido, fecha y horario implementados; vehículo no contemplado. |
+| CA02 | Antes de guardar, se verifica superposición con viajes activos y se rechaza la operación sin aplicar cambios. | Implementado; regresión de integración bloqueada por esquema QA. |
+| CA03 | Los cambios se persisten y se devuelve el detalle actualizado; la pantalla confirma el guardado. | Implementado por inspección; integración bloqueada y sin recorrido manual. |
+| CA04 | La API devuelve `pasajerosAfectados`; la pantalla muestra una alerta al comisionista para que comunique el cambio. No hay notificación visible para los clientes dentro de la app. | Parcial: no notifica directamente a clientes. |
+
+## US19 — Reservar viaje
+
+| Criterio | Verificación | Estado |
+|---|---|---|
+| CA01 | La pantalla lista viajes programados disponibles; el endpoint filtra estado, hora de inicio y cuenta activa. | Implementado; prueba de integración bloqueada por esquema QA. |
+| CA02 | El cliente selecciona el viaje, completa la solicitud y confirma el envío; queda pendiente de aprobación del comisionista. | Implementado por inspección; integración bloqueada por esquema QA. |
+| CA03 | La API calcula cupos ocupados y rechaza solicitudes de pasajeros sin capacidad suficiente. | Implementado por inspección; prueba de cupos bloqueada por esquema QA. |
+| CA04 | La solicitud se persiste vinculada al viaje y al cliente autenticado. | Implementado por inspección; integración bloqueada por esquema QA. |
+
+## US23 — Registrar cancelación de traslado
+
+| Criterio | Verificación | Estado |
+|---|---|---|
+| CA01 | El cliente puede cancelar antes del inicio; backend comprueba estado y hora del viaje. | Implementado por inspección; integración bloqueada por esquema QA. |
+| CA02 | La pantalla presenta confirmación con acciones Volver y Confirmar. | Implementado por inspección; sin recorrido manual. |
+| CA03 | La API pasa la solicitud a `cancelada`; deja de contar como reserva activa. | Implementado por inspección; integración bloqueada por esquema QA. |
+| CA04 | Los cupos se calculan desde pasajeros aceptados, excluyendo solicitudes canceladas, ausentes o canceladas por el comisionista. | Implementado por inspección; integración bloqueada por esquema QA. |
+
+## Pendientes de verificación/cierre
+
+- Actualizar la base QA con `backend/db/schema.sql` en una ventana autorizada y repetir las suites. Esta revisión no modificó la base.
+- Incorporar una notificación visible para los clientes afectados por cambios del viaje (US18 CA04); hoy solo se avisa al comisionista.
+- Hacer recorrido manual de las pantallas y confirmaciones; un build y la inspección de código no validan la interacción visual.
+
+---
+
+# Revisión y cambios de aceptación — US26, US27, US29, US30, US32 y US40 — 2026-10-22
+
+Se implementó US26 y se agregaron pruebas unitarias/de integración. La integración que persiste recordatorios no pudo completarse contra QA porque no existe allí la tabla nueva `recordatorios_viaje`; no se aplicó `backend/db/schema.sql` a la base. Las demás suites también se vieron afectadas por la columna de login ausente. Los resultados integrales anteriores de US27/US29/US30 se conservan donde ya estaban registrados.
+
+## Evidencia ejecutada
+
+| Comando/acción | Resultado |
+|---|---|
+| `npm --prefix backend run test:recordatorio` | 1 prueba unitaria aprobada: rechaza anticipación inválida o mayor al tiempo restante. |
+| `npm --prefix backend run test:recordatorio:integration` | Ejecución anterior: 2 de 3 pruebas aprobadas. La configuración/consulta falló con HTTP 500 porque QA aún no tiene la tabla `recordatorios_viaje`; validación de anticipación, estado, ID inexistente y aislamiento por propietario sí respondieron como se esperaba. La prueba ahora también cubre DELETE/desactivación, pero esa aserción queda pendiente de reejecución contra una QA con el esquema actualizado. |
+| `npm --prefix backend run test:gastos` | Las 8 pruebas puras del validador pasaron. Las de integración no pudieron establecer sesión: QA carece de `usuarios.login_failed_attempts`. |
+| `npm --prefix backend run test:encomiendas` | No concluyente: la preparación de sesión falla por `usuarios.login_failed_attempts` ausente. En la ejecución anterior documentada, la suite de encomiendas había aprobado 11/11. |
+| `npm --prefix backend run test:tarifa` | No concluyente para US32: la suite depende de `viajes.distancia_km`, `viajes.duracion_min` y `comisionistas.precio_km`, columnas ausentes en QA. |
+| `npm run build` | Reejecutado tras hacer optativa la configuración: build aprobado; chunk JavaScript de 511.75 kB, con advertencia de tamaño. |
+| SMTP | No se pudo observar entrega real: el entorno no tiene `SMTP_HOST`. El proceso reintentará los recordatorios pendientes hasta poder enviarlos. |
+
+## US26 — Confirmar/configurar recordatorio
+
+| Criterio | Revisión actual | Estado |
+|---|---|---|
+| CA01 | El detalle del viaje programado ofrece un checkbox opcional, desmarcado cuando no hay configuración previa. Sin marcarlo, no se crea ningún recordatorio. | Implementado; build aprobado, sin recorrido manual. |
+| CA02 | Al marcarlo, se puede elegir 15 min, 30 min, 1 h, 2 h, 6 h, 12 h, 1 día o 7 días de anticipación. | Implementado. |
+| CA03 | API exige entre 1 minuto y 7 días, viaje propio programado y anticipación no mayor al tiempo restante. Persiste un recordatorio solo después de marcar y guardar. Desmarcar uno ya guardado lo desactiva. | Implementado; unidad aprobada. Persistencia integrada pendiente de aplicar esquema en QA. |
+| CA04 | La pantalla confirma que se guardó o desactivó el recordatorio y muestra errores si falla la operación. | Implementado por inspección/build; sin prueba manual. |
+| CA05 | El servidor revisa únicamente recordatorios configurados y vencidos cada minuto y envía correo al comisionista. Los errores SMTP dejan el aviso pendiente para reintento. Cambiar un viaje reprograma el aviso pendiente; cancelar el viaje lo anula. | Implementado; no se pudo verificar envío por SMTP ni ejecución del worker con datos QA. |
+
+La tabla y el worker se agregaron en `backend/db/schema.sql` y `backend/src/services/recordatorios.service.js`; los endpoints son `GET/PUT/DELETE /api/viajes/:id/recordatorio`. No se programa aviso si el comisionista deja el checkbox desmarcado; DELETE desactiva un recordatorio ya guardado.
+
+## US27 — Registrar pedido de envío de encomienda
+
+| Criterio | Revisión actual | Estado |
+|---|---|---|
+| CA01 | Formulario recoge remitente autenticado, dirección de retiro y datos/dirección del destinatario. | Implementado; fixture previo aprobado. |
+| CA02 | Permite peso, dimensiones, contenido, fragilidad y descripción, con validación de campos. | Implementado; fixture previo aprobado. |
+| CA03 | Backend crea la encomienda en estado `pendiente`. | Implementado; fixture previo aprobó estado e historial inicial. |
+| CA04 | API responde mensaje de creación y pantalla presenta confirmación. | Implementado; fixture previo verificó el mensaje de API. No se repitió con QA desactualizada. |
+
+## US29 — Registrar cancelación de encomienda
+
+| Criterio | Revisión actual | Estado |
+|---|---|---|
+| CA01–CA02 | Cliente propietario puede cancelar encomienda vigente desde la interfaz; se confirma antes de llamar a `PATCH /api/encomiendas/:id/cancelar`. | Implementado; suite de regresión anterior aprobada. |
+| CA03–CA04 | Conserva el registro como `cancelada`, con historial; deja de ofrecer acciones de encomienda activa. El listado conserva el registro cancelado como historial. | Implementado; regresión anterior comprobó estado/historial y retiro de acciones. |
+| CA05 | La pantalla presenta resultado exitoso o error. | Implementado por inspección; sin recorrido manual. La reejecución actual quedó bloqueada por login QA. |
+
+## US30 — Consultar pedido de encomienda
+
+| Criterio | Revisión actual | Estado |
+|---|---|---|
+| CA01–CA02 | Detalle devuelve los campos de la encomienda y su historial/estado. | Implementado; la suite anterior comprobó detalle. |
+| CA03 | Las rutas de consulta son de lectura; no hay `UPDATE` en los controladores de detalle/listado. | Implementado por inspección. |
+| CA04 | Detalle exige autenticación; cliente accede a su encomienda, comisionista al viaje vinculado y administrador a la vista general. | Implementado; la suite anterior comprobó propietario, roles y denegaciones. La reejecución quedó bloqueada por el login de QA. |
+
+## US32 — Registrar información de pago
+
+| Criterio | Revisión actual | Estado |
+|---|---|---|
+| CA01–CA02 | Formulario de solicitud de traslado ofrece efectivo y transferencia, para pasajero y encomienda. | Implementado por inspección. |
+| CA03 | Validador exige una opción admitida y `POST /api/solicitudes` persiste `forma_pago` en la solicitud asociada al viaje. | Implementado por inspección; suite de tarifa no pudo probar persistencia en QA. |
+| CA04 | Detalle de postulaciones del comisionista muestra la forma de pago. | Implementado por inspección; sin recorrido manual. |
+
+Esta verificación cubre servicios solicitados desde el flujo de traslados (`solicitudes_viaje`). El formulario independiente de encomiendas (`/api/encomiendas`) no tiene un campo de pago propio.
+
+## US40 — Registrar un gasto general
+
+| Criterio | Revisión actual | Estado |
+|---|---|---|
+| CA01 | Formulario incluye tipo/concepto, monto, fecha y descripción. La descripción se marca opcional. | Implementado; confirmar si el criterio exige descripción obligatoria. |
+| CA02 | Validador exige concepto, monto numérico mayor a cero y fecha válida; la base persiste el registro. | Implementado; 8 pruebas puras pasaron. Integración bloqueada por esquema de login QA. |
+| CA03–CA04 | API crea el gasto (HTTP 201); la pantalla actualiza el listado y muestra toast de confirmación. | Implementado por inspección; integración y recorrido manual pendientes. |
+
+## Pendientes para cerrar estas historias
+
+- Aplicar el esquema actualizado a la base QA y repetir pruebas de integración de US26/27/29/30/32/40.
+- Configurar `SMTP_HOST` y comprobar la entrega real del recordatorio de US26.
+- Verificar el formulario/toast de US26 y US40 en navegador.
+- Confirmar si la descripción del gasto en US40 CA01 debe ser obligatoria.
+
+---
+
+# Revisión de criterios de aceptación — US41 a US48 — 2026-10-22
+
+La inspección de las pantallas, rutas, controladores, esquema y pruebas existentes no encontró criterios funcionales faltantes en estas historias. La suite unitaria pasó; la suite de integración se ejecutó, pero la base QA no permitió iniciar sesión por columnas de autenticación ausentes. No se aplicaron cambios a la base ni se hizo recorrido manual de interfaz.
+
+## Evidencia de ejecución
+
+| Comando/acción | Resultado observado |
+|---|---|
+| `npm --prefix backend run test:gastos` | Las 8 pruebas unitarias de validadores pasaron. Las pruebas de integración no pudieron evaluar rutas de gastos/tipos porque el login de fixture recibió HTTP 500: la QA no tiene `usuarios.login_failed_attempts` (ni `login_locked_until`). |
+| Inspección de `backend/test/gastos.integration.test.js` | La suite contiene casos para edición, validación, borrado y totales, filtros, detalle, asociación, unicidad, permisos, conteo por tipo y protección de categorías con gastos. No se consideran ejecutados en esta corrida por el fallo de preparación de sesión. |
+| Interfaz | Código inspeccionado; no se hizo recorrido manual en navegador. |
+
+## US41 — Modificar la información de un gasto
+
+| Criterio | Verificación | Estado |
+|---|---|---|
+| CA01 | Desde el listado o el detalle se puede abrir el formulario de edición; permite cambiar monto, fecha y concepto/tipo. | Implementado por inspección. |
+| CA02 | El `PUT` usa el mismo middleware `validarGasto` de la creación y comprueba que el tipo pertenezca al comisionista. | Implementado; pruebas de integración pendientes por QA. |
+| CA03 | La fila se actualiza y la respuesta devuelve los valores nuevos; el detalle y listado se recargan. | Implementado; persistencia no revalidada en esta corrida. |
+| CA04 | La pantalla presenta toast de éxito o alerta de error. | Implementado por inspección; sin recorrido manual. |
+
+## US42 — Registrar la baja de un gasto
+
+| Criterio | Verificación | Estado |
+|---|---|---|
+| CA01–CA02 | La acción Eliminar abre un diálogo de confirmación con opción Cancelar. | Implementado por inspección. |
+| CA03 | Al confirmar, `DELETE` elimina la fila y la interfaz muestra un toast de éxito; los errores se muestran en el diálogo. | Implementado por inspección; integración pendiente por QA. |
+| CA04 | El listado y total se vuelven a cargar después del borrado; la consulta excluye el gasto eliminado. | Implementado por inspección; integración pendiente por QA. |
+
+## US43 — Consultar los gastos registrados
+
+| Criterio | Verificación | Estado |
+|---|---|---|
+| CA01–CA02 | La pantalla lista los gastos del comisionista con fecha, concepto y monto, y ofrece Ver detalle, Modificar y Eliminar para cada fila. | Implementado por inspección. |
+| CA03 | Ver detalle abre una ficha con concepto, monto, fecha, descripción y fecha de registro. | Implementado por inspección. |
+| CA04 | Hay filtros por rango de fechas y tipo de gasto; el servidor ordena por fecha descendente. | Implementado por inspección; integración pendiente por QA. |
+
+## US44 — Asociar un gasto a un tipo de gasto
+
+| Criterio | Verificación | Estado |
+|---|---|---|
+| CA01–CA02 | El formulario usa un selector alimentado por los tipos existentes; el servidor valida que el ID pertenezca al comisionista autenticado. | Implementado por inspección; integración pendiente por QA. |
+| CA03 | El gasto guarda `tipo_gasto_id`; al renombrar un tipo, las filas existentes conservan la relación y muestran el nombre actualizado. | Implementado; la suite contiene regresión para esta relación, bloqueada por login QA. |
+
+## US45 — Registrar un tipo de gasto
+
+| Criterio | Verificación | Estado |
+|---|---|---|
+| CA01 | Formulario admite nombre obligatorio y descripción opcional. | Implementado por inspección. |
+| CA02 | Se valida el nombre y hay índice único por comisionista, sin distinguir mayúsculas; conflictos concurrentes responden HTTP 409. | Implementado; pruebas unitarias aprobadas y pruebas de persistencia pendientes por QA. |
+| CA03 | Tras guardar se muestra confirmación, se recarga la lista y se actualizan los tipos disponibles para el formulario de gastos. | Implementado por inspección; sin recorrido manual. |
+
+## US46 — Modificar un tipo de gasto
+
+| Criterio | Verificación | Estado |
+|---|---|---|
+| CA01 | Desde el listado se abre el formulario para editar nombre y descripción. | Implementado por inspección. |
+| CA02 | El índice único y el controlador rechazan nombres duplicados con HTTP 409. | Implementado; pruebas de integración pendientes por QA. |
+| CA03 | Los gastos guardan una referencia al ID del tipo; al cambiar su nombre/descripción, los gastos históricos siguen asociados y muestran el nombre nuevo. | Implementado por inspección; suite contiene regresión, pendiente por QA. |
+
+## US47 — Consultar los tipos de gastos disponibles
+
+| Criterio | Verificación | Estado |
+|---|---|---|
+| CA01–CA02 | La pantalla lista nombre, descripción y cantidad de gastos por tipo, limitada a los tipos del comisionista autenticado. | Implementado por inspección; integración pendiente por QA. |
+
+## US48 — Dar de baja un tipo de gasto
+
+| Criterio | Verificación | Estado |
+|---|---|---|
+| CA01–CA02 | Cada tipo ofrece Eliminar y abre un diálogo de confirmación. | Implementado por inspección. |
+| CA03 | Si hay gastos asociados, el diálogo explica el motivo y deshabilita confirmar; el servidor también rechaza el borrado con HTTP 409. | Implementado por inspección; prueba de integración pendiente por QA. |
+| CA04 | Un tipo sin gastos se elimina y deja de aparecer en el listado y los selectores al recargar. | Implementado por inspección; persistencia pendiente por QA. |
+| CA05 | El esquema usa una referencia restrictiva entre gasto y tipo. La eliminación está bloqueada mientras haya gastos, conservando la relación y el historial. | Implementado; la suite incluye regresión de protección, pendiente por QA. |
+
+## Observaciones
+
+- Los tipos de gasto son privados por comisionista; la unicidad de nombre se exige dentro de su cuenta y un tipo de otro comisionista no puede asignarse.
+- Para cerrar las pruebas integrales hace falta actualizar la base QA con `backend/db/schema.sql` y repetir `npm run test:gastos`. La revisión no modificó la base.
+- La descripción del gasto sigue siendo opcional en la implementación actual de US40; confirmar si el criterio CA01 anterior debe tratarla como obligatoria.
+
+---
+
+# Corrección de identidad por DNI y compatibilidad de esquema — 2026-10-22
+
+Se investigó el error `no existe la columna «usuario_id»` mediante una consulta de solo lectura a los catálogos de PostgreSQL. La QA tenía una tabla `gastos` heredada con `viaje_id`, `categoria`, `monto` y `fecha`, pero sin `usuario_id` ni `tipo_gasto_id`; `CREATE TABLE IF NOT EXISTS` no actualizaba esa tabla existente. También faltaban en `usuarios` las columnas de intentos/bloqueo de login que el backend actual requiere.
+
+## Cambios preparados
+
+- `usuarios.dni` pasa a ser el DNI canónico, con índice único para impedir cuentas duplicadas. Se copian allí los DNI existentes de `clientes` y `comisionistas`.
+- El perfil y el asunto (`sub`) de los nuevos tokens de sesión/verificación usan el DNI. Se conserva `usuarios.id` como clave técnica para las relaciones internas existentes y por compatibilidad de controladores.
+- El esquema agrega a tablas ya existentes las columnas de login faltantes.
+- La migración de `gastos` añade `usuario_id`, `tipo_gasto_id` y columnas actuales; deriva el propietario del viaje histórico y crea tipos de gasto a partir de `categoria`. Conserva la columna antigua y aborta con un mensaje explícito si encuentra gastos cuyo dueño/categoría no se puedan migrar.
+
+## Evidencia y límite
+
+| Verificación | Resultado |
+|---|---|
+| Inspección de columnas en QA (solo lectura) | Confirmó la tabla de gastos heredada y 10 filas; las 10 tienen viaje asociado y hay 2 categorías, por lo que el origen del propietario/categoría existe para esos datos. También se detectó una cuenta sin DNI; el índice permite temporalmente DNI nulo para no bloquear administradores o registros heredados incompletos. |
+| Duplicados de DNI existentes en QA (solo lectura) | No se encontraron duplicados entre perfiles cliente/comisionista. |
+| `node --check` de controlador y regresiones de autenticación | Sin errores de sintaxis. |
+| Aplicación de `schema.sql` | No ejecutada; la base QA no fue modificada. |
+| Pruebas de integración | Pendientes hasta ejecutar el esquema actualizado. La corrida anterior de gastos falló al iniciar sesión por `usuarios.login_failed_attempts` ausente. |
+
+Para aplicar la migración en la base deseada, ejecutar desde la raíz del proyecto: `psql -d comitrack -v ON_ERROR_STOP=1 -f backend/db/schema.sql`. Luego repetir `npm run test:auth` y `npm run test:gastos` (el segundo desde `backend`).

@@ -241,10 +241,10 @@ export default function Perfil({ onCuentaDadaDeBaja }) {
                     <input
                       name="dni"
                       value={form.dni}
-                      onChange={esCliente ? undefined : handleChange}
+                      onChange={undefined}
                       inputMode="numeric"
                       placeholder="30.456.789"
-                      readOnly={esCliente}
+                      readOnly
                     />
                   </Campo>
                 )}

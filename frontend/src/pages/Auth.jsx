@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react'
 import { api, guardarSesion } from '../api/client.js'
 import Icon from '../components/Icon.jsx'
 import { Logo, Campo, CampoPassword, Alerta } from '../components/ui.jsx'
+import Avatar from '../components/Avatar.jsx'
+import { prepararFotoPerfil, ACEPTA_FOTOS } from '../utils/imagen.js'
 
-const formularioInicial = { nombre: '', apellido: '', email: '', password: '', confirmarPassword: '', dni: '', telefono: '' }
+const formularioInicial = { nombre: '', apellido: '', email: '', password: '', confirmarPassword: '', dni: '', telefono: '', presentacion: '', foto_perfil: '' }
 const REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 // Validaciones del lado del cliente (los mensajes siguen el prototipo).
@@ -35,6 +37,7 @@ function validar(form, modo) {
     const dni = form.dni.replace(/\D/g, '')
     if (!/^\d{7,8}$/.test(dni)) e.dni = 'El DNI debe tener 7 u 8 dígitos'
     if (form.password && form.password.length < 6) e.password = 'La contraseña debe tener al menos 6 caracteres'
+    if (form.presentacion.length > 500) e.presentacion = 'La presentación no puede superar los 500 caracteres'
     if (!form.confirmarPassword) e.confirmarPassword = 'Repite tu contraseña'
     else if (form.password !== form.confirmarPassword) e.confirmarPassword = 'Las contraseñas no coinciden'
   }
@@ -93,6 +96,19 @@ export default function Auth({ onAuthenticated }) {
     const { name, value } = event.target
     setForm((f) => ({ ...f, [name]: value }))
     setErrores((e) => ({ ...e, [name]: undefined }))
+  }
+
+  async function elegirFoto(event) {
+    const archivo = event.target.files?.[0]
+    event.target.value = ''
+    if (!archivo) return
+    try {
+      const foto = await prepararFotoPerfil(archivo)
+      setForm((f) => ({ ...f, foto_perfil: foto }))
+      setErrores((e) => ({ ...e, foto_perfil: undefined }))
+    } catch (err) {
+      setErrores((e) => ({ ...e, foto_perfil: err.message }))
+    }
   }
 
 function cambiarModo(nuevo) {
@@ -356,6 +372,23 @@ function cambiarModo(nuevo) {
                 <input name="apellido" value={form.apellido} onChange={handleChange} placeholder="Tu apellido" autoComplete="family-name" />
               </Campo>
             </div>
+          )}
+
+          {registrando && rol === 'comisionista' && (
+            <>
+              <Campo label="Foto de perfil" error={errores.foto_perfil}>
+                <div className="foto-editor">
+                  {form.foto_perfil && <Avatar foto={form.foto_perfil} nombre={form.nombre} apellido={form.apellido} />}
+                  <label className="btn btn-chico">
+                    {form.foto_perfil ? 'Cambiar foto' : 'Elegir foto'}
+                    <input type="file" accept={ACEPTA_FOTOS} onChange={elegirFoto} hidden />
+                  </label>
+                </div>
+              </Campo>
+              <Campo label="Presentación" error={errores.presentacion}>
+                <textarea className="area" name="presentacion" value={form.presentacion} onChange={handleChange} maxLength="500" placeholder="Contales a tus clientes quién sos (opcional)" />
+              </Campo>
+            </>
           )}
 
           <Campo label="Correo electrónico" requerido icono="mail" error={errores.email}>

@@ -20,6 +20,8 @@
     "test:auth": "node --test test/auth.integration.test.js",
     "test:encomiendas": "node --test test/encomiendas.integration.test.js",
     "test:viaje-validador": "node --test test/viaje.validador.test.js",
+    "test:recordatorio": "node --test test/recordatorio.validador.test.js",
+    "test:recordatorio:integration": "node --test test/recordatorio.integration.test.js",
     "test:viajes-estado": "node --test test/viajes-estado.integration.test.js",
     "test:retiro": "node --test test/solicitud-retiro.integration.test.js",
     "test:pasajero": "node --test test/pasajero-estado.integration.test.js",

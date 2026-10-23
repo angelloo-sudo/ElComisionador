@@ -4,7 +4,87 @@ import { query, pool } from '../config/db.js'
 import { generarFechas } from '../validators/viaje.validador.js'
 import { rangoViaje, seSuperponen, extenderSeries, SQL_OCUPADOS } from '../services/viajes.service.js'
 import { hoyEnCordoba, obtenerEstadoViaje } from '../services/estado-viaje.js'
-import { datosDeViaje } from '../services/tarifa.service.js'
+import { datosDeViaje, sumarMinutos } from '../services/tarifa.service.js'
+import { validarAnticipacionRecordatorio } from '../validators/recordatorio.validador.js'
+
+export async function obtenerRecordatorio(req, res, next) {
+  try {
+    const viajeId = Number(req.params.id)
+    if (!Number.isSafeInteger(viajeId) || viajeId < 1) return res.status(400).json({ mensaje: 'El viaje indicado no es válido' })
+    const { rows: viajeRows } = await query(
+      `SELECT id, estado, fecha::text AS fecha, hora_salida,
+              ((fecha + hora_salida) AT TIME ZONE 'America/Argentina/Buenos_Aires') AS inicio
+       FROM viajes WHERE id = $1 AND usuario_id = $2`,
+      [viajeId, req.usuario.id],
+    )
+    const viaje = viajeRows[0]
+    if (!viaje) return res.status(404).json({ mensaje: 'Viaje no encontrado' })
+    const { rows } = await query(
+      `SELECT minutos_anticipacion, programado_para, estado, enviado_en
+       FROM recordatorios_viaje WHERE viaje_id = $1 AND estado <> 'cancelado'`,
+      [viaje.id],
+    )
+    res.json({ recordatorio: rows[0] ?? null })
+  } catch (e) { next(e) }
+}
+
+export async function eliminarRecordatorio(req, res, next) {
+  try {
+    const viajeId = Number(req.params.id)
+    if (!Number.isSafeInteger(viajeId) || viajeId < 1) return res.status(400).json({ mensaje: 'El viaje indicado no es válido' })
+    const { rows: viajes } = await query(
+      'SELECT id FROM viajes WHERE id = $1 AND usuario_id = $2',
+      [viajeId, req.usuario.id],
+    )
+    if (!viajes[0]) return res.status(404).json({ mensaje: 'Viaje no encontrado' })
+
+    await query(
+      `UPDATE recordatorios_viaje SET estado = 'cancelado', procesamiento_iniciado_en = NULL, actualizado_en = NOW()
+       WHERE viaje_id = $1 AND estado <> 'cancelado'`,
+      [viajeId],
+    )
+    res.json({ recordatorio: null, mensaje: 'Recordatorio desactivado' })
+  } catch (e) { next(e) }
+}
+
+export async function guardarRecordatorio(req, res, next) {
+  try {
+    const viajeId = Number(req.params.id)
+    if (!Number.isSafeInteger(viajeId) || viajeId < 1) return res.status(400).json({ mensaje: 'El viaje indicado no es válido' })
+    const minutos = req.body?.minutos_anticipacion
+    const errorAnticipacion = validarAnticipacionRecordatorio(minutos)
+    if (errorAnticipacion) return res.status(400).json({ mensaje: errorAnticipacion })
+
+    const { rows } = await query(
+      `SELECT id, estado, fecha::text AS fecha, hora_salida,
+              ((fecha + hora_salida) AT TIME ZONE 'America/Argentina/Buenos_Aires') AS inicio
+       FROM viajes WHERE id = $1 AND usuario_id = $2`,
+      [viajeId, req.usuario.id],
+    )
+    const viaje = rows[0]
+    if (!viaje) return res.status(404).json({ mensaje: 'Viaje no encontrado' })
+    if (viaje.estado !== 'programado' || !viaje.hora_salida) {
+      return res.status(409).json({ mensaje: 'Solo se puede configurar un recordatorio para un viaje programado con horario de salida' })
+    }
+
+    const segundosRestantes = (new Date(viaje.inicio).getTime() - Date.now()) / 1000
+    const errorTiempo = validarAnticipacionRecordatorio(minutos, segundosRestantes)
+    if (errorTiempo) return res.status(400).json({ mensaje: errorTiempo })
+
+    const { rows: guardados } = await query(
+      `INSERT INTO recordatorios_viaje (viaje_id, minutos_anticipacion, programado_para, estado, procesamiento_iniciado_en, enviado_en, actualizado_en)
+       VALUES ($1, $2, $3::timestamptz - make_interval(mins => $2), 'pendiente', NULL, NULL, NOW())
+       ON CONFLICT (viaje_id) DO UPDATE
+         SET minutos_anticipacion = EXCLUDED.minutos_anticipacion,
+             programado_para = EXCLUDED.programado_para,
+             estado = 'pendiente', procesamiento_iniciado_en = NULL, enviado_en = NULL,
+             actualizado_en = NOW()
+       RETURNING minutos_anticipacion, programado_para, estado, enviado_en`,
+      [viaje.id, minutos, viaje.inicio],
+    )
+    res.status(200).json({ recordatorio: guardados[0], mensaje: 'Recordatorio configurado correctamente' })
+  } catch (e) { next(e) }
+}
 
 // US16 - Listar viajes del comisionista logueado, con filtros opcionales por
 // query string: ?fecha=YYYY-MM-DD&origen=texto&destino=texto&estado=programado
@@ -108,11 +188,24 @@ export async function obtener(req, res, next) {
 
 export async function crear(req, res, next) {
   try {
-    const { origen, destino, fecha, hora_salida, cupo_total, repeticion } = req.body
+    const { origen, destino, fecha, hora_salida, hora_llegada: llegadaIngresada, duracion_min: duracionIngresada, cupo_total, repeticion } = req.body
     const usuarioId = req.usuario?.id
 
-    // Distancia, duracion y hora de llegada: las calcula el sistema con la ruta en auto del mapa.
-    const { distancia_km, duracion_min, hora_llegada } = await datosDeViaje(origen.trim(), destino.trim(), hora_salida)
+    // La ruta aporta distancia y una estimación automática. El comisionista puede
+    // reemplazar esa estimación ingresando hora de llegada o duración.
+    const ruta = await datosDeViaje(origen.trim(), destino.trim(), hora_salida)
+    let { distancia_km } = ruta
+    let duracion_min = ruta.duracion_min
+    let hora_llegada = ruta.hora_llegada
+    if (llegadaIngresada) {
+      hora_llegada = llegadaIngresada
+      const [salidaH, salidaM] = hora_salida.split(':').map(Number)
+      const [llegadaH, llegadaM] = llegadaIngresada.split(':').map(Number)
+      duracion_min = llegadaH * 60 + llegadaM - (salidaH * 60 + salidaM)
+    } else if (duracionIngresada !== undefined && duracionIngresada !== null && duracionIngresada !== '') {
+      duracion_min = Number(duracionIngresada)
+      hora_llegada = sumarMinutos(hora_salida, duracion_min)
+    }
 
     // Fechas a crear: una sola si el viaje es unico, o todas las ocurrencias si se repite.
     const fechas = generarFechas(fecha, repeticion)
@@ -247,6 +340,13 @@ export async function cancelar(req, res, next) {
         valores
       )
       cancelados = resultado.rows
+      if (cancelados.length > 0) {
+        await cliente.query(
+          `UPDATE recordatorios_viaje SET estado = 'cancelado', procesamiento_iniciado_en = NULL, actualizado_en = NOW()
+           WHERE viaje_id = ANY($1::int[]) AND estado IN ('pendiente', 'procesando')`,
+          [cancelados.map((v) => v.id)],
+        )
+      }
       if (viaje.serie_id && alcance !== 'este') {
         await cliente.query(
           `UPDATE viajes SET repeticion_dias = NULL WHERE ${condicion} AND usuario_id = $2`,
@@ -373,6 +473,18 @@ export async function actualizar(req, res, next) {
       valores
     )
     actualizados.sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)) || a.id - b.id)
+
+    if (actualizados.length > 0) {
+      await query(
+        `UPDATE recordatorios_viaje r
+         SET programado_para = ((v.fecha + v.hora_salida) AT TIME ZONE 'America/Argentina/Buenos_Aires')
+                               - make_interval(mins => r.minutos_anticipacion),
+             actualizado_en = NOW()
+         FROM viajes v
+         WHERE r.viaje_id = v.id AND v.id = ANY($1::int[]) AND r.estado = 'pendiente'`,
+        [actualizados.map((v) => v.id)],
+      )
+    }
 
     // Pasajeros asociados a los viajes modificados: el frontend muestra la alerta para avisarles.
     const pasajerosAfectados = objetivos.reduce((total, o) => total + o.ocupados, 0)

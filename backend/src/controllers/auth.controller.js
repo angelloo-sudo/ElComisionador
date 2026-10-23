@@ -18,7 +18,7 @@ const JWT_SECRET = process.env.JWT_SECRET
 // que no aplican simplemente vienen en null.
 const SELECT_PERFIL = `
   SELECT u.id, u.nombre, u.apellido, u.email, u.rol, u.activo, u.creado_en,
-         COALESCE(c.dni, m.dni) AS dni,
+         u.dni,
          COALESCE(c.telefono, m.telefono) AS telefono,
          m.presentacion, m.foto_perfil
   FROM usuarios u
@@ -27,12 +27,12 @@ const SELECT_PERFIL = `
 `
 
 function crearToken(usuario) {
-  return jwt.sign({ id: usuario.id, email: usuario.email, rol: usuario.rol }, JWT_SECRET, { expiresIn: '8h' })
+  return jwt.sign({ sub: String(usuario.dni || usuario.id), id: usuario.id, dni: usuario.dni, email: usuario.email, rol: usuario.rol }, JWT_SECRET, { expiresIn: '8h' })
 }
 
 function crearTokenVerificacion(usuario) {
   return jwt.sign(
-    { sub: String(usuario.id), email: usuario.email, rol: usuario.rol, tipo: 'verificacion_email' },
+    { sub: String(usuario.dni), dni: usuario.dni, email: usuario.email, rol: usuario.rol, tipo: 'verificacion_email' },
     JWT_SECRET,
     { expiresIn: '1h' },
   )
@@ -106,13 +106,14 @@ async function buscarConflictoContacto(usuarioId, dni, telefono) {
   const dniLimpio = dni.trim()
   const digitos = telefono.replace(/\D/g, '')
   const { rows } = await query(
-    `SELECT (dni = $2) AS dni_igual,
-            ($3 <> '' AND regexp_replace(COALESCE(telefono, ''), '\\D', '', 'g') = $3) AS telefono_igual
-     FROM (SELECT usuario_id, dni, telefono FROM clientes
-           UNION ALL
-           SELECT usuario_id, dni, telefono FROM comisionistas) t
-     WHERE usuario_id <> $1
-       AND (dni = $2 OR ($3 <> '' AND regexp_replace(COALESCE(telefono, ''), '\\D', '', 'g') = $3))`,
+    `SELECT (u.dni = $2) AS dni_igual,
+            ($3 <> '' AND regexp_replace(COALESCE(p.telefono, ''), '\\D', '', 'g') = $3) AS telefono_igual
+     FROM usuarios u
+     LEFT JOIN clientes c ON c.usuario_id = u.id
+     LEFT JOIN comisionistas m ON m.usuario_id = u.id
+     CROSS JOIN LATERAL (SELECT COALESCE(c.telefono, m.telefono) AS telefono) p
+     WHERE u.id <> $1
+       AND (u.dni = $2 OR ($3 <> '' AND regexp_replace(COALESCE(p.telefono, ''), '\\D', '', 'g') = $3))`,
     [usuarioId ?? 0, dniLimpio, digitos],
   )
   if (rows.some((r) => r.dni_igual)) return 'Ya existe una cuenta registrada con ese DNI'
@@ -131,6 +132,7 @@ async function upsertDatosContacto(usuarioId, { dni, telefono }) {
        dni = EXCLUDED.dni, telefono = EXCLUDED.telefono`,
     [usuarioId, dni.trim(), telefono.trim()],
   )
+  await query('UPDATE usuarios SET dni = $1 WHERE id = $2', [dni.trim(), usuarioId])
 }
 
 // Inserta/actualiza la fila de "comisionistas". dni/telefono ya vienen validados como
@@ -153,6 +155,7 @@ async function upsertDatosComisionista(usuarioId, { dni, telefono, presentacion,
       cambiaPresentacion, cambiaFoto,
     ],
   )
+  await query('UPDATE usuarios SET dni = $1 WHERE id = $2', [dni.trim(), usuarioId])
 }
 
 // NOTA: el viejo endpoint publico GET /auth/perfil/:id (sin `autenticar`) se elimino:
@@ -210,6 +213,39 @@ export async function actualizarMiPerfil(req, res, next) {
         usuario: datosPerfil(perfilActualizado, { conPerfilPublico: true }),
         token: crearToken(perfilActualizado),
       })
+    }
+
+    if (esComisionista) {
+      const actual = await query(
+        `SELECT u.email, m.dni FROM usuarios u JOIN comisionistas m ON m.usuario_id = u.id WHERE u.id = $1`,
+        [req.usuario.id],
+      )
+      if (!actual.rows[0]) return res.status(404).json({ mensaje: 'Perfil de comisionista no encontrado' })
+      if ((email !== undefined && (typeof email !== 'string' || email.trim().toLowerCase() !== actual.rows[0].email))
+        || (dni !== undefined && (typeof dni !== 'string' || dni.replace(/\D/g, '') !== actual.rows[0].dni))) {
+        return res.status(400).json({ mensaje: 'El DNI y el correo electrónico no se pueden modificar' })
+      }
+      const errorDni = validarDni(actual.rows[0].dni)
+      const errorNombre = validarNombrePropio(nombre, { etiqueta: 'El nombre' })
+      const errorApellido = validarNombrePropio(apellido, { etiqueta: 'El apellido' })
+      const errorTelefono = validarTelefono(telefono)
+      const errorExtras = validarPresentacion(presentacion) || validarFotoPerfil(foto_perfil)
+      const errorComisionista = errorDni || errorNombre || errorApellido || errorTelefono || errorExtras
+      if (errorComisionista) return res.status(400).json({ mensaje: errorComisionista })
+      const conflicto = await buscarConflictoContacto(req.usuario.id, actual.rows[0].dni, telefono)
+      if (conflicto) return res.status(409).json({ mensaje: conflicto })
+
+      const passwordHash = password ? await bcrypt.hash(password, 10) : null
+      await query(
+        `UPDATE usuarios SET nombre = $1, apellido = $2, password_hash = COALESCE($3, password_hash) WHERE id = $4`,
+        [nombre.trim(), apellido.trim(), passwordHash, req.usuario.id],
+      )
+      await query('UPDATE comisionistas SET telefono = $1 WHERE usuario_id = $2', [telefono.trim(), req.usuario.id])
+      if (presentacion !== undefined || foto_perfil !== undefined) {
+        await upsertDatosComisionista(req.usuario.id, { dni: actual.rows[0].dni, telefono, presentacion, foto: foto_perfil })
+      }
+      const perfilActualizado = await buscarPerfilPorId(req.usuario.id)
+      return res.json({ usuario: datosPerfil(perfilActualizado, { conPerfilPublico: true }), token: crearToken(perfilActualizado) })
     }
 
     const errorValidacion = validarDatosPerfil(
@@ -279,25 +315,45 @@ export async function actualizarMiPerfil(req, res, next) {
 // cascada hacia lo que dependa de esa tabla. Los viajes del comisionista tambien
 // se borran en cascada (FK ON DELETE CASCADE en la tabla viajes).
 export async function darDeBajaMiCuenta(req, res, next) {
+  let client
   try {
-    const { rows } = await query(
-      `DELETE FROM usuarios WHERE id = $1 RETURNING id`,
+    client = await pool.connect()
+    await client.query('BEGIN')
+    await client.query(
+      `DELETE FROM encomiendas
+       WHERE viaje_id IN (SELECT id FROM viajes WHERE usuario_id = $1)
+          OR cliente_remitente_id IN (SELECT id FROM clientes WHERE usuario_id = $1)`,
       [req.usuario.id],
     )
+    await client.query(
+      `DELETE FROM pasajeros WHERE id IN (
+         SELECT vp.pasajero_id FROM viaje_pasajero vp
+         JOIN viajes v ON v.id = vp.viaje_id WHERE v.usuario_id = $1
+       ) OR cliente_id IN (SELECT id FROM clientes WHERE usuario_id = $1)`,
+      [req.usuario.id],
+    )
+    const { rows } = await client.query('DELETE FROM usuarios WHERE id = $1 RETURNING id', [req.usuario.id])
 
     if (rows.length === 0) {
+      await client.query('ROLLBACK')
       return res.status(404).json({ mensaje: 'Usuario no encontrado' })
     }
 
+    await client.query('COMMIT')
     res.json({ mensaje: 'Tu cuenta y la información asociada fueron eliminadas correctamente' })
-  } catch (e) { next(e) }
+  } catch (e) {
+    if (client) await client.query('ROLLBACK').catch(() => {})
+    next(e)
+  } finally {
+    client?.release()
+  }
 }
 
 // Logica compartida de autorregistro publico. El rol SIEMPRE se fija por parametro
 // interno (nunca se toma del body) para que nadie pueda autoasignarse un rol.
 async function registrarConRol(req, res, next, rolFijo) {
   try {
-    const { nombre, apellido, email, password, confirmarPassword, dni, telefono } = req.body
+    const { nombre, apellido, email, password, confirmarPassword, dni, telefono, presentacion, foto_perfil } = req.body
     const esCliente = rolFijo === 'cliente'
 
     // Cliente y comisionista deben dejar DNI y telefono al registrarse.
@@ -317,6 +373,11 @@ async function registrarConRol(req, res, next, rolFijo) {
       return res.status(400).json({ mensaje: 'Las contraseñas no coinciden' })
     }
 
+    if (!esCliente) {
+      const errorExtras = validarPresentacion(presentacion) || validarFotoPerfil(foto_perfil)
+      if (errorExtras) return res.status(400).json({ mensaje: errorExtras })
+    }
+
     const emailNormalizado = email.trim().toLowerCase()
     const existente = await query('SELECT id FROM usuarios WHERE email = $1', [emailNormalizado])
     if (existente.rows.length > 0) {
@@ -330,10 +391,10 @@ async function registrarConRol(req, res, next, rolFijo) {
 
     const passwordHash = await bcrypt.hash(password, 10)
     const { rows } = await query(
-      `INSERT INTO usuarios (nombre, apellido, email, password_hash, rol, email_verificado)
-       VALUES ($1, $2, $3, $4, $5, false)
+      `INSERT INTO usuarios (nombre, apellido, email, dni, password_hash, rol, email_verificado)
+       VALUES ($1, $2, $3, $4, $5, $6, false)
        RETURNING id`,
-      [nombre.trim(), apellido?.trim() || null, emailNormalizado, passwordHash, rolFijo],
+      [nombre.trim(), apellido?.trim() || null, emailNormalizado, dni.trim(), passwordHash, rolFijo],
     )
 
     const nuevoId = rows[0].id
@@ -343,7 +404,7 @@ async function registrarConRol(req, res, next, rolFijo) {
     if (esCliente) {
       await upsertDatosContacto(nuevoId, { dni, telefono })
     } else {
-      await upsertDatosComisionista(nuevoId, { dni, telefono })
+      await upsertDatosComisionista(nuevoId, { dni, telefono, presentacion, foto: foto_perfil })
     }
 
     const perfil = await buscarPerfilPorId(nuevoId)
@@ -365,6 +426,9 @@ async function registrarConRol(req, res, next, rolFijo) {
     // de forma definitiva dos altas concurrentes con el mismo email normalizado.
     if (e.code === '23505' && e.constraint === 'usuarios_email_key') {
       return res.status(409).json({ mensaje: 'El email ya está registrado' })
+    }
+    if (e.code === '23505' && e.constraint === 'usuarios_dni_uq') {
+      return res.status(409).json({ mensaje: 'Ya existe una cuenta registrada con ese DNI' })
     }
     next(e)
   }
@@ -405,7 +469,7 @@ export async function verificarEmail(req, res, next) {
     const actualizacion = await query(
       `UPDATE usuarios
        SET email_verificado = true
-       WHERE id = $1 AND email = $2 AND rol = $3 AND activo = true AND email_verificado = false
+       WHERE (dni = $1 OR id::text = $1) AND email = $2 AND rol = $3 AND activo = true AND email_verificado = false
        RETURNING id`,
       [datosToken.sub, datosToken.email, datosToken.rol],
     )
@@ -413,7 +477,7 @@ export async function verificarEmail(req, res, next) {
     if (actualizacion.rowCount === 0) {
       const existente = await query(
         `SELECT email_verificado FROM usuarios
-         WHERE id = $1 AND email = $2 AND rol = $3 AND activo = true`,
+         WHERE (dni = $1 OR id::text = $1) AND email = $2 AND rol = $3 AND activo = true`,
         [datosToken.sub, datosToken.email, datosToken.rol],
       )
       if (!existente.rows[0]) {
@@ -638,4 +702,4 @@ export async function restablecerPassword(req, res, next) {
 
     res.json({ mensaje: 'Tu contraseña fue actualizada correctamente. Ya podés iniciar sesión.' })
   } catch (e) { next(e) }
-}
+}

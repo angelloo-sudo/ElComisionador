@@ -22,4 +22,29 @@ export async function enviarEmailVerificacion({ email, token }) {
     text: `Para verificar tu correo, abrí este enlace dentro de la próxima hora: ${enlace}`,
     html: `<p>Verificá tu correo de ComiTrack abriendo este enlace:</p><p><a href="${enlace}">Verificar correo</a></p><p>El enlace vence en una hora.</p>`,
   })
-}
+}
+export async function enviarEmailRecordatorioViaje({ email, origen, destino, fecha, hora, minutosAnticipacion }) {
+  const { SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASSWORD, SMTP_FROM } = process.env
+  if (!SMTP_HOST) throw new Error('Falta configurar SMTP_HOST para enviar correos')
+
+  const transporte = nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: Number(SMTP_PORT || 587),
+    secure: SMTP_SECURE === 'true',
+    ...(SMTP_USER || SMTP_PASSWORD ? { auth: { user: SMTP_USER, pass: SMTP_PASSWORD } } : {}),
+  })
+  const anticipacion = minutosAnticipacion >= 1440
+    ? `${Math.round(minutosAnticipacion / 1440)} día(s)`
+    : minutosAnticipacion >= 60
+      ? `${Math.round(minutosAnticipacion / 60)} hora(s)`
+      : `${minutosAnticipacion} minuto(s)`
+  const asunto = `Recordatorio de viaje: ${origen} → ${destino}`
+  const texto = `Tu viaje de ${origen} a ${destino} comienza el ${fecha} a las ${hora}. Configuraste este aviso con ${anticipacion} de anticipación.`
+  await transporte.sendMail({
+    from: SMTP_FROM || SMTP_USER,
+    to: email,
+    subject: asunto,
+    text: texto,
+    html: `<p>${texto}</p>`,
+  })
+}

@@ -2,6 +2,7 @@
 import 'dotenv/config'
 import { app } from './app.js'
 import { extenderSeries } from './services/viajes.service.js'
+import { procesarRecordatorios } from './services/recordatorios.service.js'
 
 const PORT = process.env.PORT ?? 4000
 
@@ -22,3 +23,11 @@ async function mantenerSeries() {
 }
 mantenerSeries()
 setInterval(mantenerSeries, SEIS_HORAS).unref()
+
+// US26: procesa recordatorios vencidos cada minuto; los avisos fallidos se reintentan.
+const UN_MINUTO = 60 * 1000
+async function revisarRecordatorios() {
+  try { await procesarRecordatorios() } catch (e) { console.error('No se pudieron procesar recordatorios:', e.message) }
+}
+revisarRecordatorios()
+setInterval(revisarRecordatorios, UN_MINUTO).unref()

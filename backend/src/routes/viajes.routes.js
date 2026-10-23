@@ -12,6 +12,9 @@ router.use(autenticar, permitirRoles('comisionista'))
 
 router.get('/', viajes.listar)                // Consultar / filtrar viajes
 router.get('/:id/paradas', paradasDelComisionista) // paradas de los pasajeros aceptados + ruta sugerida
+router.get('/:id/recordatorio', viajes.obtenerRecordatorio) // US26
+router.put('/:id/recordatorio', viajes.guardarRecordatorio) // US26
+router.delete('/:id/recordatorio', viajes.eliminarRecordatorio) // US26 (opt-out)
 router.get('/:id/pasajeros', listarPasajeros) // US22/24/25: pasajeros aceptados y su estado
 router.get('/:id', viajes.obtener)            // Consultar un viaje
 router.post('/', validarViaje, viajes.crear)  // Registrar viaje

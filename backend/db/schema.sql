@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   nombre                VARCHAR(120) NOT NULL,
   apellido              VARCHAR(120),
   email                 VARCHAR(120) UNIQUE NOT NULL,
+  dni                   VARCHAR(20),
   password_hash         VARCHAR(255) NOT NULL,
   rol                   VARCHAR(20) NOT NULL DEFAULT 'cliente'
                         CHECK (rol IN ('comisionista', 'cliente', 'administrador')),
@@ -19,6 +20,14 @@ CREATE TABLE IF NOT EXISTS usuarios (
   login_locked_until    TIMESTAMPTZ,
   creado_en             TIMESTAMP DEFAULT NOW()
 );
+
+-- Identificador personal canónico. `id` se conserva como clave técnica para las
+-- relaciones existentes; el DNI identifica de forma única a cada persona.
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS dni VARCHAR(20);
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS login_failed_attempts INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS login_lock_level INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS login_locked_until TIMESTAMPTZ;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS email_verificado BOOLEAN NOT NULL DEFAULT true;
 
 CREATE TABLE IF NOT EXISTS clientes (
   id                                      SERIAL PRIMARY KEY,
@@ -40,6 +49,15 @@ CREATE TABLE IF NOT EXISTS comisionistas (
   creado_en     TIMESTAMP DEFAULT NOW()
 );
 
+-- Migrar los DNI ya guardados en las tablas de rol al registro canónico del usuario.
+UPDATE usuarios u SET dni = c.dni
+FROM clientes c
+WHERE c.usuario_id = u.id AND NULLIF(BTRIM(c.dni), '') IS NOT NULL AND u.dni IS NULL;
+UPDATE usuarios u SET dni = m.dni
+FROM comisionistas m
+WHERE m.usuario_id = u.id AND NULLIF(BTRIM(m.dni), '') IS NOT NULL AND u.dni IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS usuarios_dni_uq ON usuarios (dni) WHERE dni IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS viajes (
   id                SERIAL PRIMARY KEY,
   usuario_id        INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
@@ -56,6 +74,20 @@ CREATE TABLE IF NOT EXISTS viajes (
   estado            VARCHAR(20) DEFAULT 'programado'
                     CHECK (estado IN ('programado', 'en_curso', 'finalizado', 'cancelado')),
   creado_en         TIMESTAMP DEFAULT NOW()
+);
+
+-- US26: recordatorio automatico del comisionista para un viaje.
+CREATE TABLE IF NOT EXISTS recordatorios_viaje (
+  id                       SERIAL PRIMARY KEY,
+  viaje_id                 INTEGER NOT NULL UNIQUE REFERENCES viajes(id) ON DELETE CASCADE,
+  minutos_anticipacion     INTEGER NOT NULL CHECK (minutos_anticipacion > 0),
+  programado_para          TIMESTAMPTZ NOT NULL,
+  estado                   VARCHAR(16) NOT NULL DEFAULT 'pendiente'
+                           CHECK (estado IN ('pendiente', 'procesando', 'enviado', 'cancelado')),
+  procesamiento_iniciado_en TIMESTAMPTZ,
+  enviado_en               TIMESTAMPTZ,
+  creado_en                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  actualizado_en           TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS encomiendas (
@@ -197,6 +229,8 @@ CREATE TABLE IF NOT EXISTS tipos_gasto (
   CHECK (char_length(btrim(nombre)) >= 3)
 );
 
+-- Compatibilidad con una tabla de tipos previa que no tuviera propietario.
+ALTER TABLE tipos_gasto ADD COLUMN IF NOT EXISTS usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE;
 CREATE UNIQUE INDEX IF NOT EXISTS tipos_gasto_nombre_uq ON tipos_gasto (usuario_id, lower(nombre));
 
 CREATE TABLE IF NOT EXISTS gastos (
@@ -204,6 +238,7 @@ CREATE TABLE IF NOT EXISTS gastos (
   viaje_id       INTEGER REFERENCES viajes(id) ON DELETE CASCADE,
   usuario_id     INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
   tipo_gasto_id  INTEGER NOT NULL REFERENCES tipos_gasto(id),
+  categoria      VARCHAR(60),
   monto          NUMERIC(12,2) NOT NULL CHECK (monto > 0),
   fecha          DATE NOT NULL,
   descripcion    VARCHAR(500),
@@ -211,6 +246,54 @@ CREATE TABLE IF NOT EXISTS gastos (
   actualizado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Migración aditiva de la tabla de gastos anterior (viaje_id/categoria/monto/fecha).
+-- No se elimina categoria: se conserva como dato legado mientras tipo_gasto_id pasa
+-- a ser la relación usada por la aplicación.
+ALTER TABLE gastos ADD COLUMN IF NOT EXISTS usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE;
+ALTER TABLE gastos ADD COLUMN IF NOT EXISTS tipo_gasto_id INTEGER REFERENCES tipos_gasto(id);
+ALTER TABLE gastos ADD COLUMN IF NOT EXISTS categoria VARCHAR(60);
+ALTER TABLE gastos ADD COLUMN IF NOT EXISTS descripcion VARCHAR(500);
+ALTER TABLE gastos ADD COLUMN IF NOT EXISTS creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW();
+ALTER TABLE gastos ADD COLUMN IF NOT EXISTS actualizado_en TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+-- Recuperar el propietario desde el viaje histórico y convertir categorias legadas
+-- en tipos de gasto propios de cada comisionista.
+UPDATE gastos g SET usuario_id = v.usuario_id
+FROM viajes v
+WHERE g.viaje_id = v.id AND g.usuario_id IS NULL;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM gastos WHERE usuario_id IS NULL) THEN
+    RAISE EXCEPTION 'No se pudo determinar el comisionista de uno o más gastos antiguos; completar gastos.usuario_id antes de continuar';
+  END IF;
+END;
+$$;
+
+INSERT INTO tipos_gasto (usuario_id, nombre)
+SELECT DISTINCT g.usuario_id,
+       LEFT(INITCAP(REGEXP_REPLACE(COALESCE(NULLIF(BTRIM(g.categoria), ''), 'Otros'), '\s+', ' ', 'g')), 60)
+FROM gastos g
+WHERE g.tipo_gasto_id IS NULL
+ON CONFLICT (usuario_id, lower(nombre)) DO NOTHING;
+
+UPDATE gastos g
+SET tipo_gasto_id = t.id
+FROM tipos_gasto t
+WHERE g.tipo_gasto_id IS NULL
+  AND t.usuario_id = g.usuario_id
+  AND LOWER(t.nombre) = LOWER(LEFT(INITCAP(REGEXP_REPLACE(COALESCE(NULLIF(BTRIM(g.categoria), ''), 'Otros'), '\s+', ' ', 'g')), 60));
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM gastos WHERE tipo_gasto_id IS NULL) THEN
+    RAISE EXCEPTION 'No se pudo convertir la categoria de uno o más gastos a tipo_gasto_id';
+  END IF;
+END;
+$$;
+
+ALTER TABLE gastos ALTER COLUMN usuario_id SET NOT NULL;
+ALTER TABLE gastos ALTER COLUMN tipo_gasto_id SET NOT NULL;
 CREATE INDEX IF NOT EXISTS gastos_usuario_fecha_idx ON gastos (usuario_id, fecha DESC);
 CREATE INDEX IF NOT EXISTS gastos_tipo_gasto_idx ON gastos (tipo_gasto_id);
 

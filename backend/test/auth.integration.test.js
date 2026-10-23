@@ -62,17 +62,19 @@ describe('autenticacion de clientes', () => {
 
   it('registra un cliente, normaliza el email y nunca devuelve la contraseña', async () => {
     const email = emailFor('normalizado')
-    const response = await api.post('/api/auth/register').send(registrationData(`  ${email.toUpperCase()}  `, {
+    const datos = registrationData(`  ${email.toUpperCase()}  `, {
       nombre: '  Ana Cliente  ',
-    }))
+    })
+    const response = await api.post('/api/auth/register').send(datos)
 
     assert.equal(response.status, 201)
     assert.equal(response.body.email, email)
     assert.equal('token' in response.body, false)
-    const account = await query('SELECT id, nombre, rol, email_verificado, password_hash FROM usuarios WHERE email = $1', [email])
+    const account = await query('SELECT id, nombre, rol, dni, email_verificado, password_hash FROM usuarios WHERE email = $1', [email])
     assert.equal(account.rows.length, 1)
     assert.equal(account.rows[0].nombre, 'Ana Cliente')
     assert.equal(account.rows[0].rol, 'cliente')
+    assert.equal(account.rows[0].dni, datos.dni)
     assert.equal(account.rows[0].email_verificado, false)
     assert.notEqual(account.rows[0].password_hash, password)
   })
@@ -82,12 +84,12 @@ describe('autenticacion de clientes', () => {
     const registration = await api.post('/api/auth/register').send(registrationData(email))
     assert.equal(registration.status, 201)
     assert.equal(registration.body.verificacionEnviada, false)
-    const account = await query('SELECT id, email_verificado FROM usuarios WHERE email = $1', [email])
+    const account = await query('SELECT id, dni, email_verificado FROM usuarios WHERE email = $1', [email])
     assert.equal(account.rows[0].email_verificado, false)
     const beforeVerification = await api.post('/api/auth/login').send({ email, password })
     assert.equal(beforeVerification.status, 403)
     assert.equal(beforeVerification.body.codigo, 'EMAIL_NO_VERIFICADO')
-    const token = jwt.sign({ sub: String(account.rows[0].id), email, rol: 'cliente', tipo: 'verificacion_email' }, process.env.JWT_SECRET, { expiresIn: '1h' })
+    const token = jwt.sign({ sub: String(account.rows[0].dni), email, rol: 'cliente', tipo: 'verificacion_email' }, process.env.JWT_SECRET, { expiresIn: '1h' })
     const verification = await api.post('/api/auth/verificar-email').send({ token })
     assert.equal(verification.status, 200, JSON.stringify(verification.body))
     assert.match(verification.body.mensaje, /verificado/i)
@@ -164,8 +166,10 @@ describe('autenticacion de clientes', () => {
 
     assert.equal(response.status, 200)
     assert.equal(response.body.usuario.email, email)
+    assert.ok(response.body.usuario.dni)
     assert.equal('password_hash' in response.body.usuario, false)
     assert.ok(response.body.token)
+    assert.equal(jwt.verify(response.body.token, process.env.JWT_SECRET).sub, response.body.usuario.dni)
   })
 
   it('bloquea el acceso tras tres errores, amplía el segundo bloqueo y reinicia el contador al entrar', async () => {
@@ -339,6 +343,64 @@ describe('autenticacion de clientes', () => {
     assert.deepEqual(responses.map(({ status }) => status).sort(), [201, 409])
     const result = await query('SELECT COUNT(*)::int AS count FROM usuarios WHERE email = $1', [email])
     assert.equal(result.rows[0].count, 1)
+  })
+  it('registra un comisionista con foto y presentación y persiste su rol fijo', async () => {
+    const email = emailFor('comisionista')
+    const body = registrationData(email, {
+      nombre: 'Ana Comisionista', presentacion: 'Traslados en Córdoba.',
+      foto_perfil: 'data:image/jpeg;base64,/9j/4AAQSkZJRg==', rol: 'administrador',
+    })
+    const response = await api.post('/api/auth/register-comisionista').send(body)
+    assert.equal(response.status, 201, JSON.stringify(response.body))
+    const profile = await query(
+      `SELECT u.rol, m.presentacion, m.foto_perfil FROM usuarios u JOIN comisionistas m ON m.usuario_id = u.id WHERE u.email = $1`,
+      [email],
+    )
+    assert.equal(profile.rows[0].rol, 'comisionista')
+    assert.equal(profile.rows[0].presentacion, body.presentacion)
+    assert.equal(profile.rows[0].foto_perfil, body.foto_perfil)
+    const invalidPhoto = await api.post('/api/auth/register-comisionista').send(registrationData(emailFor('foto-invalida'), {
+      nombre: 'Ana Comisionista', foto_perfil: 'data:image/jpeg;base64,invalida',
+    }))
+    assert.equal(invalidPhoto.status, 400)
+    const invalidPresentation = await api.post('/api/auth/register-comisionista').send(registrationData(emailFor('presentacion-invalida'), {
+      nombre: 'Ana Comisionista', presentacion: 'x'.repeat(501),
+    }))
+    assert.equal(invalidPresentation.status, 400)
+  })
+
+  it('rechaza cambiar email o DNI del comisionista sin alterar datos', async () => {
+    const email = emailFor('comisionista-inmutable')
+    const data = registrationData(email, { nombre: 'Ana Comisionista' })
+    assert.equal((await api.post('/api/auth/register-comisionista').send(data)).status, 201)
+    await query('UPDATE usuarios SET email_verificado = true WHERE email = $1', [email])
+    const login = await api.post('/api/auth/login').send({ email, password })
+    assert.equal(login.status, 200)
+    const before = await query('SELECT u.email, m.dni FROM usuarios u JOIN comisionistas m ON m.usuario_id = u.id WHERE u.email = $1', [email])
+    const response = await api.put('/api/auth/perfil').set('Authorization', `Bearer ${login.body.token}`).send({
+      nombre: 'Maria', apellido: 'Actualizada', telefono: '3517654321', email: 'otro@example.test', dni: '12345678',
+    })
+    assert.equal(response.status, 400)
+    const after = await query('SELECT u.email, m.dni FROM usuarios u JOIN comisionistas m ON m.usuario_id = u.id WHERE u.email = $1', [email])
+    assert.deepEqual(after.rows, before.rows)
+  })
+
+  it('elimina los viajes y encomiendas del comisionista al dar de baja su cuenta', async () => {
+    const email = emailFor('comisionista-baja')
+    const registration = await api.post('/api/auth/register-comisionista').send(registrationData(email, { nombre: 'Ana Comisionista' }))
+    assert.equal(registration.status, 201)
+    await query('UPDATE usuarios SET email_verificado = true WHERE email = $1', [email])
+    const login = await api.post('/api/auth/login').send({ email, password })
+    const userId = login.body.usuario.id
+    const trip = await query(`INSERT INTO viajes (usuario_id, origen, destino, fecha) VALUES ($1, 'Córdoba', 'Carlos Paz', CURRENT_DATE + 1) RETURNING id`, [userId])
+    const shipment = await query(`INSERT INTO encomiendas (viaje_id, destinatario_nombre) VALUES ($1, 'Destinatario QA') RETURNING id`, [trip.rows[0].id])
+    const baja = await api.delete('/api/auth/perfil').set('Authorization', `Bearer ${login.body.token}`)
+    assert.equal(baja.status, 200, JSON.stringify(baja.body))
+    assert.equal((await query('SELECT id FROM usuarios WHERE id = $1', [userId])).rows.length, 0)
+    assert.equal((await query('SELECT id FROM viajes WHERE id = $1', [trip.rows[0].id])).rows.length, 0)
+    assert.equal((await query('SELECT id FROM encomiendas WHERE id = $1', [shipment.rows[0].id])).rows.length, 0)
+    const relogin = await api.post('/api/auth/login').send({ email, password })
+    assert.equal(relogin.status, 401)
   })
 })
 

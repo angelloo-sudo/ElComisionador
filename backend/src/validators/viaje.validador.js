@@ -49,19 +49,19 @@ export function generarFechas(fecha, repeticion) {
 }
 
 export function validarViaje(req, res, next) {
-  const { origen, destino, fecha, hora_salida, cupo_total, repeticion } = req.body
+  const { origen, destino, fecha, hora_salida, hora_llegada, duracion_min, cupo_total, repeticion } = req.body
 
   const errores = []
 
   // Origen y destino deben ser una localidad de la lista de Cordoba. Si la lista
   // todavia no fue generada (esLocalidadValida devuelve null) no se bloquea el alta.
-  if (!origen || !origen.trim()) {
+  if (typeof origen !== 'string' || !origen.trim()) {
     errores.push('El origen es obligatorio')
   } else if (esLocalidadValida(origen) === false) {
     errores.push('El origen debe ser una localidad de la lista de Córdoba')
   }
 
-  if (!destino || !destino.trim()) {
+  if (typeof destino !== 'string' || !destino.trim()) {
     errores.push('El destino es obligatorio')
   } else if (esLocalidadValida(destino) === false) {
     errores.push('El destino debe ser una localidad de la lista de Córdoba')
@@ -84,8 +84,27 @@ export function validarViaje(req, res, next) {
     }
   }
 
-  // La hora de llegada y la duracion ya no se cargan: las calcula el sistema con la ruta del mapa.
-  validarHora(hora_salida, 'hora de salida', errores)
+  const salidaValida = validarHora(hora_salida, 'hora de salida', errores)
+  const tieneLlegada = hora_llegada !== undefined && hora_llegada !== null && hora_llegada !== ''
+  const tieneDuracion = duracion_min !== undefined && duracion_min !== null && duracion_min !== ''
+  if (tieneLlegada && tieneDuracion) {
+    errores.push('Indica la hora de llegada o la duración, no ambas')
+  } else if (tieneLlegada) {
+    const llegadaValida = validarHora(hora_llegada, 'hora de llegada', errores)
+    if (salidaValida && llegadaValida && hora_llegada <= hora_salida) {
+      errores.push('La hora de llegada debe ser posterior a la salida y corresponder al mismo día')
+    }
+  } else if (tieneDuracion) {
+    const minutos = Number(duracion_min)
+    if (!Number.isInteger(minutos) || minutos < 1 || !salidaValida) {
+      errores.push('La duración debe ser un número entero de minutos mayor a cero')
+    } else {
+      const [h, m] = hora_salida.split(':').map(Number)
+      if (h * 60 + m + minutos > 23 * 60 + 59) {
+        errores.push('La duración debe terminar antes de la medianoche del mismo día')
+      }
+    }
+  }
 
   if (cupo_total === undefined || cupo_total === null || cupo_total === '') {
     errores.push('El cupo total es obligatorio')

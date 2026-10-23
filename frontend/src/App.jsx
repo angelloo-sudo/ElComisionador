@@ -15,6 +15,7 @@ import Gastos from './pages/Gastos.jsx'
 import Ingresos from './pages/Ingresos.jsx'
 import Tarifa from './pages/Tarifa.jsx'
 import SolicitarViaje from './pages/SolicitarViaje.jsx'
+import Landing from './pages/Landing.jsx'
 import Icon from './components/Icon.jsx'
 import Avatar from './components/Avatar.jsx'
 import { Logo, Modal } from './components/ui.jsx'
@@ -81,6 +82,10 @@ export default function App() {
 
   if (!token) {
     if (pantallaFinal) return <PantallaFinal tipo={pantallaFinal} onVolver={() => setPantallaFinal(null)} />
+    const abrirAcceso = () => navegar('/ingresar')
+    if (ubicacion.pathname !== '/ingresar' && !new URLSearchParams(ubicacion.search).has('token')) {
+      return <Landing onIngresar={abrirAcceso} />
+    }
     return (
       <Auth
         onAuthenticated={() => {

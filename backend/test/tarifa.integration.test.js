@@ -130,11 +130,57 @@ describe('tarifa por km y duracion automatica', () => {
   })
 
   it('al registrar un viaje no pide hora de llegada: el sistema calcula distancia, duracion y llegada', async () => {
-    const r = await api.post('/api/viajes').set(comisionista.auth).send(viajeBase({ hora_llegada: '09:00' }))
+    const r = await api.post('/api/viajes').set(comisionista.auth).send(viajeBase())
     assert.equal(r.status, 201, JSON.stringify(r.body))
     assert.equal(Number(r.body.distancia_km), 36.5)
     assert.equal(r.body.duracion_min, 45)
-    assert.equal(r.body.hora_llegada.slice(0, 5), '08:45') // se ignora lo que mande el cliente
+    assert.equal(r.body.hora_llegada.slice(0, 5), '08:45')
+  })
+
+  it('permite indicar manualmente la hora estimada de llegada', async () => {
+    const r = await api.post('/api/viajes').set(comisionista.auth).send(viajeBase({
+      fecha: fechaFutura(25), hora_llegada: '09:30',
+    }))
+    assert.equal(r.status, 201, JSON.stringify(r.body))
+    assert.equal(r.body.hora_llegada.slice(0, 5), '09:30')
+    assert.equal(r.body.duracion_min, 90)
+  })
+
+  it('permite indicar manualmente la duración y deriva la hora de llegada', async () => {
+    const r = await api.post('/api/viajes').set(comisionista.auth).send(viajeBase({
+      fecha: fechaFutura(26), duracion_min: 75,
+    }))
+    assert.equal(r.status, 201, JSON.stringify(r.body))
+    assert.equal(r.body.hora_llegada.slice(0, 5), '09:15')
+    assert.equal(r.body.duracion_min, 75)
+  })
+
+  it('rechaza un viaje superpuesto y no persiste la segunda alta', async () => {
+    const fecha = fechaFutura(27)
+    const primero = await api.post('/api/viajes').set(comisionista.auth).send(viajeBase({ fecha, hora_salida: '08:00' }))
+    assert.equal(primero.status, 201, JSON.stringify(primero.body))
+    const segundo = await api.post('/api/viajes').set(comisionista.auth).send(viajeBase({ fecha, hora_salida: '08:30' }))
+    assert.equal(segundo.status, 409)
+    const count = await query('SELECT COUNT(*)::int AS cantidad FROM viajes WHERE usuario_id = $1 AND fecha = $2', [comisionista.id, fecha])
+    assert.equal(count.rows[0].cantidad, 1)
+  })
+
+  it('registra viajes recurrentes diarios y semanales con sus fechas correspondientes', async () => {
+    const diaria = await api.post('/api/viajes').set(comisionista.auth).send(viajeBase({
+      fecha: fechaFutura(28), hora_salida: '06:00', repeticion: { tipo: 'diario' },
+    }))
+    assert.equal(diaria.status, 201, JSON.stringify(diaria.body))
+    assert.ok(diaria.body.cantidad > 60)
+
+    const fechaSemanal = fechaFutura(29)
+    const diaInicial = new Date(`${fechaSemanal}T00:00:00Z`).getUTCDay()
+    const dias = [diaInicial, (diaInicial + 3) % 7]
+    const semanal = await api.post('/api/viajes').set(comisionista.auth).send(viajeBase({
+      fecha: fechaSemanal, hora_salida: '15:00', repeticion: { tipo: 'semanal', dias: [...new Set(dias)] },
+    }))
+    assert.equal(semanal.status, 201, JSON.stringify(semanal.body))
+    assert.ok(semanal.body.cantidad > 15)
+    assert.ok(semanal.body.viajes.every((v) => dias.includes(new Date(`${v.fecha.slice(0, 10)}T00:00:00Z`).getUTCDay())))
   })
 
   it('si el servicio de mapas esta caido el viaje igual se registra, sin duracion', async () => {

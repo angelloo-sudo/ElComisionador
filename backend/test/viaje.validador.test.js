@@ -43,4 +43,29 @@ describe('validador de fechas de viaje', () => {
     assert.equal(continuo, true)
     assert.equal(res.statusCode, null)
   })
+
+  it('acepta una hora estimada de llegada posterior a la salida', () => {
+    const { continuo, res } = validar({ ...viajeBase, hora_llegada: '11:30' })
+    assert.equal(continuo, true)
+    assert.equal(res.statusCode, null)
+  })
+
+  it('acepta una duración estimada que termina el mismo día', () => {
+    const { continuo, res } = validar({ ...viajeBase, duracion_min: 90 })
+    assert.equal(continuo, true)
+    assert.equal(res.statusCode, null)
+  })
+
+  it('rechaza estimaciones contradictorias, llegada anterior y duración que cruza medianoche', () => {
+    const casosInvalidos = [
+      { hora_llegada: '09:00', duracion_min: 60 },
+      { hora_llegada: '09:55' },
+      { duracion_min: 840 },
+    ]
+    for (const extra of casosInvalidos) {
+      const { continuo, res } = validar({ ...viajeBase, ...extra })
+      assert.equal(continuo, false, JSON.stringify(extra))
+      assert.equal(res.statusCode, 400, JSON.stringify(extra))
+    }
+  })
 })
