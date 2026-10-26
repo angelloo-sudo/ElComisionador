@@ -387,6 +387,8 @@ textarea.area:focus { border-color: var(--foco); }
 .auth-olvide { text-align: right; margin-top: -8px; }
 .auth-olvide button { background: none; border: 0; color: var(--texto-2); font-size: 0.85rem; padding: 0; }
 .auth-centro { text-align: center; padding: 20px 12px; }
+.viajes-indicacion { min-height: 190px; display: flex; align-items: center; justify-content: center; gap: 20px; padding: 28px; color: var(--texto-2); text-align: left; }
+.viajes-indicacion p { max-width: 360px; margin: 0; font-size: 16px; }
 .auth-centro .icono-caja { margin: 0 auto 18px; }
 .icono-caja { width: 52px; height: 52px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; background: var(--verde-fondo); border: 1px solid var(--verde-borde); color: var(--verde); }
 .icono-caja.rojo { background: var(--rojo-fondo); border-color: var(--rojo-borde); color: var(--rojo); }
@@ -864,11 +866,22 @@ textarea.area:focus { border-color: var(--foco); }
   border-top: 4px solid #8c1c34; animation: ruta 1.4s linear infinite;
 }
 :root[data-tema='cafe-tinto'] .auth-pagina::after {
-  content: ''; position: fixed; left: -140px; bottom: 34px; width: 110px; height: 104px; pointer-events: none; z-index: 0;
+  content: ''; position: fixed; left: -140px; bottom: 34px; width: 110px; height: 104px; pointer-events: none; z-index: 2;
   background: url('../assets/canguro-sprites.png') 100% 0 / 400% 100% no-repeat; filter: drop-shadow(0 6px 4px rgba(58, 35, 24, .25));
   transform-origin: 50% 100%;
   animation: pasa 16s linear infinite, salto-ruta 1.9s linear infinite, pies-m 1.9s steps(1, end) infinite;
 }
+.auth-trafico { position: fixed; inset: auto 0 0; height: 42px; pointer-events: none; z-index: 1; overflow: hidden; }
+.auth-trafico span { position: absolute; bottom: 0; left: -90px; display: block; font-size: 78px; line-height: 1; filter: drop-shadow(0 2px 2px rgba(0,0,0,.25)); animation: trafico-pasa 14s linear infinite; }
+.auth-trafico .trafico-moto { bottom: 7px; font-size: 68px; animation-duration: 11s; }
+.auth-trafico .trafico-van { bottom: 1px; font-size: 84px; animation-duration: 19s; }
+.auth-trafico .trafico-uno { animation-delay: -12s; }
+.auth-trafico .trafico-dos { animation-delay: -8s; }
+.auth-trafico .trafico-tres { animation-delay: -4s; }
+.auth-trafico .trafico-cuatro { animation-delay: -15s; animation-duration: 17s; }
+.auth-trafico .trafico-cinco { animation-delay: -2s; animation-duration: 13s; }
+.auth-trafico .trafico-seis { animation-delay: -10s; animation-duration: 20s; }
+@keyframes trafico-pasa { from { transform: translateX(0); } to { transform: translateX(calc(100vw + 180px)); } }
 @keyframes salto-ruta {
   0%, 8% { transform: translateY(0) rotate(0deg) scale(1, 1); }
   18% { transform: translateY(0) rotate(-3deg) scale(1.08, .88); }

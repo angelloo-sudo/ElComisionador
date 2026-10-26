@@ -20,7 +20,7 @@ function validar(form, modo) {
 
   if (modo === 'restablecer') {
     if (!form.password) e.password = 'Ingresa tu nueva contraseña'
-    else if (form.password.length < 6) e.password = 'La contraseña debe tener al menos 6 caracteres'
+    else if (form.password.length < 8 || !/\d/.test(form.password) || !/[^\p{L}\p{N}\s]/u.test(form.password)) e.password = 'Usa al menos 8 caracteres, un número y un carácter especial'
     if (!form.confirmarPassword) e.confirmarPassword = 'Repite tu contraseña'
     else if (form.password !== form.confirmarPassword) e.confirmarPassword = 'Las contraseñas no coinciden'
     return e
@@ -33,10 +33,12 @@ function validar(form, modo) {
   if (modo === 'register') {
     if (form.nombre.trim().length < 3) e.nombre = 'El nombre es obligatorio (mínimo 3 letras)'
     if (form.apellido.trim().length < 3) e.apellido = 'El apellido es obligatorio (mínimo 3 letras)'
+    const digitosTelefono = form.telefono.replace(/\D/g, '')
     if (!form.telefono.trim()) e.telefono = 'Ingresa tu número de teléfono'
+    else if (!/^[0-9+\-\s()]+$/.test(form.telefono.trim()) || digitosTelefono.length < 8 || digitosTelefono.length > 15) e.telefono = 'Usa un teléfono válido con entre 8 y 15 dígitos'
     const dni = form.dni.replace(/\D/g, '')
     if (!/^\d{7,8}$/.test(dni)) e.dni = 'El DNI debe tener 7 u 8 dígitos'
-    if (form.password && form.password.length < 6) e.password = 'La contraseña debe tener al menos 6 caracteres'
+    if (form.password && (form.password.length < 8 || !/\d/.test(form.password) || !/[^\p{L}\p{N}\s]/u.test(form.password))) e.password = 'Usa al menos 8 caracteres, un número y un carácter especial'
     if (form.presentacion.length > 500) e.presentacion = 'La presentación no puede superar los 500 caracteres'
     if (!form.confirmarPassword) e.confirmarPassword = 'Repite tu contraseña'
     else if (form.password !== form.confirmarPassword) e.confirmarPassword = 'Las contraseñas no coinciden'
@@ -309,7 +311,7 @@ function cambiarModo(nuevo) {
             {error && <Alerta tipo="error" titulo="No pudimos actualizar la contraseña">{error}</Alerta>}
 
             <div className="grilla-2">
-              <CampoPassword label="Nueva contraseña" requerido name="password" value={form.password} onChange={handleChange} placeholder="Mínimo 6 caracteres" autoComplete="new-password" error={errores.password} />
+              <CampoPassword label="Nueva contraseña" requerido name="password" value={form.password} onChange={handleChange} placeholder="8 caracteres, número y símbolo" autoComplete="new-password" error={errores.password} />
               <CampoPassword label="Confirmar contraseña" requerido name="confirmarPassword" value={form.confirmarPassword} onChange={handleChange} placeholder="Repite la contraseña" autoComplete="new-password" error={errores.confirmarPassword} />
             </div>
 
@@ -328,6 +330,11 @@ function cambiarModo(nuevo) {
 
   return (
     <main className="auth-pagina">
+      <div className="auth-trafico" aria-hidden="true">
+        <span className="trafico-auto trafico-uno">🚗</span><span className="trafico-moto trafico-dos">🏍️</span>
+        <span className="trafico-van trafico-tres">🚐</span><span className="trafico-auto trafico-cuatro">🚙</span>
+        <span className="trafico-moto trafico-cinco">🛵</span><span className="trafico-van trafico-seis">🚐</span>
+      </div>
       <form className="auth-card" onSubmit={handleSubmit} noValidate>
         <Logo />
         <h1>{registrando ? 'Crear cuenta' : 'Iniciar sesión'}</h1>
@@ -398,7 +405,7 @@ function cambiarModo(nuevo) {
           {registrando && (
             <div className="grilla-2">
               <Campo label="Teléfono" requerido icono="phone" error={errores.telefono}>
-                <input name="telefono" value={form.telefono} onChange={handleChange} placeholder="+54 351 456-7890" autoComplete="tel" />
+                <input name="telefono" type="tel" value={form.telefono} onChange={handleChange} placeholder="+54 351 456-7890" autoComplete="tel" />
               </Campo>
               <Campo label="DNI" requerido icono="idcard" error={errores.dni}>
                 <input name="dni" value={form.dni} onChange={handleChange} inputMode="numeric" placeholder="30.456.789" />
@@ -408,7 +415,7 @@ function cambiarModo(nuevo) {
 
           {registrando ? (
             <div className="grilla-2">
-              <CampoPassword label="Contraseña" requerido name="password" value={form.password} onChange={handleChange} placeholder="Mínimo 6 caracteres" autoComplete="new-password" error={errores.password} />
+              <CampoPassword label="Contraseña" requerido name="password" value={form.password} onChange={handleChange} placeholder="8 caracteres, número y símbolo" autoComplete="new-password" error={errores.password} />
               <CampoPassword label="Confirmar contraseña" requerido name="confirmarPassword" value={form.confirmarPassword} onChange={handleChange} placeholder="Repite la contraseña" autoComplete="new-password" error={errores.confirmarPassword} />
             </div>
           ) : (

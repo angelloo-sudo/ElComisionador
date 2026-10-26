@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api/client.js'
 import Icon from '../components/Icon.jsx'
-import { Alerta, Campo, formatoFecha, Modal, Toast } from '../components/ui.jsx'
+import { Alerta, Campo, formatoFecha, Modal, Toast, Mascota } from '../components/ui.jsx'
 import { formatoDuracion, formatoPesos } from '../utils/tarifa.js'
 
 const fechaLocal = (fecha) => formatoFecha(`${fecha}T12:00:00`)
@@ -141,7 +141,7 @@ export default function MisTraslados() {
         </div>
       </form>
 
-      <div className="card">
+      {hayFiltros ? <div className="card">
         <div className="card-cabecera">
           <div>
             <h2>Viajes disponibles</h2>
@@ -196,7 +196,7 @@ export default function MisTraslados() {
             </table>
           )}
         </div>
-      </div>
+      </div> : <div className="card viajes-indicacion"><Mascota ancho={76} /><p>Indique origen, destino o fecha para ver viajes disponibles.</p></div>}
         </>
       ) : (
         <>

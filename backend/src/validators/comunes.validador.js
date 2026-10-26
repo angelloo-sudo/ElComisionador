@@ -49,8 +49,9 @@ export function validarTelefono(valor, { obligatorio = true } = {}) {
   if (!limpio) {
     return obligatorio ? 'El teléfono es obligatorio' : null
   }
-  if (!/^[0-9+\-\s()]{6,20}$/.test(limpio)) {
-    return 'El teléfono tiene un formato inválido'
+  const digitos = limpio.replace(/\D/g, '')
+  if (!/^[0-9+\-\s()]+$/.test(limpio) || digitos.length < 8 || digitos.length > 15) {
+    return 'El teléfono debe tener entre 8 y 15 dígitos y un formato válido'
   }
   return null
 }

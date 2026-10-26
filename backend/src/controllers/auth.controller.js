@@ -60,8 +60,8 @@ function validarDatosPerfil({ nombre, apellido, email, password, dni, telefono }
     return 'La contraseña no es válida'
   }
 
-  if (password !== undefined && password !== '' && password.length < 6) {
-    return 'La contraseña debe tener al menos 6 caracteres'
+  if (password !== undefined && password !== '' && (password.length < 8 || !/\d/.test(password) || !/[^\p{L}\p{N}\s]/u.test(password))) {
+    return 'La contraseña debe tener al menos 8 caracteres, un número y un carácter especial'
   }
 
   if (pideContacto) {
@@ -680,8 +680,8 @@ export async function restablecerPassword(req, res, next) {
     if (!token) {
       return res.status(400).json({ mensaje: 'Falta el token de recuperación' })
     }
-    if (!password || password.length < 6) {
-      return res.status(400).json({ mensaje: 'La contraseña debe tener al menos 6 caracteres' })
+    if (!password || password.length < 8 || !/\d/.test(password) || !/[^\p{L}\p{N}\s]/u.test(password)) {
+      return res.status(400).json({ mensaje: 'La contraseña debe tener al menos 8 caracteres, un número y un carácter especial' })
     }
 
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex')
