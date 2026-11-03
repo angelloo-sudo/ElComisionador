@@ -64,9 +64,43 @@ export function validarSolicitud(body = {}) {
     agregar(validarTelefono(body.telefono))
     Object.assign(datos, { nombre: texto(body.nombre), apellido: texto(body.apellido), dni: texto(body.dni), telefono: texto(body.telefono) })
 
-    if (typeof body.lleva_equipaje !== 'boolean') {
-      errores.push('Indicá si llevás equipaje')
-    } else {
+    const cantidad = Number(body.cantidad_pasajeros)
+    if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > MAX_PASAJEROS_POR_SOLICITUD) {
+      errores.push(`La cantidad de pasajeros debe ser un número entre 1 y ${MAX_PASAJEROS_POR_SOLICITUD}`)
+    }
+    datos.cantidad_pasajeros = cantidad
+
+    const camposEquipaje = ['valijas_grandes', 'mochilas_bolsos_mano']
+    const envioCantidadesEquipaje = camposEquipaje.some((campo) => body[campo] !== undefined)
+    if (envioCantidadesEquipaje) {
+      for (const [campo, etiqueta] of [
+        ['valijas_grandes', 'valijas grandes'],
+        ['mochilas_bolsos_mano', 'mochilas o bolsos de mano'],
+      ]) {
+        const equipaje = Number(body[campo])
+        if (!Number.isInteger(equipaje) || equipaje < 0 || equipaje > cantidad || equipaje > MAX_PASAJEROS_POR_SOLICITUD) {
+          errores.push(`La cantidad de ${etiqueta} debe ser un número entre 0 y la cantidad de pasajeros`)
+        }
+      }
+
+      const valijas = Number(body.valijas_grandes)
+      const bolsos = Number(body.mochilas_bolsos_mano)
+      const descripcion = texto(body.equipaje_descripcion)
+      if (typeof body.equipaje_descripcion !== 'undefined' && typeof body.equipaje_descripcion !== 'string') {
+        errores.push('La descripción del equipaje no es válida')
+      } else if (descripcion.length > 120) {
+        errores.push('La descripción del equipaje no puede superar los 120 caracteres')
+      }
+      datos.lleva_equipaje = valijas > 0 || bolsos > 0
+      const detalles = []
+      if (valijas > 0) detalles.push(`${valijas} valija${valijas === 1 ? '' : 's'} grande${valijas === 1 ? '' : 's'}`)
+      if (bolsos > 0) detalles.push(`${bolsos} mochila${bolsos === 1 ? '' : 's'} o bolso${bolsos === 1 ? '' : 's'} de mano`)
+      if (descripcion && detalles.length === 0) errores.push('Indicá al menos una pieza de equipaje para agregar una descripción')
+      datos.equipaje_detalle = detalles.length > 0
+        ? `${detalles.join(' y ')}${descripcion ? ` — ${descripcion}` : ''}`
+        : null
+    } else if (typeof body.lleva_equipaje === 'boolean') {
+      // Compatibilidad con clientes anteriores que enviaban solo el detalle libre.
       datos.lleva_equipaje = body.lleva_equipaje
       const detalle = texto(body.equipaje_detalle)
       if (body.lleva_equipaje) {
@@ -74,13 +108,9 @@ export function validarSolicitud(body = {}) {
         else if (detalle.length > 300) errores.push('El detalle del equipaje no puede superar los 300 caracteres')
       }
       datos.equipaje_detalle = body.lleva_equipaje ? detalle : null
+    } else {
+      errores.push('Indicá cuántas valijas grandes y mochilas o bolsos de mano llevás')
     }
-
-    const cantidad = Number(body.cantidad_pasajeros)
-    if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > MAX_PASAJEROS_POR_SOLICITUD) {
-      errores.push(`La cantidad de pasajeros debe ser un número entre 1 y ${MAX_PASAJEROS_POR_SOLICITUD}`)
-    }
-    datos.cantidad_pasajeros = cantidad
 
   } else {
     const peso = numeroPositivo(body.peso_kg, 1000)

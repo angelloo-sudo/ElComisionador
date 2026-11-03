@@ -19,6 +19,7 @@
     "test:geo": "node --test test/geo.service.test.js",
     "test:auth": "node --test test/auth.integration.test.js",
     "test:encomiendas": "node --test test/encomiendas.integration.test.js",
+    "test:solicitud-validador": "node --test test/solicitud.validador.test.js",
     "test:viaje-validador": "node --test test/viaje.validador.test.js",
     "test:recordatorio": "node --test test/recordatorio.validador.test.js",
     "test:recordatorio:integration": "node --test test/recordatorio.integration.test.js",

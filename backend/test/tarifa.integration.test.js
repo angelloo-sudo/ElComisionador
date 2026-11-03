@@ -200,7 +200,11 @@ describe('tarifa por km y duracion automatica', () => {
     assert.equal(visto.distancia_km, undefined)
     assert.equal(visto.duracion_min, 45)
 
-    const pas = await api.post('/api/solicitudes').set(cliente.auth).send(solicitudPasajero(viaje.id))
+    const pas = await api.post('/api/solicitudes').set(cliente.auth).send(solicitudPasajero(viaje.id, {
+      valijas_grandes: 1,
+      mochilas_bolsos_mano: 2,
+      equipaje_descripcion: 'Valija azul y mochila negra',
+    }))
     assert.equal(pas.status, 201, JSON.stringify(pas.body))
     assert.equal(Number(pas.body.monto), 400 * 36.5 * 2) // 29200
 
@@ -225,6 +229,7 @@ describe('tarifa por km y duracion automatica', () => {
     assert.equal(guardada.duracion_min, 45)
     const recibidas = await api.get('/api/solicitudes/recibidas?estado=todas').set(comisionista.auth)
     assert.equal(Number(recibidas.body.find((s) => s.id === pas.body.id).monto), 29200)
+    assert.equal(recibidas.body.find((s) => s.id === pas.body.id).equipaje_detalle, '1 valija grande y 2 mochilas o bolsos de mano — Valija azul y mochila negra')
     await api.put('/api/tarifa').set(comisionista.auth).send({ precio_km: 400 })
   })
 

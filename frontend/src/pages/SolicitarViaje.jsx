@@ -14,7 +14,7 @@ import { formatoDuracion, formatoPesos } from '../utils/tarifa.js'
 const FORM_INICIAL = {
   // pasajero
   nombre: '', apellido: '', dni: '', telefono: '', cantidad_pasajeros: '1', forma_pago: '',
-  equipaje_detalle: '',
+  valijas_grandes: '0', mochilas_bolsos_mano: '0', equipaje_descripcion: '',
   // encomienda
   peso_kg: '', ancho_cm: '', largo_cm: '', tipo_contenido: '', contenido_descripcion: '',
   emisor_nombre: '', emisor_apellido: '', emisor_telefono: '',
@@ -32,6 +32,53 @@ const TIPOS_CONTENIDO = [
 const SOLO_NUMEROS = /^\d*$/
 const TEXTO_ACCION = { sube: 'sube un pasajero', baja: 'baja un pasajero', retira: 'se retira una encomienda', entrega: 'se entrega una encomienda' }
 
+function SelectorEquipaje({ id, label, value, max, onChange, error }) {
+  const [abierto, setAbierto] = useState(false)
+  const cantidad = Number(value)
+
+  return (
+    <div className={`equipaje-selector campo${error ? ' tiene-error' : ''}`}>
+      <label id={`${id}-label`}>{label}</label>
+      <button
+        type="button"
+        className="equipaje-selector-boton"
+        aria-labelledby={`${id}-label ${id}-valor`}
+        aria-haspopup="listbox"
+        aria-expanded={abierto}
+        aria-controls={`${id}-opciones`}
+        onClick={() => setAbierto((actual) => !actual)}
+      >
+        <span id={`${id}-valor`}>{cantidad} {cantidad === 1 ? 'unidad' : 'unidades'}</span>
+        <Icon nombre="down" tamano={18} className={`equipaje-selector-flecha${abierto ? ' abierta' : ''}`} />
+      </button>
+      <div
+        className="equipaje-selector-opciones"
+        id={`${id}-opciones`}
+        role="listbox"
+        aria-labelledby={`${id}-label`}
+        hidden={!abierto}
+      >
+        {Array.from({ length: Math.min(Math.max(max, 0), 20) + 1 }, (_, opcion) => (
+          <button
+            type="button"
+            role="option"
+            aria-selected={cantidad === opcion}
+            className={cantidad === opcion ? 'activa' : ''}
+            key={opcion}
+            onClick={() => {
+              onChange(String(opcion))
+              setAbierto(false)
+            }}
+          >
+            {opcion} {opcion === 1 ? 'unidad' : 'unidades'}
+          </button>
+        ))}
+      </div>
+      {error && <p className="campo-error"><Icon nombre="alert" tamano={16} />{error}</p>}
+    </div>
+  )
+}
+
 export default function SolicitarViaje() {
   const { id } = useParams()
   const navegar = useNavigate()
@@ -39,7 +86,6 @@ export default function SolicitarViaje() {
   const [cargando, setCargando] = useState(true)
   const [errorCarga, setErrorCarga] = useState(null)
   const [tipo, setTipo] = useState('pasajero')
-  const [llevaEquipaje, setLlevaEquipaje] = useState(null) // null = sin responder
   const [fragil, setFragil] = useState(null) // null = sin responder
   const [form, setForm] = useState(FORM_INICIAL)
   const [errores, setErrores] = useState({})
@@ -116,6 +162,17 @@ export default function SolicitarViaje() {
     if (prefijo) setVerif((v) => ({ ...v, [prefijo]: undefined })) // la direccion cambio: hay que volver a verificar
   }
 
+  function cambiarCantidadPasajeros(valor) {
+    const nuevaCantidad = Number(valor) || 0
+    setForm((f) => ({
+      ...f,
+      cantidad_pasajeros: valor,
+      valijas_grandes: String(Math.min(Number(f.valijas_grandes) || 0, nuevaCantidad)),
+      mochilas_bolsos_mano: String(Math.min(Number(f.mochilas_bolsos_mano) || 0, nuevaCantidad)),
+    }))
+    setErrores((e) => ({ ...e, cantidad: undefined, valijas_grandes: undefined, mochilas_bolsos_mano: undefined }))
+  }
+
   // Comprueba que la calle y la altura existan en la localidad elegida para esa parada. Devuelve el resultado, o null si todavia no hay datos suficientes.
   async function verificar(prefijo, valores = form) {
     const calle = valores[`${prefijo}_calle`].trim()
@@ -137,7 +194,11 @@ export default function SolicitarViaje() {
     }
     return resultado
   }
-  const num = (campo) => (e) => { if (SOLO_NUMEROS.test(e.target.value)) cambiar(campo, e.target.value) }
+  const num = (campo) => (e) => {
+    if (!SOLO_NUMEROS.test(e.target.value)) return
+    if (campo === 'cantidad_pasajeros') cambiarCantidadPasajeros(e.target.value)
+    else cambiar(campo, e.target.value)
+  }
   const txt = (campo) => (e) => cambiar(campo, e.target.value)
 
   const libres = viaje?.cupos_disponibles ?? 0
@@ -166,10 +227,16 @@ export default function SolicitarViaje() {
       req('nombre', 'Ingresá tu nombre'); req('apellido', 'Ingresá tu apellido')
       if (!/^\d{7,8}$/.test(form.dni.trim())) e.dni = 'El DNI debe tener 7 u 8 dígitos'
       req('telefono', 'Ingresá tu número de celular')
-      if (llevaEquipaje === null) e.equipaje = 'Indicá si llevás equipaje'
-      else if (llevaEquipaje && form.equipaje_detalle.trim().length < 3) e.equipaje_detalle = 'Especificá qué equipaje llevás'
       if (!Number.isInteger(cantidad) || cantidad < 1) e.cantidad = 'Indicá cuántos pasajeros son (mínimo 1)'
+      else if (cantidad > 20) e.cantidad = 'La solicitud admite hasta 20 pasajeros'
       else if (cantidad > libres) e.cantidad = `Solo quedan ${libres} lugar${libres === 1 ? '' : 'es'} en este viaje`
+      for (const campo of ['valijas_grandes', 'mochilas_bolsos_mano']) {
+        const cantidadEquipaje = Number(form[campo])
+        if (!Number.isInteger(cantidadEquipaje) || cantidadEquipaje < 0 || cantidadEquipaje > cantidad) {
+          e[campo] = `Indicá un número entre 0 y ${cantidad} (una unidad por pasajero)`
+        }
+      }
+      if (form.equipaje_descripcion.trim().length > 120) e.equipaje_descripcion = 'La descripción admite hasta 120 caracteres'
     } else {
       if (!form.tipo_contenido) e.tipo_contenido = 'Elegí el tipo de contenido'
       else if (form.tipo_contenido === 'otro' && form.contenido_descripcion.trim().length < 3) e.contenido_descripcion = 'Aclará qué contiene el paquete'
@@ -215,7 +282,12 @@ export default function SolicitarViaje() {
         destino_calle: form.destino_calle, destino_altura: form.destino_altura, destino_codigo_postal: form.destino_codigo_postal,
         forma_pago: form.forma_pago,
         ...(tipo === 'pasajero'
-          ? { nombre: form.nombre, apellido: form.apellido, dni: form.dni, telefono: form.telefono, lleva_equipaje: llevaEquipaje, equipaje_detalle: llevaEquipaje ? form.equipaje_detalle : '', cantidad_pasajeros: cantidad }
+          ? {
+              nombre: form.nombre, apellido: form.apellido, dni: form.dni, telefono: form.telefono,
+              valijas_grandes: Number(form.valijas_grandes), mochilas_bolsos_mano: Number(form.mochilas_bolsos_mano),
+              equipaje_descripcion: form.equipaje_descripcion,
+              cantidad_pasajeros: cantidad,
+            }
           : { tipo_contenido: form.tipo_contenido, contenido_descripcion: form.tipo_contenido === 'otro' ? form.contenido_descripcion : '', fragil,
               peso_kg: decimal(form.peso_kg), ancho_cm: decimal(form.ancho_cm), largo_cm: decimal(form.largo_cm),
               emisor_nombre: form.emisor_nombre, emisor_apellido: form.emisor_apellido, emisor_telefono: form.emisor_telefono,
@@ -429,26 +501,40 @@ export default function SolicitarViaje() {
                     <Campo label="Cantidad de pasajeros" requerido icono="seat" error={errores.cantidad} ayuda={`Contá a todas las personas que viajan con vos. Quedan ${libres} lugar${libres === 1 ? '' : 'es'}.`}>
                       <input inputMode="numeric" value={form.cantidad_pasajeros} onChange={num('cantidad_pasajeros')} maxLength={2} />
                       <span className="stepper">
-                        <button type="button" aria-label="Quitar un pasajero" onClick={() => cambiar('cantidad_pasajeros', String(Math.max(1, cantidad - 1)))}><Icon nombre="minus" tamano={14} /></button>
-                        <button type="button" aria-label="Agregar un pasajero" onClick={() => cambiar('cantidad_pasajeros', String(Math.min(libres, cantidad + 1)))}><Icon nombre="plus" tamano={14} /></button>
+                        <button type="button" aria-label="Quitar un pasajero" onClick={() => cambiarCantidadPasajeros(String(Math.max(1, cantidad - 1)))}><Icon nombre="minus" tamano={14} /></button>
+                        <button type="button" aria-label="Agregar un pasajero" onClick={() => cambiarCantidadPasajeros(String(Math.min(libres, cantidad + 1)))}><Icon nombre="plus" tamano={14} /></button>
                       </span>
                     </Campo>
-                    <div className="campo">
-                      <label>¿Llevás equipaje?<span className="req">*</span></label>
-                      <div className="segmentado" role="radiogroup" aria-label="Lleva equipaje">
-                        <button type="button" role="radio" aria-checked={llevaEquipaje === true} className={llevaEquipaje === true ? 'activo' : ''} onClick={() => { setLlevaEquipaje(true); setErrores((e) => ({ ...e, equipaje: undefined })) }}>Sí</button>
-                        <button type="button" role="radio" aria-checked={llevaEquipaje === false} className={llevaEquipaje === false ? 'activo' : ''} onClick={() => { setLlevaEquipaje(false); setErrores((e) => ({ ...e, equipaje: undefined, equipaje_detalle: undefined })) }}>No</button>
-                      </div>
-                      {errores.equipaje && <p className="campo-error"><Icon nombre="alert" tamano={16} />{errores.equipaje}</p>}
-                    </div>
                   </div>
-                  {llevaEquipaje === true && (
-                    <div style={{ marginTop: 16 }}>
-                      <Campo label="¿Qué equipaje llevás?" requerido error={errores.equipaje_detalle}>
-                        <textarea className="area" rows={2} maxLength={300} value={form.equipaje_detalle} onChange={txt('equipaje_detalle')} placeholder="Ej: 2 valijas medianas y una mochila" />
-                      </Campo>
-                    </div>
-                  )}
+                  <p className="campo-ayuda">Cada pasajero puede llevar hasta 1 unidad de cada tipo.</p>
+                  <div className="grilla-2 equipaje-selectores">
+                    <SelectorEquipaje
+                      id="valijas-grandes"
+                      label="Valijas grandes"
+                      value={form.valijas_grandes}
+                      max={cantidad}
+                      onChange={(valor) => cambiar('valijas_grandes', valor)}
+                      error={errores.valijas_grandes}
+                    />
+                    <SelectorEquipaje
+                      id="mochilas-bolsos"
+                      label="Mochilas o bolsos de mano"
+                      value={form.mochilas_bolsos_mano}
+                      max={cantidad}
+                      onChange={(valor) => cambiar('mochilas_bolsos_mano', valor)}
+                      error={errores.mochilas_bolsos_mano}
+                    />
+                  </div>
+                  <Campo label="Descripción del equipaje" opcional="(opcional)" error={errores.equipaje_descripcion} ayuda="Por ejemplo: color o alguna característica. Hasta 120 caracteres.">
+                    <textarea
+                      className="area equipaje-descripcion"
+                      rows={2}
+                      maxLength={120}
+                      value={form.equipaje_descripcion}
+                      onChange={txt('equipaje_descripcion')}
+                      placeholder="Ej: valija azul y mochila negra"
+                    />
+                  </Campo>
                 </div>
 
                 {ubicacion('origen', 'Dónde te buscan', true)}
