@@ -1,7 +1,8 @@
 import nodemailer from 'nodemailer'
 
 export async function enviarEmailVerificacion({ email, token }) {
-  const { SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASSWORD, SMTP_FROM } = process.env
+  const { SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_FROM } = process.env
+  const password = process.env.SMTP_PASSWORD || process.env.SMTP_PASS
   if (!SMTP_HOST) {
     throw new Error('Falta configurar SMTP_HOST para enviar correos')
   }
@@ -11,8 +12,8 @@ export async function enviarEmailVerificacion({ email, token }) {
   const transporte = nodemailer.createTransport({
     host: SMTP_HOST,
     port: Number(SMTP_PORT || 587),
-    secure: SMTP_SECURE === 'true',
-    ...(SMTP_USER || SMTP_PASSWORD ? { auth: { user: SMTP_USER, pass: SMTP_PASSWORD } } : {}),
+    secure: SMTP_SECURE === 'true' || Number(SMTP_PORT) === 465,
+    ...(SMTP_USER || password ? { auth: { user: SMTP_USER, pass: password } } : {}),
   })
 
   await transporte.sendMail({

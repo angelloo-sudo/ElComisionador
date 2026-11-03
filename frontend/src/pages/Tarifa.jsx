@@ -74,11 +74,6 @@ export default function Tarifa() {
                 <input inputMode="decimal" value={texto} onChange={(e) => { setTexto(e.target.value); setError(null) }} placeholder="Ej: 350" maxLength={12} aria-label="Precio por kilómetro en pesos" />
               </Campo>
             </div>
-            <p className="nota-resumen" style={{ marginTop: 18 }}>
-              Fórmula: <strong>precio por km × kilómetros</strong>. Si el cliente viaja con acompañantes se multiplica además por la cantidad de pasajeros; una encomienda se cobra una sola vez.
-              Los kilómetros son los de la ruta en auto entre el origen y el destino de tu viaje.
-            </p>
-            <p className="nota-resumen">Si cambiás tu tarifa, las solicitudes que ya recibiste conservan el precio con el que se enviaron.</p>
           </div>
           <div className="card-pie">
             <button type="submit" className="btn btn-primario" disabled={guardando || guardado === undefined || sinCambios}>

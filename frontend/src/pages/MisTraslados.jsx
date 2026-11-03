@@ -196,7 +196,7 @@ export default function MisTraslados() {
             </table>
           )}
         </div>
-      </div> : <div className="card viajes-indicacion"><Mascota ancho={76} /><p>Indique origen, destino o fecha para ver viajes disponibles.</p></div>}
+      </div> : <div className="card viajes-indicacion"><Mascota ancho={76} /><p>Realizá una búsqueda para ver resultados.</p></div>}
         </>
       ) : (
         <>

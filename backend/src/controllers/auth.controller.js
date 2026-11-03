@@ -665,7 +665,8 @@ export async function solicitarRecuperacion(req, res, next) {
       [tokenHash, expira, rows[0].id],
     )
 
-    const link = `${process.env.FRONTEND_URL}/?token=${tokenPlano}`
+    const baseUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '')
+    const link = `${baseUrl}/?token=${encodeURIComponent(tokenPlano)}`
     await enviarEmailRecuperacion(email, link)
 
     res.json(mensajeGenerico)

@@ -35,7 +35,7 @@ export default function VerificarEmail() {
         <h1>{cargando ? 'Verificando correo...' : error ? 'No se pudo verificar' : 'Correo verificado'}</h1>
         <p>{cargando ? 'Estamos comprobando el enlace.' : error || mensaje}</p>
         {!cargando && (
-          <button type="button" className="btn btn-primario btn-bloque" onClick={() => navegar('/')}>
+          <button type="button" className="btn btn-primario btn-bloque" onClick={() => navegar('/ingresar')}>
             Ir a iniciar sesión <Icon nombre="arrow" />
           </button>
         )}

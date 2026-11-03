@@ -2,9 +2,9 @@ import { Mascota } from '../components/ui.jsx'
 import Icon from '../components/Icon.jsx'
 
 const beneficios = [
-  { icono: 'logo', titulo: 'Viajes bajo control', texto: 'Organizá recorridos, horarios y disponibilidad desde un solo lugar.' },
-  { icono: 'package', titulo: 'Encomiendas acompañadas', texto: 'Seguí cada pedido y mantené a clientes y comisionistas conectados.' },
-  { icono: 'wallet', titulo: 'Tu trabajo, más claro', texto: 'Reuní pasajeros, solicitudes y movimientos de tu actividad.' },
+  { icono: 'package', titulo: 'Encomiendas en camino', texto: 'Clientes y comisionistas coordinan cada envío y siguen su recorrido en un mismo lugar.' },
+  { icono: 'logo', titulo: 'Viajes bajo control', texto: 'Organizá recorridos, horarios y lugares disponibles para pasajeros.' },
+  { icono: 'wallet', titulo: 'Todo más claro', texto: 'Reuní envíos, pasajeros y movimientos de tu actividad en un solo lugar.' },
 ]
 
 export default function Landing({ onIngresar }) {
@@ -27,23 +27,23 @@ export default function Landing({ onIngresar }) {
       <main id="inicio">
         <section className="landing-hero">
           <div className="landing-hero-copy">
-            <span className="landing-eyebrow"><span /> VIAJES, ENCOMIENDAS Y PERSONAS</span>
-            <h1>Cada viaje conecta.<br /><em>ComiTrack lo hace simple.</em></h1>
-            <p>La plataforma para organizar tus viajes, coordinar pasajeros y encomiendas, y llevar el control de tu actividad en un solo lugar.</p>
+            <span className="landing-eyebrow"><span /> ENCOMIENDAS Y VIAJES, EN UN SOLO LUGAR</span>
+            <h1>Tus encomiendas<br /><em>llegan más lejos.</em></h1>
+            <p>Conectá con un comisionista para enviar o recibir paquetes. También encontrá viajes y coordiná traslados de pasajeros desde un mismo lugar.</p>
             <div className="landing-acciones">
               <button type="button" className="landing-cta" onClick={onIngresar}>Empezar ahora <Icon nombre="arrow" tamano={18} /></button>
               <a className="landing-secundario" href="#como-funciona">Conocé ComiTrack <span>↓</span></a>
             </div>
-            <div className="landing-confianza"><span className="landing-puntos"><i /><i /><i /></span><span>Una ruta más clara para quienes mueven personas y paquetes.</span></div>
+            <div className="landing-confianza"><span className="landing-puntos"><i /><i /><i /></span><span>Un mismo camino para tus paquetes y tus viajes.</span></div>
           </div>
 
           <div className="landing-escena" aria-label="La mascota canguro de ComiTrack junto a un viaje organizado">
             <div className="landing-orbita orbita-uno" /><div className="landing-orbita orbita-dos" />
             <div className="landing-etiqueta etiqueta-ruta"><span className="landing-mini-icon"><Icon nombre="pin" tamano={17} /></span><span><b>Tu próxima ruta</b><small>Lista para organizar</small></span><i className="landing-pulso" /></div>
             <div className="landing-tarjeta-viaje">
-              <div className="landing-tarjeta-top"><span>RECORRIDO</span><span className="landing-estado"><i /> PROGRAMADO</span></div>
-              <div className="landing-ruta"><div className="landing-puntos-ruta"><i /><span /><i /></div><div><b>Origen</b><strong>Tu ciudad</strong><b>Destino</b><strong>Tu próximo lugar</strong></div><Icon nombre="arrow" tamano={18} /></div>
-              <div className="landing-tarjeta-pie"><span><Icon nombre="clock" tamano={15} /> Horarios claros</span><span><Icon nombre="users" tamano={15} /> Todo conectado</span></div>
+              <div className="landing-tarjeta-top"><span>ENCOMIENDA</span><span className="landing-estado"><i /> EN CAMINO</span></div>
+              <div className="landing-ruta"><div className="landing-puntos-ruta"><i /><span /><i /></div><div><b>Retiro</b><strong>Tu ciudad</strong><b>Entrega</b><strong>Tu próximo destino</strong></div><Icon nombre="arrow" tamano={18} /></div>
+              <div className="landing-tarjeta-pie"><span><Icon nombre="package" tamano={15} /> Paquete acompañado</span><span><Icon nombre="users" tamano={15} /> En contacto</span></div>
             </div>
             <div className="landing-mascota-fondo"><Mascota ancho={220} /></div>
             <div className="landing-burbuja"><span>¡Vamos!</span><i /></div>
@@ -64,8 +64,8 @@ export default function Landing({ onIngresar }) {
         </section>
 
         <section className="landing-comunidad" id="comunidad">
-          <div className="landing-comunidad-visual"><div className="landing-comunidad-sol" /><Mascota ancho={150} /><span className="landing-comunidad-tag">Kilómetro a kilómetro</span></div>
-          <div className="landing-comunidad-copy"><span className="landing-eyebrow">HECHO PARA CONECTAR</span><h2>Las mejores rutas<br />se hacen <em>en equipo.</em></h2><p>ComiTrack acerca a quienes ofrecen un viaje con quienes necesitan llegar o enviar algo. Y cada experiencia ayuda a que el próximo recorrido sea todavía mejor.</p><div className="landing-opinion"><span>“</span><div><strong>Tu experiencia también cuenta</strong><small>Muy pronto, este espacio reunirá las historias y opiniones de la comunidad ComiTrack.</small></div><Icon nombre="checkcircle" tamano={19} /></div></div>
+          <div className="landing-comunidad-visual"><div className="landing-mapa-ilustrado" role="img" aria-label="Mapa ilustrado con una ruta de entrega, origen, destino y el canguro de ComiTrack llevando un paquete"><div className="mapa-cuadricula" /><svg className="mapa-calles" viewBox="0 0 520 330" aria-hidden="true"><path d="M-20 70 115 120 205 55 345 95 535 30M-15 245 100 200 215 265 345 205 530 275M55-15 100 90 75 180 145 345M270-20 240 75 300 155 265 240 325 350M440-15 385 75 430 165 385 250 455 350" /><path d="M95 225C135 195 156 205 185 166S240 100 285 125s65 80 110 58 50-47 85-41" className="mapa-ruta-linea" /></svg><span className="mapa-etiqueta mapa-origen"><i /> Retiro</span><span className="mapa-etiqueta mapa-destino"><i /> Entrega</span><div className="mapa-mascota"><Mascota ancho={116} /><span className="mapa-paquete" aria-hidden="true">□</span></div></div><span className="landing-comunidad-tag">Seguí cada encomienda en su recorrido</span></div>
+          <div className="landing-comunidad-copy"><span className="landing-eyebrow">HECHO PARA CONECTAR</span><h2>De una ciudad<br />a otra, <em>en camino.</em></h2><p>Clientes y comisionistas coordinan el envío y la entrega de cada encomienda. Y cuando necesitás viajar, también podés encontrar y organizar traslados de pasajeros.</p><div className="landing-opinion"><span>“</span><div><strong>Paquetes y viajes, más fáciles de coordinar</strong><small>Todo el recorrido y la información de cada solicitud, en un mismo lugar.</small></div><Icon nombre="checkcircle" tamano={19} /></div></div>
         </section>
 
         <section className="landing-cierre"><div><span className="landing-eyebrow">EL PRÓXIMO VIAJE EMPIEZA ACÁ</span><h2>¿A dónde vamos?</h2><p>Organizá tu actividad o encontrá el viaje que necesitás.</p></div><button type="button" className="landing-cta landing-cta-claro" onClick={onIngresar}>Ingresar a ComiTrack <Icon nombre="arrow" tamano={18} /></button><div className="landing-cierre-mascota"><Mascota ancho={100} /></div></section>

@@ -103,7 +103,7 @@ function puedeEntregar(s) {
 }
 
 export default function Postulaciones() {
-  const [tipoFijo, setTipoFijo] = useState('pasajero')
+  const [tipoFijo, setTipoFijo] = useState('encomienda')
   const textos = TEXTOS[tipoFijo]
   const ultimoPedido = useRef(0)
   const [estado, setEstado] = useState('pendiente')
@@ -184,11 +184,11 @@ export default function Postulaciones() {
       </div>
 
       <div className="pestanas" role="tablist" aria-label="Tipo de solicitud">
-        <button type="button" role="tab" aria-selected={tipoFijo === 'pasajero'} className={tipoFijo === 'pasajero' ? 'activo' : ''} onClick={() => cambiarPestana('pasajero')}>
-          Pasajeros
-        </button>
         <button type="button" role="tab" aria-selected={tipoFijo === 'encomienda'} className={tipoFijo === 'encomienda' ? 'activo' : ''} onClick={() => cambiarPestana('encomienda')}>
           Encomiendas
+        </button>
+        <button type="button" role="tab" aria-selected={tipoFijo === 'pasajero'} className={tipoFijo === 'pasajero' ? 'activo' : ''} onClick={() => cambiarPestana('pasajero')}>
+          Pasajeros
         </button>
       </div>
 

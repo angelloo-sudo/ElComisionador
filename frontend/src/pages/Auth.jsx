@@ -334,6 +334,9 @@ function cambiarModo(nuevo) {
         <span className="trafico-auto trafico-uno">🚗</span><span className="trafico-moto trafico-dos">🏍️</span>
         <span className="trafico-van trafico-tres">🚐</span><span className="trafico-auto trafico-cuatro">🚙</span>
         <span className="trafico-moto trafico-cinco">🛵</span><span className="trafico-van trafico-seis">🚐</span>
+        <span className="trafico-auto trafico-siete">🚕</span><span className="trafico-auto trafico-ocho">🚓</span>
+        <span className="trafico-auto trafico-nueve">🚙</span><span className="trafico-van trafico-diez">🚚</span>
+        <span className="trafico-auto trafico-once">🚜</span><span className="trafico-van trafico-doce">🚌</span>
       </div>
       <form className="auth-card" onSubmit={handleSubmit} noValidate>
         <Logo />
