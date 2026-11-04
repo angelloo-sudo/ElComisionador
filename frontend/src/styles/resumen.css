@@ -41,6 +41,35 @@ a.kpi:hover { border-color: var(--borde-fuerte); transform: translateY(-1px); }
 
 /* Inicio del cliente */
 .resumen-cliente { gap: 18px; }
+.resumen-comisionista { width: min(100%, 1240px); margin: 0 auto; gap: 18px; }
+.resumen-comisionista .resumen-saludo { align-items: center; }
+.resumen-comisionista .resumen-saludo h2 { margin-top: 3px; font-size: clamp(23px, 3vw, 30px); letter-spacing: -.035em; }
+.resumen-comisionista .resumen-saludo p:not(.comisionista-fecha) { margin-top: 5px; color: var(--texto-2); }
+.comisionista-fecha { color: var(--texto-2); font-size: 12px; }
+.comisionista-kpis-principales { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.comisionista-kpis-secundarios { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.comisionista-paneles { grid-template-columns: minmax(0, 1.25fr) minmax(300px, .9fr); align-items: stretch; }
+.resumen-comisionista .kpi { min-width: 0; min-height: 112px; padding: 19px 20px; border-radius: var(--radio); }
+.resumen-comisionista .kpi small, .resumen-comisionista .kpi span { color: var(--texto-2); letter-spacing: 0; text-transform: none; }
+.resumen-comisionista .kpi strong { overflow-wrap: anywhere; }
+.resumen-comisionista .kpi.destacado { background: var(--ambar-fondo); }
+.resumen-comisionista .card { min-width: 0; overflow: hidden; }
+.resumen-comisionista .card-cabecera h2 { color: var(--texto); }
+.resumen-comisionista .card-cabecera p, .resumen-comisionista .lista-resumen small,
+.resumen-comisionista .resumen-vacio, .resumen-comisionista .cupo-texto { color: var(--texto-2); }
+.resumen-comisionista .card-pie { padding-bottom: 14px; }
+@media (max-width: 960px) {
+  .comisionista-paneles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .resumen-comisionista { gap: 14px; }
+  .resumen-comisionista .resumen-saludo { align-items: flex-start; flex-direction: column; }
+  .resumen-comisionista .resumen-saludo > .btn { align-self: stretch; justify-content: center; }
+  .comisionista-kpis-principales, .comisionista-kpis-secundarios,
+  .comisionista-paneles { grid-template-columns: minmax(0, 1fr); }
+  .resumen-comisionista .kpi { min-height: auto; padding: 15px 16px; }
+  .resumen-comisionista .kpi strong { font-size: 24px; }
+}
 .cliente-inicio-cabecera { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 .cliente-inicio-cabecera h2 { margin: 3px 0; font-size: 26px; }
 .cliente-inicio-cabecera p:last-child { color: var(--texto-2); }

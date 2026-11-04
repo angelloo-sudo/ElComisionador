@@ -6,6 +6,11 @@ import { formatoPesos } from '../../utils/tarifa.js'
 import { cuando, plural } from './util.js'
 import '../../styles/resumen.css'
 
+function fechaActual() {
+  const texto = new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())
+  return texto.charAt(0).toUpperCase() + texto.slice(1)
+}
+
 function Kpi({ titulo, valor, detalle, a, destacado, chico }) {
   const contenido = <><small>{titulo}</small><strong>{valor}</strong>{detalle && <span>{detalle}</span>}</>
   const clase = `kpi${destacado ? ' destacado' : ''}${chico ? ' chico' : ''}`
@@ -25,15 +30,17 @@ function Cupo({ ocupados, total }) {
 
 export default function ResumenComisionista({ datos, nombre }) {
   const { proximo_viaje: proximo, totales: t, alertas, pendientes, agenda } = datos
+  const fecha = fechaActual()
   return (
-    <div className="resumen">
-      <div className="resumen-saludo">
+    <div className="resumen resumen-comisionista">
+      <header className="resumen-saludo">
         <div>
-          <h2>Hola, {nombre}</h2>
+          <p className="comisionista-fecha">{fecha}</p>
+          <h2>Buen día, {nombre || 'comisionista'}</h2>
           <p>{proximo ? 'Esto es lo que tenés por delante.' : 'Todavía no tenés viajes programados.'}</p>
         </div>
-        <Link to="/viajes/nuevo" className="btn btn-primario">Registrar un viaje</Link>
-      </div>
+        <Link to="/viajes/nuevo" className="btn btn-primario">+ Registrar un viaje</Link>
+      </header>
 
       {(alertas.sin_tarifa || alertas.pendientes_urgentes.length > 0 || alertas.viajes_sin_ruta > 0) && (
         <div className="resumen-alertas">
@@ -55,16 +62,13 @@ export default function ResumenComisionista({ datos, nombre }) {
         </div>
       )}
 
-      <div className="resumen-kpis">
+      <div className="resumen-kpis comisionista-kpis-principales">
         <Kpi titulo="Solicitudes por responder" valor={t.solicitudes_pendientes} detalle={t.solicitudes_pendientes ? 'Esperan tu respuesta' : 'Estás al día'} a="/solicitudes" destacado={t.solicitudes_pendientes > 0} />
         <Kpi titulo="Viajes esta semana" valor={t.viajes_semana} detalle={t.viajes_hoy ? `${plural(t.viajes_hoy, 'sale hoy', 'salen hoy')}` : 'Ninguno sale hoy'} a="/viajes" />
-        <Kpi titulo="Cupos libres" valor={t.cupos_libres} detalle={`en ${plural(t.viajes_programados, 'viaje programado', 'viajes programados')}`} />
-        <Kpi titulo="Encomiendas aceptadas" valor={t.encomiendas_en_curso} detalle="en viajes por salir" />
         {t.gastos_mes != null && <Kpi titulo="Gastos del mes" valor={formatoPesos(t.gastos_mes)} a="/gastos" />}
-        <Kpi titulo="Tu precio por km" valor={datos.precio_km != null ? formatoPesos(datos.precio_km) : 'Sin configurar'} a="/tarifa" chico={datos.precio_km == null} />
       </div>
 
-      <div className="resumen-cols">
+      <div className="resumen-cols comisionista-paneles">
         <section className="card">
           <div className="card-cabecera"><h2>Próximo viaje</h2></div>
           {proximo ? (
@@ -107,6 +111,12 @@ export default function ResumenComisionista({ datos, nombre }) {
             </>
           )}
         </section>
+      </div>
+
+      <div className="resumen-kpis comisionista-kpis-secundarios">
+        <Kpi titulo="Cupos libres" valor={t.cupos_libres} detalle={`en ${plural(t.viajes_programados, 'viaje programado', 'viajes programados')}`} a="/viajes" chico />
+        <Kpi titulo="Encomiendas aceptadas" valor={t.encomiendas_en_curso} detalle="En viajes por salir" a="/solicitudes" chico />
+        <Kpi titulo="Tu precio por km" valor={datos.precio_km != null ? formatoPesos(datos.precio_km) : 'Sin configurar'} a="/tarifa" chico />
       </div>
 
       <section className="card">

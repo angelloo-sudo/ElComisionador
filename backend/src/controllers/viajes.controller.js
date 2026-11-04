@@ -366,130 +366,80 @@ export async function cancelar(req, res, next) {
   } catch (e) { next(e) }
 }
 
-// US18 - Modificar definicion de viaje.
-// Se puede editar recorrido, fecha, horario y cupo de un viaje en estado "Programado". Si el
-// viaje es parte de una serie repetitiva, "alcance" indica a cuales aplica el cambio:
-//   'este'       -> solo el viaje elegido (por defecto); es el unico caso en que se puede cambiar la fecha
-//   'siguientes' -> el elegido y los siguientes de su serie que todavia no se realizaron
-// Antes de guardar se valida que no se superponga con otros viajes del comisionista y que el
-// cupo no quede por debajo de los pasajeros ya asociados. Todo o nada.
-const ALCANCES_EDICION = ['este', 'siguientes']
-
+// US18: modifica solo horarios/capacidad y notifica en forma persistente a los clientes afectados.
 export async function actualizar(req, res, next) {
+  const cliente = await pool.connect()
   try {
     const { id } = req.params
     const usuarioId = req.usuario?.id
-    const { origen, destino, fecha, hora_salida, cupo_total } = req.body
-    const alcance = req.body.alcance ?? 'este'
-
-    if (!ALCANCES_EDICION.includes(alcance)) {
-      return res.status(400).json({ mensaje: 'El alcance de la modificacion no es valido' })
-    }
-
-    const { rows } = await query(
-      'SELECT id, estado, fecha::text AS fecha, serie_id FROM viajes WHERE id = $1 AND usuario_id = $2',
-      [id, usuarioId]
+    const { hora_salida, hora_llegada, cupo_total } = req.body
+    await cliente.query('BEGIN')
+    const { rows } = await cliente.query(
+      'SELECT id, origen, destino, estado, fecha::text AS fecha, hora_salida, hora_llegada, cupo_total FROM viajes WHERE id = $1 AND usuario_id = $2 FOR UPDATE',
+      [id, usuarioId],
     )
-    if (rows.length === 0) {
-      return res.status(404).json({ mensaje: `Viaje ${id} no encontrado` })
-    }
+    if (!rows.length) { await cliente.query('ROLLBACK'); return res.status(404).json({ mensaje: `Viaje ${id} no encontrado` }) }
     const viaje = rows[0]
     if (obtenerEstadoViaje(viaje.estado, viaje.fecha) !== 'programado') {
+      await cliente.query('ROLLBACK')
       return res.status(409).json({ mensaje: 'Solo se pueden modificar viajes en estado Programado' })
     }
-
-    const aplicaASerie = Boolean(viaje.serie_id) && alcance === 'siguientes'
-    if (aplicaASerie && fecha !== viaje.fecha) {
-      return res.status(400).json({ mensaje: 'La fecha solo se puede cambiar al modificar un unico viaje' })
+    const { rows: ocupacion } = await cliente.query(`SELECT ${SQL_OCUPADOS} AS ocupados FROM viajes v WHERE v.id = $1`, [id])
+    const ocupados = ocupacion[0].ocupados
+    if (ocupados > cupo_total) {
+      await cliente.query('ROLLBACK')
+      return res.status(409).json({ mensaje: `El cupo no puede ser menor que los ${ocupados} pasajeros que ya tiene asociados el viaje` })
     }
-
-    // Viajes que se van a modificar (con la cantidad de pasajeros asociados a cada uno).
-    const { rows: objetivos } = aplicaASerie
-      ? await query(
-          `SELECT v.id, v.fecha::text AS fecha,
-                  ${SQL_OCUPADOS} AS ocupados
-           FROM viajes v
-           WHERE v.serie_id = $1 AND v.usuario_id = $2 AND v.estado = 'programado'
-             AND (v.fecha, v.hora_salida) >= (SELECT fecha, hora_salida FROM viajes WHERE id = $3)
-             AND (v.id = $3 OR v.fecha >= (NOW() AT TIME ZONE 'America/Argentina/Cordoba')::date)`,
-          [viaje.serie_id, usuarioId, id]
-        )
-      : await query(
-          `SELECT v.id, v.fecha::text AS fecha,
-                  ${SQL_OCUPADOS} AS ocupados
-           FROM viajes v WHERE v.id = $1`,
-          [id]
-        )
-    const ids = objetivos.map((o) => o.id)
-
-    // El cupo no puede quedar por debajo de los pasajeros que ya tiene el viaje.
-    const maxOcupados = Math.max(...objetivos.map((o) => o.ocupados))
-    if (maxOcupados > Number(cupo_total)) {
-      return res.status(409).json({
-        mensaje: `El cupo no puede ser menor que los ${maxOcupados} pasajeros que ya tiene asociados el viaje`,
-      })
-    }
-
-    // No se pueden superponer con otros viajes del comisionista (se ignoran los que se estan
-    // modificando y los cancelados). Se chequean todas las fechas antes de guardar nada.
-    const fechas = [...new Set(objetivos.map((o) => (aplicaASerie ? o.fecha : fecha)))]
-    const { rows: existentes } = await query(
-      `SELECT fecha::text AS fecha, hora_salida, hora_llegada FROM viajes
-       WHERE usuario_id = $1 AND fecha = ANY($2::date[]) AND estado <> 'cancelado'
-         AND id <> ALL($3::int[])`,
-      [usuarioId, fechas, ids]
+    const { rows: existentes } = await cliente.query(
+      `SELECT hora_salida, hora_llegada FROM viajes WHERE usuario_id = $1 AND fecha = $2 AND estado <> 'cancelado' AND id <> $3`,
+      [usuarioId, viaje.fecha, id],
     )
-    const { distancia_km, duracion_min, hora_llegada } = await datosDeViaje(origen.trim(), destino.trim(), hora_salida)
-    const rangoNuevo = rangoViaje(hora_salida, hora_llegada)
-    const fechasConflicto = [...new Set(
-      existentes
-        .filter((v) => seSuperponen(rangoNuevo, rangoViaje(v.hora_salida, v.hora_llegada)))
-        .map((v) => v.fecha.slice(0, 10))
-    )].sort()
-
-    if (fechasConflicto.length > 0) {
-      const lista = fechasConflicto
-        .slice(0, 5)
-        .map((f) => f.split('-').reverse().join('/'))
-        .join(', ')
-      const resto = fechasConflicto.length > 5 ? ` y ${fechasConflicto.length - 5} más` : ''
-      return res.status(409).json({
-        mensaje: objetivos.length === 1
-          ? 'Ya tenés un viaje programado que se superpone con ese horario ese mismo día'
-          : `Ya tenés viajes que se superponen con ese horario en: ${lista}${resto}. No se modificó ninguno.`,
-      })
+    if (existentes.some((v) => seSuperponen(rangoViaje(hora_salida, hora_llegada), rangoViaje(v.hora_salida, v.hora_llegada)))) {
+      await cliente.query('ROLLBACK')
+      return res.status(409).json({ mensaje: 'Ya tenés un viaje programado que se superpone con ese horario ese mismo día' })
     }
-
-    const valores = [origen.trim(), destino.trim(), hora_salida, hora_llegada, Number(cupo_total), ids, usuarioId, distancia_km, duracion_min]
-    if (!aplicaASerie) valores.push(fecha)
-    const { rows: actualizados } = await query(
-      `UPDATE viajes
-       SET hora_llegada = COALESCE($4::time, CASE WHEN origen = $1 AND destino = $2 AND hora_salida = $3::time THEN hora_llegada END),
-           distancia_km = COALESCE($8::numeric, CASE WHEN origen = $1 AND destino = $2 THEN distancia_km END),
-           duracion_min = COALESCE($9::int, CASE WHEN origen = $1 AND destino = $2 THEN duracion_min END),
-           origen = $1, destino = $2, hora_salida = $3, cupo_total = $5${aplicaASerie ? '' : ', fecha = $10'}
-       WHERE id = ANY($6::int[]) AND usuario_id = $7 AND estado = 'programado'
-       RETURNING *`,
-      valores
+    const { rows: actualizados } = await cliente.query(
+      `UPDATE viajes SET hora_salida = $1, hora_llegada = $2,
+       duracion_min = EXTRACT(EPOCH FROM ($2::time - $1::time))::int / 60, cupo_total = $3
+       WHERE id = $4 AND usuario_id = $5 AND estado = 'programado' RETURNING *`,
+      [hora_salida, hora_llegada, cupo_total, id, usuarioId],
     )
-    actualizados.sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)) || a.id - b.id)
-
-    if (actualizados.length > 0) {
-      await query(
-        `UPDATE recordatorios_viaje r
-         SET programado_para = ((v.fecha + v.hora_salida) AT TIME ZONE 'America/Argentina/Buenos_Aires')
-                               - make_interval(mins => r.minutos_anticipacion),
-             actualizado_en = NOW()
-         FROM viajes v
-         WHERE r.viaje_id = v.id AND v.id = ANY($1::int[]) AND r.estado = 'pendiente'`,
-        [actualizados.map((v) => v.id)],
+    const cambioHorario = viaje.hora_salida?.slice(0, 5) !== hora_salida || viaje.hora_llegada?.slice(0, 5) !== hora_llegada
+    const huboCambio = cambioHorario || Number(viaje.cupo_total) !== cupo_total
+    if (huboCambio) {
+      if (cambioHorario) {
+        await cliente.query(
+          `UPDATE recordatorios_viaje SET programado_para = (($1::date + $2::time) AT TIME ZONE 'America/Argentina/Buenos_Aires')
+           - make_interval(mins => minutos_anticipacion), actualizado_en = NOW() WHERE viaje_id = $3 AND estado = 'pendiente'`,
+          [viaje.fecha, hora_salida, id],
+        )
+      }
+      const { rows: destinatarios } = await cliente.query(
+        `SELECT DISTINCT cliente_usuario_id FROM (
+          SELECT c.usuario_id AS cliente_usuario_id FROM solicitudes_viaje s JOIN clientes c ON c.id = s.cliente_id
+          WHERE s.viaje_id = $1 AND s.estado = 'aceptada' AND s.tipo = 'pasajero'
+          UNION
+          SELECT c.usuario_id FROM solicitudes_viaje s JOIN clientes c ON c.id = s.cliente_id
+          WHERE s.viaje_id = $1 AND s.estado = 'aceptada' AND s.tipo = 'encomienda'
+          UNION
+          SELECT c.usuario_id FROM encomiendas e JOIN clientes c ON c.id = e.cliente_remitente_id WHERE e.viaje_id = $1
+        ) afectados WHERE cliente_usuario_id IS NOT NULL`, [id],
       )
+      const mensaje = `El comisionista modificó el viaje ${id}. Nueva hora de salida: ${hora_salida} hs. Nueva hora estimada de llegada: ${hora_llegada} hs. El origen (${viaje.origen}) y el destino (${viaje.destino}) no cambiaron. Consultá el viaje actualizado en ComiTrack.`
+      for (const destinatario of destinatarios) {
+        await cliente.query('INSERT INTO notificaciones (usuario_id, viaje_id, titulo, mensaje) VALUES ($1, $2, $3, $4)',
+          [destinatario.cliente_usuario_id, id, 'Tu viaje ha sido modificado', mensaje])
+      }
     }
-
-    // Pasajeros asociados a los viajes modificados: el frontend muestra la alerta para avisarles.
-    const pasajerosAfectados = objetivos.reduce((total, o) => total + o.ocupados, 0)
-    res.status(200).json({ cantidad: actualizados.length, viajes: actualizados, pasajerosAfectados })
-  } catch (e) { next(e) }
+    const clientesNotificados = huboCambio ? (await cliente.query(
+      `SELECT COUNT(DISTINCT usuario_id)::int AS cantidad FROM notificaciones WHERE viaje_id = $1 AND creado_en >= transaction_timestamp()`, [id],
+    )).rows[0].cantidad : 0
+    await cliente.query('COMMIT')
+    res.status(200).json({ ...actualizados[0], clientesNotificados })
+  } catch (error) {
+    await cliente.query('ROLLBACK').catch(() => {})
+    next(error)
+  } finally { cliente.release() }
 }
 
 // US20 - Iniciar viaje.

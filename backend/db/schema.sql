@@ -90,6 +90,18 @@ CREATE TABLE IF NOT EXISTS recordatorios_viaje (
   actualizado_en           TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Notificaciones persistentes visibles por el cliente dentro de ComiTrack.
+CREATE TABLE IF NOT EXISTS notificaciones (
+  id          SERIAL PRIMARY KEY,
+  usuario_id  INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  viaje_id    INTEGER REFERENCES viajes(id) ON DELETE SET NULL,
+  titulo      VARCHAR(160) NOT NULL,
+  mensaje     TEXT NOT NULL,
+  leida_en    TIMESTAMPTZ,
+  creado_en   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS notificaciones_usuario_fecha_idx ON notificaciones (usuario_id, creado_en DESC);
+
 CREATE TABLE IF NOT EXISTS encomiendas (
   id                     SERIAL PRIMARY KEY,
   viaje_id               INTEGER REFERENCES viajes(id) ON DELETE SET NULL,

@@ -113,17 +113,17 @@ export default function MisTraslados() {
     <section className="mis-traslados">
       <div className="barra-pagina">
         <div>
-          <h2>Mis traslados</h2>
+          <h2>Viajes</h2>
           <p>Elegí un viaje y pedí tu lugar como pasajero o enviá una encomienda. El comisionista responde tu solicitud.</p>
         </div>
       </div>
 
-      <div className="pestanas" role="tablist" aria-label="Mis traslados">
+      <div className="pestanas" role="tablist" aria-label="Viajes y solicitudes">
         <button type="button" role="tab" aria-selected={pestana === 'viajes'} className={pestana === 'viajes' ? 'activo' : ''} onClick={() => setPestana('viajes')}>
-          Viajes disponibles
+          Viajes
         </button>
         <button type="button" role="tab" aria-selected={pestana === 'solicitudes'} className={pestana === 'solicitudes' ? 'activo' : ''} onClick={() => setPestana('solicitudes')}>
-          Mis solicitudes{solicitudes.length > 0 && <span className="pestana-contador">{solicitudes.length}</span>}
+          Solicitudes{solicitudes.length > 0 && <span className="pestana-contador">{solicitudes.length}</span>}
         </button>
       </div>
 
@@ -225,7 +225,7 @@ export default function MisTraslados() {
       <div className="card">
         <div className="card-cabecera">
           <div>
-            <h2>Mis solicitudes</h2>
+            <h2>Solicitudes</h2>
             <p>Seguí el estado de lo que pediste y cancelá lo que ya no necesites antes de que el viaje inicie.</p>
           </div>
         </div>

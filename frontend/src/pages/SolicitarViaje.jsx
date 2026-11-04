@@ -304,7 +304,7 @@ export default function SolicitarViaje() {
 
   const migas = (
     <nav className="migas" aria-label="Ruta">
-      <button type="button" onClick={() => navegar('/mis-traslados')}>Mis traslados</button>
+      <button type="button" onClick={() => navegar('/mis-traslados')}>Viajes</button>
       <Icon nombre="right" tamano={14} />
       <strong>Solicitar viaje{viaje ? ` ${codigoViaje(viaje.viaje_id)}` : ''}</strong>
     </nav>
@@ -316,7 +316,7 @@ export default function SolicitarViaje() {
       <section>
         {migas}
         <Alerta tipo="aviso" titulo="Este viaje no está disponible">{errorCarga}</Alerta>
-        <button type="button" className="btn" onClick={() => navegar('/mis-traslados')}>Volver a Mis traslados</button>
+        <button type="button" className="btn" onClick={() => navegar('/mis-traslados')}>Volver a Viajes</button>
       </section>
     )
   }
@@ -474,10 +474,10 @@ export default function SolicitarViaje() {
               {(yaPasajero || yaEncomienda) && (
                 <p className="campo-ayuda" style={{ marginTop: 12 }}>
                   {yaPasajero && yaEncomienda
-                    ? 'Ya solicitaste como pasajero y como encomienda en este viaje. Para volver a solicitar, cancelá la solicitud anterior desde Mis traslados.'
+                    ? 'Ya solicitaste como pasajero y como encomienda en este viaje. Para volver a solicitar, cancelá la solicitud anterior desde Solicitudes.'
                     : yaPasajero
-                      ? 'Ya solicitaste viajar como pasajero en este viaje. Para volver a hacerlo, cancelá antes esa solicitud en Mis traslados.'
-                      : 'Ya solicitaste enviar una encomienda en este viaje. Para volver a hacerlo, cancelá antes esa solicitud en Mis traslados.'}
+                      ? 'Ya solicitaste viajar como pasajero en este viaje. Para volver a hacerlo, cancelá antes esa solicitud en Solicitudes.'
+                      : 'Ya solicitaste enviar una encomienda en este viaje. Para volver a hacerlo, cancelá antes esa solicitud en Solicitudes.'}
                 </p>
               )}
               {libres === 0 && !yaPasajero && <p className="campo-ayuda" style={{ marginTop: 12 }}>Este viaje ya no tiene lugares para pasajeros, pero podés enviar una encomienda.</p>}
