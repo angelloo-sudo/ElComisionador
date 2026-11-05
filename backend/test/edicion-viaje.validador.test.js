@@ -14,6 +14,10 @@ test('permite horarios válidos y capacidad entera', () => {
   assert.equal(validar({ hora_salida: '10:30', hora_llegada: '14:00', cupo_total: 8 }).continuo, true)
 })
 
+test('acepta cupo cero si el viaje todavía no tiene pasajeros confirmados', () => {
+  assert.equal(validar({ hora_salida: '10:30', hora_llegada: '14:00', cupo_total: 0 }).continuo, true)
+})
+
 test('rechaza origen, destino, fecha y otros campos no editables', () => {
   const { resultado, continuo } = validar({ hora_salida: '10:30', hora_llegada: '14:00', cupo_total: 8, origen: 'Córdoba' })
   assert.equal(continuo, false)

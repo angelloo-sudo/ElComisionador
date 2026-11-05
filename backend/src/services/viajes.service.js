@@ -70,7 +70,7 @@ async function extenderSerie(serieId, hasta) {
     await cliente.query('SELECT pg_advisory_xact_lock(hashtext($1))', [String(serieId)])
 
     const { rows } = await cliente.query(
-      `SELECT usuario_id, origen, destino, fecha::text AS fecha, hora_salida, hora_llegada,
+      `SELECT id, usuario_id, origen, destino, fecha::text AS fecha, hora_salida, hora_llegada,
               distancia_km, duracion_min, cupo_total, repeticion_dias
        FROM viajes WHERE serie_id = $1
        ORDER BY fecha DESC, hora_salida DESC LIMIT 1`,
@@ -111,13 +111,22 @@ async function extenderSerie(serieId, hasta) {
     const libres = fechas.filter((f) => !ocupadas.has(f))
 
     if (libres.length > 0) {
-      await cliente.query(
+      const { rows: nuevos } = await cliente.query(
         `INSERT INTO viajes (usuario_id, origen, destino, fecha, hora_salida, hora_llegada,
                              distancia_km, duracion_min, cupo_total, serie_id, repeticion_dias)
-         SELECT $1, $2, $3, f, $4, $5, $6, $7, $8, $9, $10 FROM unnest($11::date[]) AS f`,
+         SELECT $1, $2, $3, f, $4, $5, $6, $7, $8, $9, $10 FROM unnest($11::date[]) AS f RETURNING id`,
         [ultimo.usuario_id, ultimo.origen, ultimo.destino, ultimo.hora_salida, ultimo.hora_llegada,
          ultimo.distancia_km, ultimo.duracion_min, ultimo.cupo_total, serieId, ultimo.repeticion_dias, libres]
       )
+      if (nuevos.length) {
+        const { rows: paradas } = await cliente.query('SELECT orden, localidad, hora_estimada FROM paradas_viaje WHERE viaje_id = $1 ORDER BY orden', [ultimo.id])
+        for (const nuevo of nuevos) {
+          for (const p of paradas) await cliente.query(
+            'INSERT INTO paradas_viaje (viaje_id, orden, localidad, hora_estimada) VALUES ($1, $2, $3, $4)',
+            [nuevo.id, p.orden, p.localidad, p.hora_estimada],
+          )
+        }
+      }
     }
     await cliente.query('COMMIT')
     return libres.length

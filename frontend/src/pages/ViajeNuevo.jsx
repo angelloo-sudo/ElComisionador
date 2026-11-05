@@ -8,9 +8,12 @@ import Icon from '../components/Icon.jsx'
 import MapaRuta from '../components/MapaRuta.jsx'
 import { formatoDuracion, formatoKm, formatoPesos, horaDeLlegada, calcularMonto } from '../utils/tarifa.js'
 import { Campo, Alerta, Toast, BadgeEstado, formatoFecha } from '../components/ui.jsx'
+import { calcularLlegadasAcumuladas } from '../utils/horarios.js'
 
 const HORAS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
 const MINUTOS = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'))
+const horaValida = (valor) => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(valor ?? '')
+const claveParada = () => globalThis.crypto?.randomUUID?.() ?? `parada-${Date.now()}-${Math.random()}`
 
 // Orden de la semana arrancando en lunes. "valor" coincide con Date.getDay() (0 = domingo).
 const DIAS_SEMANA = [
@@ -50,13 +53,14 @@ export function SelectorHora({ hora, minuto, onHora, onMinuto, etiqueta }) {
   )
 }
 
-const FORM_VACIO = { origen: '', destino: '', fecha: '', cupo_total: '' }
+const FORM_VACIO = { origen: '', destino: '', fecha: '', cupo_total: '0' }
 
 export default function ViajeNuevo() {
   const navegar = useNavigate()
   const { localidades, cargando: cargandoLocalidades, error: errorLocalidades } = useLocalidades()
 
   const [form, setForm] = useState(FORM_VACIO)
+  const [paradas, setParadas] = useState([])
   const [salida, setSalida] = useState(['', ''])
   const [modoEstimacion, setModoEstimacion] = useState('mapa') // mapa | llegada | duracion
   const [llegada, setLlegada] = useState(['', ''])
@@ -96,11 +100,18 @@ export default function ViajeNuevo() {
 
   function cambiarCupo(delta) {
     const actual = Number(form.cupo_total) || 0
-    cambiar('cupo_total', String(Math.max(1, actual + delta)))
+    cambiar('cupo_total', String(Math.max(0, actual + delta)))
   }
 
   const horaSalida = salida[0] && salida[1] ? `${salida[0]}:${salida[1]}` : ''
   const recorridoElegido = Boolean(form.origen && form.destino)
+  const localidadesParadas = paradas.map((p) => p.localidad)
+  const firmaRecorrido = JSON.stringify([form.origen, ...localidadesParadas, form.destino])
+  const horariosAuto = paradas.length > 0 && ruta?.firma === firmaRecorrido && !ruta.aproximada
+    ? calcularLlegadasAcumuladas(horaSalida, ruta.tramos?.map((t) => t.duracion_min) ?? [])
+    : null
+  const llegadasParadas = horariosAuto?.slice(0, paradas.length) ?? []
+  const horaLlegadaAuto = horariosAuto?.at(-1) ?? ''
   const duracionRuta = ruta && !ruta.aproximada ? ruta.duracion_min : null
   const horaLlegadaManual = llegada[0] && llegada[1] ? `${llegada[0]}:${llegada[1]}` : ''
   const duracionMin = modoEstimacion === 'duracion'
@@ -108,7 +119,7 @@ export default function ViajeNuevo() {
     : modoEstimacion === 'llegada' && horaLlegadaManual && horaSalida
       ? (Number(horaLlegadaManual.slice(0, 2)) * 60 + Number(horaLlegadaManual.slice(3)) - Number(horaSalida.slice(0, 2)) * 60 - Number(horaSalida.slice(3)))
       : duracionRuta
-  const horaLlegada = modoEstimacion === 'llegada'
+  const horaLlegada = paradas.length ? horaLlegadaAuto : modoEstimacion === 'llegada'
     ? horaLlegadaManual
     : horaDeLlegada(horaSalida, duracionMin) ?? ''
   const montoPorPasajero = calcularMonto({ precioKm, distanciaKm: ruta && !ruta.aproximada ? ruta.distancia_km : null })
@@ -117,6 +128,7 @@ export default function ViajeNuevo() {
     const e = {}
     if (!form.origen) e.origen = 'Selecciona la localidad de origen'
     if (!form.destino) e.destino = 'Selecciona la localidad de destino'
+    if (form.origen && form.origen === form.destino) e.destino = 'El origen y el destino deben ser distintos'
     if (!form.fecha) e.fecha = 'Indica la fecha del viaje'
     else if (form.fecha < hoyISO()) e.fecha = 'La fecha del viaje no puede ser anterior a hoy'
     if (!horaSalida) e.salida = 'Ingresa un horario válido (hh:mm)'
@@ -129,8 +141,25 @@ export default function ViajeNuevo() {
       if (!duracionManual || !Number.isInteger(minutos) || minutos < 1) e.duracion = 'Ingresa una duración en minutos mayor a cero'
       else if (horaSalida && (Number(horaSalida.slice(0, 2)) * 60 + Number(horaSalida.slice(3)) + minutos > 1439)) e.duracion = 'El viaje debe terminar antes de la medianoche del mismo día'
     }
+    const puntos = [form.origen, ...paradas.map((p) => p.localidad), form.destino].filter(Boolean)
+    if (new Set(puntos.map((p) => p.toLocaleLowerCase())).size !== puntos.length) e.paradas = 'No repitas localidades en el recorrido'
+    if (paradas.length && !horariosAuto) e.paradas = ruta?.firma === firmaRecorrido && ruta.aproximada
+      ? 'No se pudieron calcular tiempos exactos para todos los tramos; intentá nuevamente'
+      : ruta?.firma === firmaRecorrido && !ruta.aproximada
+        ? 'El horario calculado supera la medianoche del mismo día'
+        : 'Esperando el cálculo exacto de los tramos'
+    let horaAnterior = horaSalida
+    for (let i = 0; i < paradas.length; i++) {
+      const p = paradas[i]
+      if (!p.localidad) e[`parada_${i}`] = 'Selecciona una localidad'
+      const horaParada = paradas.length ? llegadasParadas[i] : p.hora_estimada
+      if (!horaValida(horaParada)) e[`parada_hora_${i}`] = 'No hay una hora calculada válida'
+      else if (horaAnterior && horaParada <= horaAnterior) e[`parada_hora_${i}`] = 'Debe ser posterior a la hora anterior'
+      if (horaParada) horaAnterior = horaParada
+    }
+    if (horaLlegada && horaAnterior && horaAnterior >= horaLlegada) e.paradas = 'Las paradas deben ocurrir antes de la llegada final'
     const cupo = Number(form.cupo_total)
-    if (!form.cupo_total || !Number.isInteger(cupo) || cupo < 1) e.cupo = 'Indica el cupo de pasajeros (mínimo 1)'
+    if (form.cupo_total === '' || !Number.isInteger(cupo) || cupo < 0) e.cupo = 'Indica un cupo de pasajeros igual o mayor a 0'
     if (tipoRepeticion === 'semanal' && diasSel.length === 0) e.dias = 'Elegí al menos un día de la semana para repetir el viaje'
     return e
   }
@@ -152,8 +181,9 @@ export default function ViajeNuevo() {
         ...form,
         cupo_total: Number(form.cupo_total),
         hora_salida: horaSalida,
-        ...(modoEstimacion === 'llegada' && { hora_llegada: horaLlegadaManual }),
-        ...(modoEstimacion === 'duracion' && { duracion_min: Number(duracionManual) }),
+        paradas: paradas.map((p, i) => ({ ...p, hora_estimada: paradas.length ? llegadasParadas[i] : p.hora_estimada })),
+        ...(paradas.length === 0 && modoEstimacion === 'llegada' && { hora_llegada: horaLlegadaManual }),
+        ...(paradas.length === 0 && modoEstimacion === 'duracion' && { duracion_min: Number(duracionManual) }),
         repeticion:
           tipoRepeticion === 'unico'
             ? { tipo: 'unico' }
@@ -181,6 +211,7 @@ export default function ViajeNuevo() {
 
   function registrarOtro() {
     setForm(FORM_VACIO)
+    setParadas([])
     setSalida(['', ''])
     setModoEstimacion('mapa')
     setLlegada(['', ''])
@@ -266,8 +297,23 @@ export default function ViajeNuevo() {
                 <LocalidadSelect label="Destino" value={form.destino} onChange={(v) => cambiar('destino', v)} localidades={localidades} deshabilitado={cargandoLocalidades} error={errores.destino} />
               </div>
               {recorridoElegido && form.origen !== form.destino && (
-                <MapaRuta origen={form.origen} destino={form.destino} alto={300} onRuta={setRuta} />
+                <MapaRuta origen={form.origen} destino={form.destino} paradasRecorrido={paradas.filter((p) => p.localidad)} alto={300} onRuta={setRuta} />
               )}
+              <div className="seccion" style={{ marginTop: 18 }}>
+                <p className="seccion-titulo">Paradas intermedias</p>
+                {paradas.map((parada, i) => <div className="grilla-3" key={parada.id ?? parada.clientKey} style={{ alignItems: 'end', marginBottom: 12 }}>
+                  <LocalidadSelect label={`Parada ${i + 1}`} value={parada.localidad} onChange={(localidad) => setParadas((actuales) => actuales.map((p, n) => n === i ? { ...p, localidad } : p))} localidades={localidades} deshabilitado={cargandoLocalidades} error={errores[`parada_${i}`]} />
+                  <Campo label="Hora estimada automática" requerido icono="clock" error={errores[`parada_hora_${i}`]}><input type="time" readOnly value={llegadasParadas[i] ?? ''} /></Campo>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button type="button" className="btn" disabled={i === 0} aria-label="Mover parada arriba" onClick={() => setParadas((a) => { const b = [...a]; [b[i - 1], b[i]] = [b[i], b[i - 1]]; return b })}>↑</button>
+                    <button type="button" className="btn" disabled={i === paradas.length - 1} aria-label="Mover parada abajo" onClick={() => setParadas((a) => { const b = [...a]; [b[i + 1], b[i]] = [b[i], b[i + 1]]; return b })}>↓</button>
+                    <button type="button" className="btn" onClick={() => setParadas((a) => a.filter((_, n) => n !== i))}>Quitar</button>
+                  </div>
+                </div>)}
+                {errores.paradas && <p className="campo-error">{errores.paradas}</p>}
+                <button type="button" className="btn" onClick={() => setParadas((a) => [...a, { clientKey: claveParada(), localidad: '', hora_estimada: '' }])}>Agregar parada</button>
+                {paradas.length > 0 && <p className="campo-ayuda">Las horas se calculan automáticamente tramo por tramo; no se agrega tiempo de espera en las paradas.</p>}
+              </div>
             </div>
 
             <div className="seccion">
@@ -283,20 +329,21 @@ export default function ViajeNuevo() {
                   <input type="text" readOnly tabIndex={-1} value={recorridoElegido ? (duracionMin != null ? formatoDuracion(duracionMin) : (ruta ? 'No disponible' : 'Calculando...')) : ''} placeholder="Automática" aria-label="Duración del viaje (calculada)" />
                 </Campo>}
               </div>
-              <div className="campo" style={{ marginTop: 14 }}>
+              {paradas.length === 0 && <div className="campo" style={{ marginTop: 14 }}>
                 <span className="campo-label">Estimación de llegada</span>
                 <div className="segmentado" role="radiogroup" aria-label="Método de estimación de llegada">
                   <button type="button" role="radio" aria-checked={modoEstimacion === 'mapa'} className={modoEstimacion === 'mapa' ? 'activo' : ''} onClick={() => setModoEstimacion('mapa')}>Usar mapa</button>
                   <button type="button" role="radio" aria-checked={modoEstimacion === 'llegada'} className={modoEstimacion === 'llegada' ? 'activo' : ''} onClick={() => setModoEstimacion('llegada')}>Ingresar llegada</button>
                   <button type="button" role="radio" aria-checked={modoEstimacion === 'duracion'} className={modoEstimacion === 'duracion' ? 'activo' : ''} onClick={() => setModoEstimacion('duracion')}>Ingresar duración</button>
                 </div>
-              </div>
-              {modoEstimacion === 'llegada' && <div className="grilla-2" style={{ marginTop: 12 }}>
+              </div>}
+              {paradas.length > 0 && <Campo label="Llegada estimada automática" soloLectura ayuda={horaLlegadaAuto ? 'Calculada acumulando los tramos del recorrido' : 'Esperando un cálculo exacto de la ruta'}><input type="time" readOnly value={horaLlegadaAuto} /></Campo>}
+              {paradas.length === 0 && modoEstimacion === 'llegada' && <div className="grilla-2" style={{ marginTop: 12 }}>
                 <Campo label="Hora estimada de llegada" requerido icono="clock" error={errores.llegada}>
                   <SelectorHora etiqueta="Hora estimada de llegada" hora={llegada[0]} minuto={llegada[1]} onHora={(h) => { setLlegada([h, llegada[1]]); setErrores((e) => ({ ...e, llegada: undefined })) }} onMinuto={(m) => { setLlegada([llegada[0], m]); setErrores((e) => ({ ...e, llegada: undefined })) }} />
                 </Campo>
               </div>}
-              {modoEstimacion === 'duracion' && <div className="grilla-2" style={{ marginTop: 12 }}>
+              {paradas.length === 0 && modoEstimacion === 'duracion' && <div className="grilla-2" style={{ marginTop: 12 }}>
                 <Campo label="Duración estimada (minutos)" requerido icono="clock" error={errores.duracion}>
                   <input type="number" min="1" step="1" value={duracionManual} onChange={(e) => { setDuracionManual(e.target.value); setErrores((actuales) => ({ ...actuales, duracion: undefined })) }} placeholder="Ej.: 45" />
                 </Campo>
@@ -307,7 +354,7 @@ export default function ViajeNuevo() {
               <p className="seccion-titulo">Cupo</p>
               <div className="grilla-2">
                 <Campo label="Cupo de pasajeros" requerido icono="seat" error={errores.cupo}>
-                  <input type="number" min="1" step="1" name="cupo_total" value={form.cupo_total} onChange={(e) => cambiar('cupo_total', e.target.value)} placeholder="Ej: 4" />
+                  <input type="number" min="0" step="1" name="cupo_total" value={form.cupo_total} onChange={(e) => cambiar('cupo_total', e.target.value)} placeholder="Ej: 4" />
                   <span className="stepper">
                     <button type="button" aria-label="Quitar un lugar" onClick={() => cambiarCupo(-1)}><Icon nombre="minus" tamano={14} /></button>
                     <button type="button" aria-label="Agregar un lugar" onClick={() => cambiarCupo(1)}><Icon nombre="plus" tamano={14} /></button>
@@ -357,7 +404,7 @@ export default function ViajeNuevo() {
             <div className="resumen-fila"><span>Distancia</span><strong>{ruta && !ruta.aproximada ? formatoKm(ruta.distancia_km) : '—'}</strong></div>
             <div className="resumen-fila"><span>Duración</span><strong>{formatoDuracion(duracionMin)}</strong></div>
             <div className="resumen-fila"><span>Llegada (aprox.)</span><strong>{horaLlegada || '—'}</strong></div>
-            <div className="resumen-fila"><span>Cupo</span><strong>{Number(form.cupo_total) > 0 ? `${form.cupo_total} pasajero${Number(form.cupo_total) === 1 ? '' : 's'}` : '—'}</strong></div>
+            <div className="resumen-fila"><span>Cupo</span><strong>{`${Number(form.cupo_total) || 0} pasajero${Number(form.cupo_total) === 1 ? '' : 's'}`}</strong></div>
             <div className="resumen-fila"><span>Repetición</span><strong>{textoRepeticion}</strong></div>
             <div className="resumen-fila"><span>Tu precio por km</span><strong>{precioKm ? formatoPesos(precioKm) : '—'}</strong></div>
             <div className="resumen-fila"><span>Precio por pasajero</span><strong>{formatoPesos(montoPorPasajero)}</strong></div>

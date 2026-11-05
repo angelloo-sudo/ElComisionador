@@ -1,7 +1,7 @@
 // US19 (cliente): formulario para solicitar un viaje publicado por el comisionista,
 // como pasajero o para enviar una encomienda. El comisionista la acepta o la rechaza.
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client.js'
 import Icon from '../components/Icon.jsx'
 import { Campo, Alerta, formatoFecha } from '../components/ui.jsx'
@@ -81,6 +81,7 @@ function SelectorEquipaje({ id, label, value, max, onChange, error }) {
 
 export default function SolicitarViaje() {
   const { id } = useParams()
+  const [parametros] = useSearchParams()
   const navegar = useNavigate()
   const [viaje, setViaje] = useState(null)
   const [cargando, setCargando] = useState(true)
@@ -111,7 +112,7 @@ export default function SolicitarViaje() {
     Promise.all([api.get(`/solicitudes/viajes-disponibles/${id}`), api.get('/auth/perfil').catch(() => null)])
       .then(([v, perfil]) => {
         setViaje(v)
-        setLoc({ origen: v.origen, destino: v.destino })
+        setLoc({ origen: parametros.get('desde') || v.origen, destino: parametros.get('hasta') || v.destino })
         const tomados = (v.mis_solicitudes ?? []).map((s) => s.tipo)
         if (v.cupos_disponibles === 0 || tomados.includes('pasajero')) setTipo('encomienda')
         if (perfil) {
@@ -120,7 +121,7 @@ export default function SolicitarViaje() {
       })
       .catch((err) => setErrorCarga(err.message))
       .finally(() => setCargando(false))
-  }, [id])
+  }, [id, parametros])
 
   const okOrigen = verif.origen?.estado === 'ok' ? verif.origen.clave : ''
   const okDestino = verif.destino?.estado === 'ok' ? verif.destino.clave : ''
@@ -201,7 +202,7 @@ export default function SolicitarViaje() {
   }
   const txt = (campo) => (e) => cambiar(campo, e.target.value)
 
-  const libres = viaje?.cupos_disponibles ?? 0
+  const libres = tramo?.estado === 'ok' ? tramo.cupos_disponibles_tramo : (viaje?.cupos_disponibles ?? 0)
   // Un mismo viaje admite una solicitud de pasajero y otra de encomienda; mientras la anterior de un tipo
   // siga vigente (pendiente o aceptada) no se puede repetir. Si se canceló o el comisionista la rechazó, se puede volver a pedir.
   const yaPasajero = (viaje?.mis_solicitudes ?? []).some((s) => s.tipo === 'pasajero')
@@ -321,8 +322,16 @@ export default function SolicitarViaje() {
     )
   }
 
-  const recorrido = `${viaje.origen} → ${viaje.destino}`
-  const salida = `${formatoFecha(`${viaje.fecha}T12:00:00`)} · ${viaje.hora_salida.slice(0, 5)}`
+  const horaLocalidad = (localidad) => localidad === viaje.origen ? viaje.hora_salida
+    : localidad === viaje.destino ? viaje.hora_llegada
+      : viaje.paradas?.find((p) => p.localidad === localidad)?.hora_estimada
+  const recorrido = `${loc.origen || viaje.origen} → ${loc.destino || viaje.destino}`
+  const horaTramoSalida = horaLocalidad(loc.origen) ?? viaje.hora_salida
+  const horaTramoLlegada = horaLocalidad(loc.destino) ?? viaje.hora_llegada
+  const minutosTramo = horaTramoSalida && horaTramoLlegada
+    ? Number(horaTramoLlegada.slice(0, 2)) * 60 + Number(horaTramoLlegada.slice(3, 5)) - Number(horaTramoSalida.slice(0, 2)) * 60 - Number(horaTramoSalida.slice(3, 5))
+    : viaje.duracion_min
+  const salida = `${formatoFecha(`${viaje.fecha}T12:00:00`)} · ${horaTramoSalida?.slice(0, 5) ?? '—'}`
 
   if (enviada) {
     return (
@@ -335,6 +344,7 @@ export default function SolicitarViaje() {
           <div className="exito-detalle">
             <div className="resumen-fila"><span>Viaje</span><strong>{codigoViaje(viaje.viaje_id)} · {recorrido}</strong></div>
             <div className="resumen-fila"><span>Salida</span><strong>{salida}</strong></div>
+            <div className="resumen-fila"><span>Llegada estimada</span><strong>{horaTramoLlegada?.slice(0, 5) ?? '—'}</strong></div>
             <div className="resumen-fila"><span>{enviada.tipo === 'pasajero' ? 'Subís en' : 'Se retira en'}</span><strong>{enviada.desde}</strong></div>
             <div className="resumen-fila"><span>{enviada.tipo === 'pasajero' ? 'Bajás en' : 'Se entrega en'}</span><strong>{enviada.hasta}</strong></div>
             <div className="resumen-fila"><span>Tipo</span><strong>{enviada.tipo === 'pasajero' ? `Pasajero${enviada.cantidad > 1 ? `s (${enviada.cantidad})` : ''}` : 'Encomienda'}</strong></div>
@@ -434,13 +444,14 @@ export default function SolicitarViaje() {
           <div className="viaje-detalle">
             <div className="resumen-fila"><span>Recorrido</span><strong>{recorrido}</strong></div>
             <div className="resumen-fila"><span>Salida</span><strong>{salida}</strong></div>
-            <div className="resumen-fila"><span>Duración</span><strong>{formatoDuracion(viaje.duracion_min)}</strong></div>
+            <div className="resumen-fila"><span>Llegada estimada</span><strong>{horaTramoLlegada?.slice(0, 5) ?? '—'}</strong></div>
+            <div className="resumen-fila"><span>Duración</span><strong>{formatoDuracion(minutosTramo > 0 ? minutosTramo : viaje.duracion_min)}</strong></div>
             <div className="resumen-fila"><span>Comisionista</span><strong>{`${viaje.comisionista_nombre} ${viaje.comisionista_apellido ?? ''}`.trim()}</strong></div>
-            <div className="resumen-fila"><span>Cupos para pasajeros</span><strong>{viaje.ocupados} / {viaje.cupo_total}</strong></div>
-            <div className="cupo-barra" aria-hidden="true"><span style={{ width: `${Math.min(100, (viaje.ocupados / Math.max(viaje.cupo_total, 1)) * 100)}%` }} /></div>
+            <div className="resumen-fila"><span>Cupos en este tramo</span><strong>{tramo?.estado === 'ok' ? tramo.ocupados_tramo : viaje.ocupados} / {viaje.cupo_total}</strong></div>
+            <div className="cupo-barra" aria-hidden="true"><span style={{ width: `${Math.min(100, ((tramo?.estado === 'ok' ? tramo.ocupados_tramo : viaje.ocupados) / Math.max(viaje.cupo_total, 1)) * 100)}%` }} /></div>
           </div>
           <div>
-            <MapaRuta origen={viaje.origen} destino={viaje.destino} alto={340} mostrarKm={false} tramo={tramo?.estado === 'ok' && !tramo.completo ? tramo : null} paradas={pinesOtras} />
+            <MapaRuta origen={viaje.origen} destino={viaje.destino} paradasRecorrido={viaje.paradas ?? []} alto={340} mostrarKm={false} tramo={tramo?.estado === 'ok' && !tramo.completo ? tramo : null} paradas={pinesOtras} />
             {otrasParadas.length > 0 && (
               <div className="paradas-cliente">
                 <b>Este viaje ya tiene paradas confirmadas</b>
@@ -603,7 +614,7 @@ export default function SolicitarViaje() {
             {monto == null && !tramoInvalido && tramo?.estado !== 'cargando' && <p className="nota-resumen" style={{ marginTop: 12 }}>El monto se acuerda con el comisionista.</p>}
             {!tramoInvalido && viaje && !viajeCompleto && monto != null && <p className="nota-resumen" style={{ marginTop: 12 }}>Pagás solo el tramo que recorrés, no el viaje completo.</p>}
             {tipo === 'pasajero' && cantidad > 0 && cantidad <= libres && (
-              <p className="nota-resumen">Si el comisionista acepta, el cupo pasa a <strong>{viaje.ocupados + cantidad} / {viaje.cupo_total}</strong>.</p>
+              <p className="nota-resumen">Si el comisionista acepta, este tramo pasa a <strong>{(tramo?.ocupados_tramo ?? viaje.ocupados) + cantidad} / {viaje.cupo_total}</strong>.</p>
             )}
           </div>
         </aside>

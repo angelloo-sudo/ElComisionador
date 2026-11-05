@@ -13,6 +13,7 @@ const hora = (h) => (h ? h.slice(0, 5) : '-')
 // Precio de una persona en ese viaje (lo calcula el sistema), o "A convenir" si no hay tarifa.
 function precioPorPasajero(v) {
   const monto = v.precio_pasajero == null ? null : Number(v.precio_pasajero)
+  if (v.requiere_calculo_tramo) return <span className="campo-ayuda">Se calcula para este tramo</span>
   return monto == null ? <span className="campo-ayuda">A convenir</span> : formatoPesos(monto)
 }
 
@@ -160,8 +161,9 @@ export default function MisTraslados() {
               </thead>
               <tbody>
                 {viajes.map((v) => (
-                  <tr key={v.viaje_id}>
-                    <td className="col-recorrido">{v.origen}<span className="flecha">→</span>{v.destino}</td>
+                  <tr key={v.opcion_id ?? v.viaje_id}>
+                    <td className="col-recorrido">{v.origen}<span className="flecha">→</span>{v.destino}
+                    </td>
                     <td>{fechaLocal(v.fecha)}</td>
                     <td>{hora(v.hora_salida)}</td>
                     <td>{formatoDuracion(v.duracion_min)}</td>
@@ -185,7 +187,7 @@ export default function MisTraslados() {
                         
                         <button type="button" className="btn btn-chico btn-primario" disabled={(v.mis_solicitudes ?? []).length >= 2}
                           title={(v.mis_solicitudes ?? []).length >= 2 ? 'Ya solicitaste como pasajero y como encomienda' : undefined}
-                          onClick={() => navegar(`/mis-traslados/solicitar/${v.viaje_id}`)}>
+                          onClick={() => navegar(`/mis-traslados/solicitar/${v.viaje_id}?desde=${encodeURIComponent(v.origen)}&hasta=${encodeURIComponent(v.destino)}`)}>
                           <Icon nombre="seat" tamano={13} /> Solicitar
                         </button>
                       </div>

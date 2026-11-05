@@ -6,6 +6,12 @@ import { rangoViaje, seSuperponen, extenderSeries, SQL_OCUPADOS } from '../servi
 import { hoyEnCordoba, obtenerEstadoViaje } from '../services/estado-viaje.js'
 import { datosDeViaje, sumarMinutos } from '../services/tarifa.service.js'
 import { validarAnticipacionRecordatorio } from '../validators/recordatorio.validador.js'
+import { calcularRuta, centroLocalidad } from '../services/geo.service.js'
+import { ubicarEnRuta } from '../services/tramo.service.js'
+import { calcularHorarioRecorrido } from '../services/horario-recorrido.service.js'
+
+const SQL_PARADAS = `COALESCE((SELECT json_agg(json_build_object('id', p.id, 'orden', p.orden, 'localidad', p.localidad, 'hora_estimada', to_char(p.hora_estimada, 'HH24:MI')) ORDER BY p.orden)
+  FROM paradas_viaje p WHERE p.viaje_id = v.id), '[]'::json) AS paradas`
 
 export async function obtenerRecordatorio(req, res, next) {
   try {
@@ -125,6 +131,7 @@ export async function listar(req, res, next) {
          SELECT v.*,
                 v.fecha::text AS fecha_iso,
                 ${SQL_OCUPADOS} AS ocupados,
+                ${SQL_PARADAS},
                 (v.fecha < $${valores.length + 1}::date) AS ya_paso
          FROM viajes v
          WHERE ${condiciones.join(' AND ')}
@@ -163,6 +170,7 @@ export async function obtener(req, res, next) {
       `SELECT v.*,
               v.fecha::text AS fecha_iso,
               ${SQL_OCUPADOS} AS ocupados,
+              ${SQL_PARADAS},
               (SELECT cm.precio_km FROM comisionistas cm WHERE cm.usuario_id = v.usuario_id) AS precio_km,
               COALESCE((
                 SELECT json_agg(s.nombre || ' ' || s.apellido || CASE WHEN s.cantidad_pasajeros > 1 THEN ' (' || s.cantidad_pasajeros || ' pasajeros)' ELSE '' END ORDER BY s.id)
@@ -189,6 +197,7 @@ export async function obtener(req, res, next) {
 export async function crear(req, res, next) {
   try {
     const { origen, destino, fecha, hora_salida, hora_llegada: llegadaIngresada, duracion_min: duracionIngresada, cupo_total, repeticion } = req.body
+    const paradas = req.body.paradas ?? []
     const usuarioId = req.usuario?.id
 
     // La ruta aporta distancia y una estimación automática. El comisionista puede
@@ -205,6 +214,36 @@ export async function crear(req, res, next) {
     } else if (duracionIngresada !== undefined && duracionIngresada !== null && duracionIngresada !== '') {
       duracion_min = Number(duracionIngresada)
       hora_llegada = sumarMinutos(hora_salida, duracion_min)
+    }
+
+    if (paradas.length) {
+      try {
+        const horario = await calcularHorarioRecorrido(origen.trim(), destino.trim(), paradas, hora_salida)
+        paradas.splice(0, paradas.length, ...horario.paradas)
+        ;({ hora_llegada, duracion_min, distancia_km } = horario)
+      } catch (error) {
+        const status = error.code === 'HORARIO_MEDIANOCHE' ? 400 : 503
+        return res.status(status).json({ mensaje: error.message })
+      }
+    }
+
+    if (paradas.some((p) => p.hora_estimada >= hora_llegada)) {
+      return res.status(400).json({ mensaje: 'Todas las paradas deben ocurrir antes de la llegada al destino final' })
+    }
+    if (paradas.length) {
+      try {
+        const rutaCompleta = await calcularRuta(origen.trim(), destino.trim())
+        if (rutaCompleta.aproximada) return res.status(503).json({ mensaje: 'No pudimos validar el orden geográfico de las paradas ahora. Probá de nuevo en unos minutos' })
+        let posicionAnterior = 0
+        for (const parada of paradas) {
+          const centro = await centroLocalidad(parada.localidad.trim())
+          const posicion = ubicarEnRuta(rutaCompleta.geometria, centro).s
+          if (posicion <= posicionAnterior) return res.status(400).json({ mensaje: `La parada ${parada.localidad} no respeta el orden geográfico del recorrido` })
+          posicionAnterior = posicion
+        }
+      } catch {
+        return res.status(503).json({ mensaje: 'No pudimos validar el recorrido en el mapa ahora. Probá de nuevo en unos minutos' })
+      }
     }
 
     // Fechas a crear: una sola si el viaje es unico, o todas las ocurrencias si se repite.
@@ -261,6 +300,13 @@ export async function crear(req, res, next) {
           [usuarioId, origen.trim(), destino.trim(), f, hora_salida, hora_llegada,
            distancia_km, duracion_min, cupo_total ?? 0, serieId, repeticionDias]
         )
+        for (let i = 0; i < paradas.length; i++) {
+          const parada = paradas[i]
+          await cliente.query(
+            `INSERT INTO paradas_viaje (viaje_id, orden, localidad, hora_estimada) VALUES ($1, $2, $3, $4)`,
+            [rows[0].id, i + 1, parada.localidad.trim(), parada.hora_estimada],
+          )
+        }
         creados.push(rows[0])
       }
       await cliente.query('COMMIT')
@@ -372,7 +418,8 @@ export async function actualizar(req, res, next) {
   try {
     const { id } = req.params
     const usuarioId = req.usuario?.id
-    const { hora_salida, hora_llegada, cupo_total } = req.body
+    const { hora_salida, cupo_total, paradas } = req.body
+    let hora_llegada = req.body.hora_llegada
     await cliente.query('BEGIN')
     const { rows } = await cliente.query(
       'SELECT id, origen, destino, estado, fecha::text AS fecha, hora_salida, hora_llegada, cupo_total FROM viajes WHERE id = $1 AND usuario_id = $2 FOR UPDATE',
@@ -383,6 +430,51 @@ export async function actualizar(req, res, next) {
     if (obtenerEstadoViaje(viaje.estado, viaje.fecha) !== 'programado') {
       await cliente.query('ROLLBACK')
       return res.status(409).json({ mensaje: 'Solo se pueden modificar viajes en estado Programado' })
+    }
+    const { rows: paradasAnteriores } = await cliente.query(
+      "SELECT id, orden, localidad, to_char(hora_estimada, 'HH24:MI') AS hora_estimada FROM paradas_viaje WHERE viaje_id = $1 ORDER BY orden", [id],
+    )
+    const paradasRecibidas = paradas ?? paradasAnteriores.map((p) => ({ ...p }))
+    let duracionActualizada = null
+    let distanciaActualizada = null
+    if (paradasAnteriores.length || paradasRecibidas.length) {
+      try {
+        const horario = await calcularHorarioRecorrido(viaje.origen, viaje.destino, paradasRecibidas, hora_salida)
+        paradasRecibidas.splice(0, paradasRecibidas.length, ...horario.paradas)
+        hora_llegada = horario.hora_llegada
+        duracionActualizada = horario.duracion_min
+        distanciaActualizada = horario.distancia_km
+      } catch (error) {
+        await cliente.query('ROLLBACK')
+        const status = error.code === 'HORARIO_MEDIANOCHE' ? 400 : 503
+        return res.status(status).json({ mensaje: error.message })
+      }
+    }
+    if (paradas !== undefined && paradas.length) {
+      const localidades = new Set([viaje.origen.trim().toLocaleLowerCase(), viaje.destino.trim().toLocaleLowerCase()])
+      for (const parada of paradas) {
+        const clave = parada.localidad.trim().toLocaleLowerCase()
+        if (localidades.has(clave)) {
+          await cliente.query('ROLLBACK')
+          return res.status(400).json({ mensaje: 'No repitas el origen, el destino ni localidades en el recorrido' })
+        }
+        localidades.add(clave)
+      }
+      try {
+        const ruta = await calcularRuta(viaje.origen, viaje.destino)
+        if (ruta.aproximada) throw new Error('ruta no disponible')
+        let anterior = 0
+        for (const parada of paradas) {
+          const centro = await centroLocalidad(parada.localidad.trim())
+          const posicion = ubicarEnRuta(ruta.geometria, centro).s
+          if (posicion <= anterior) throw new Error(`La parada ${parada.localidad} no respeta el orden geográfico del recorrido`)
+          anterior = posicion
+        }
+      } catch (error) {
+        await cliente.query('ROLLBACK')
+        const status = error.message.startsWith('La parada ') ? 400 : 503
+        return res.status(status).json({ mensaje: status === 400 ? error.message : 'No pudimos validar el recorrido en el mapa ahora. Probá de nuevo en unos minutos' })
+      }
     }
     const { rows: ocupacion } = await cliente.query(`SELECT ${SQL_OCUPADOS} AS ocupados FROM viajes v WHERE v.id = $1`, [id])
     const ocupados = ocupacion[0].ocupados
@@ -400,12 +492,36 @@ export async function actualizar(req, res, next) {
     }
     const { rows: actualizados } = await cliente.query(
       `UPDATE viajes SET hora_salida = $1, hora_llegada = $2,
-       duracion_min = EXTRACT(EPOCH FROM ($2::time - $1::time))::int / 60, cupo_total = $3
+       duracion_min = COALESCE($6, EXTRACT(EPOCH FROM ($2::time - $1::time))::int / 60),
+       distancia_km = COALESCE($7, distancia_km), cupo_total = $3
        WHERE id = $4 AND usuario_id = $5 AND estado = 'programado' RETURNING *`,
-      [hora_salida, hora_llegada, cupo_total, id, usuarioId],
+      [hora_salida, hora_llegada, cupo_total, id, usuarioId, duracionActualizada, distanciaActualizada],
     )
+    if (paradas !== undefined || paradasAnteriores.length) {
+      const idsExistentes = new Set(paradasAnteriores.map((p) => Number(p.id)))
+      const idsConservados = []
+      if (paradasAnteriores.length) await cliente.query('UPDATE paradas_viaje SET orden = orden + 100000 WHERE viaje_id = $1', [id])
+      for (let i = 0; i < paradasRecibidas.length; i++) {
+        const parada = paradasRecibidas[i]
+        const paradaId = Number(parada.id)
+        if (Number.isSafeInteger(paradaId) && idsExistentes.has(paradaId) && !idsConservados.includes(paradaId)) {
+          await cliente.query('UPDATE paradas_viaje SET orden = $1, localidad = $2, hora_estimada = $3 WHERE id = $4 AND viaje_id = $5',
+            [i + 1, parada.localidad.trim(), parada.hora_estimada, paradaId, id])
+          idsConservados.push(paradaId)
+        } else {
+          const { rows: insertadas } = await cliente.query('INSERT INTO paradas_viaje (viaje_id, orden, localidad, hora_estimada) VALUES ($1, $2, $3, $4) RETURNING id',
+            [id, i + 1, parada.localidad.trim(), parada.hora_estimada])
+          idsConservados.push(Number(insertadas[0].id))
+        }
+      }
+      const idsRemovidos = [...idsExistentes].filter((paradaId) => !idsConservados.includes(paradaId))
+      if (idsRemovidos.length) await cliente.query('DELETE FROM paradas_viaje WHERE viaje_id = $1 AND id = ANY($2::int[])', [id, idsRemovidos])
+    }
     const cambioHorario = viaje.hora_salida?.slice(0, 5) !== hora_salida || viaje.hora_llegada?.slice(0, 5) !== hora_llegada
-    const huboCambio = cambioHorario || Number(viaje.cupo_total) !== cupo_total
+    const paradasNuevas = paradas?.map((p) => ({ id: p.id ?? null, localidad: p.localidad.trim(), hora_estimada: p.hora_estimada.slice(0, 5) }))
+    const paradasPreviasNormalizadas = paradasAnteriores.map(({ id: paradaId, localidad, hora_estimada }) => ({ id: paradaId, localidad, hora_estimada }))
+    const cambioParadas = paradasNuevas !== undefined && JSON.stringify(paradasNuevas) !== JSON.stringify(paradasPreviasNormalizadas)
+    const huboCambio = cambioHorario || cambioParadas || Number(viaje.cupo_total) !== cupo_total
     if (huboCambio) {
       if (cambioHorario) {
         await cliente.query(

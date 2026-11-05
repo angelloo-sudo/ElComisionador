@@ -49,7 +49,7 @@ export function generarFechas(fecha, repeticion) {
 }
 
 export function validarViaje(req, res, next) {
-  const { origen, destino, fecha, hora_salida, hora_llegada, duracion_min, cupo_total, repeticion } = req.body
+  const { origen, destino, fecha, hora_salida, hora_llegada, duracion_min, cupo_total, repeticion, paradas } = req.body
 
   const errores = []
 
@@ -65,6 +65,33 @@ export function validarViaje(req, res, next) {
     errores.push('El destino es obligatorio')
   } else if (esLocalidadValida(destino) === false) {
     errores.push('El destino debe ser una localidad de la lista de Córdoba')
+  }
+
+  if (typeof origen === 'string' && typeof destino === 'string' && origen.trim() && origen.trim() === destino.trim()) {
+    errores.push('El origen y el destino deben ser localidades distintas')
+  }
+
+  if (paradas !== undefined && !Array.isArray(paradas)) {
+    errores.push('Las paradas deben enviarse como una lista')
+  } else if (Array.isArray(paradas)) {
+    const localidades = new Set([String(origen ?? '').trim().toLocaleLowerCase(), String(destino ?? '').trim().toLocaleLowerCase()])
+    let horaAnterior = hora_salida
+    paradas.forEach((parada, i) => {
+      if (!parada || typeof parada.localidad !== 'string' || !parada.localidad.trim()) {
+        errores.push(`La localidad de la parada ${i + 1} es obligatoria`)
+        return
+      }
+      const localidad = parada.localidad.trim()
+      const clave = localidad.toLocaleLowerCase()
+      if (localidades.has(clave)) errores.push(`La localidad ${localidad} está repetida en el recorrido`)
+      localidades.add(clave)
+      if (!REGEX_HORA.test(parada.hora_estimada ?? '')) {
+        errores.push(`La hora estimada de la parada ${i + 1} debe tener formato HH:MM`)
+      } else {
+        if (REGEX_HORA.test(horaAnterior ?? '') && parada.hora_estimada <= horaAnterior) errores.push('Los horarios de las paradas deben ser posteriores y estar ordenados')
+        horaAnterior = parada.hora_estimada
+      }
+    })
   }
 
   let fechaValida = false
@@ -106,12 +133,17 @@ export function validarViaje(req, res, next) {
     }
   }
 
+  if (Array.isArray(paradas) && hora_llegada && REGEX_HORA.test(hora_llegada)
+      && paradas.some((p) => REGEX_HORA.test(p?.hora_estimada ?? '') && p.hora_estimada >= hora_llegada)) {
+    errores.push('Todas las paradas deben ocurrir antes de la llegada al destino final')
+  }
+
   if (cupo_total === undefined || cupo_total === null || cupo_total === '') {
     errores.push('El cupo total es obligatorio')
   } else {
     const cupoNum = Number(cupo_total)
-    if (!Number.isInteger(cupoNum) || cupoNum < 1) {
-      errores.push('El cupo total debe ser un numero entero mayor o igual a 1')
+    if (!Number.isInteger(cupoNum) || cupoNum < 0) {
+      errores.push('El cupo total debe ser un numero entero mayor o igual a 0')
     }
   }
 

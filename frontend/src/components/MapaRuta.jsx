@@ -34,7 +34,7 @@ const pin = (clase, letra) => L.divIcon({
 // paradas (opcional): paradas de otras solicitudes del viaje [{lat, lon, accion, estado, texto, n}].
 // rutaSugerida (opcional): [[lat, lon], ...] ruta propuesta al comisionista, dibujada en verde punteado.
 // mostrarKm = false oculta los kilometros (el cliente no ve el calculo del precio).
-export default function MapaRuta({ origen, destino, alto = 260, onRuta, mostrarLeyenda = true, tramo = null, mostrarKm = true, paradas = null, rutaSugerida = null }) {
+export default function MapaRuta({ origen, destino, alto = 260, onRuta, mostrarLeyenda = true, tramo = null, mostrarKm = true, paradas = null, rutaSugerida = null, paradasRecorrido = [] }) {
   const lienzo = useRef(null)
   const [ruta, setRuta] = useState(null)
   const [error, setError] = useState(null)
@@ -43,13 +43,20 @@ export default function MapaRuta({ origen, destino, alto = 260, onRuta, mostrarL
   useEffect(() => {
     let vigente = true
     setCargando(true); setError(null); setRuta(null); onRuta?.(null)
-    api.get(`/geo/ruta?origen=${encodeURIComponent(origen)}&destino=${encodeURIComponent(destino)}`)
-      .then((r) => { if (vigente) { setRuta(r); onRuta?.(r) } })
+    const puntos = [origen, ...paradasRecorrido.map((p) => p.localidad), destino]
+    const firma = JSON.stringify(puntos)
+    Promise.all(puntos.slice(0, -1).map((p, i) => api.get(`/geo/ruta?origen=${encodeURIComponent(p)}&destino=${encodeURIComponent(puntos[i + 1])}`)))
+      .then((tramos) => {
+        if (!vigente) return
+        const geometria = tramos.flatMap((t, i) => i ? t.geometria.slice(1) : t.geometria)
+        const r = { ...tramos[0], destino: tramos.at(-1).destino, geometria, tramos, firma, paradasCoords: tramos.slice(0, -1).map((t) => t.destino), distancia_km: tramos.reduce((n, t) => n + Number(t.distancia_km || 0), 0), duracion_min: tramos.reduce((n, t) => n + Number(t.duracion_min || 0), 0), aproximada: tramos.some((t) => t.aproximada) }
+        setRuta(r); onRuta?.(r)
+      })
       .catch((e) => { if (vigente) { setError(e.message); onRuta?.(null) } })
       .finally(() => { if (vigente) setCargando(false) })
     return () => { vigente = false }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [origen, destino])
+  }, [origen, destino, paradasRecorrido.map((p) => p.localidad).join('|')])
 
   useEffect(() => {
     if (!ruta || !lienzo.current) return undefined
@@ -69,6 +76,11 @@ export default function MapaRuta({ origen, destino, alto = 260, onRuta, mostrarL
     }).addTo(mapa)
     L.marker([ruta.origen.lat, ruta.origen.lon], { icon: pin('origen', 'A'), title: `Origen: ${origen}` }).addTo(mapa)
     L.marker([ruta.destino.lat, ruta.destino.lon], { icon: pin('destino', 'B'), title: `Destino: ${destino}` }).addTo(mapa)
+    paradasRecorrido.forEach((p, i) => {
+      const punto = ruta.paradasCoords?.[i]
+      if (punto) L.marker([punto.lat, punto.lon], { icon: pinParada('sube'), title: `${i + 1}. ${p.localidad}` })
+        .bindTooltip(`${i + 1}. ${p.localidad}`, { permanent: true, direction: 'top', className: 'mapa-etiqueta' }).addTo(mapa)
+    })
     if (conTramo) {
       L.polyline(tramo.geometria, { color: '#ffffff', weight: 9, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }).addTo(mapa)
       L.polyline(tramo.geometria, { color: '#7a2a3a', weight: 5, opacity: 1, lineCap: 'round', lineJoin: 'round' }).addTo(mapa)
@@ -94,7 +106,7 @@ export default function MapaRuta({ origen, destino, alto = 260, onRuta, mostrarL
     aviso.observe(lienzo.current)
     const t = setTimeout(() => { mapa.invalidateSize(); mapa.fitBounds(trazo.getBounds(), { padding: [60, 60] }) }, 150)
     return () => { clearTimeout(t); aviso.disconnect(); mapa.remove() }
-  }, [ruta, origen, destino, tramo, paradas, rutaSugerida])
+  }, [ruta, origen, destino, tramo, paradas, rutaSugerida, JSON.stringify(paradasRecorrido)])
 
   return (
     <div className="mapa-ruta">

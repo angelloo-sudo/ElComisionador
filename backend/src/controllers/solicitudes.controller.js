@@ -9,6 +9,7 @@ import { SQL_OCUPADOS } from '../services/viajes.service.js'
 import { validarDireccion } from '../services/geo.service.js'
 import { asegurarRutaDeViaje, calcularMonto } from '../services/tarifa.service.js'
 import { calcularTramo } from '../services/tramo.service.js'
+import { lugaresEnTramo } from '../services/capacidad-tramo.service.js'
 
 const TZ = "NOW() AT TIME ZONE 'America/Argentina/Cordoba'"
 const INICIO = "(v.fecha + COALESCE(v.hora_salida, TIME '00:00'))"
@@ -56,6 +57,8 @@ const SQL_MIS_SOLICITUDES = (n) => `COALESCE((SELECT json_agg(json_build_object(
 
 const CAMPOS_VIAJE_DISPONIBLE = `
   v.id AS viaje_id, v.origen, v.destino, v.fecha::text AS fecha, v.hora_salida, v.hora_llegada,
+  COALESCE((SELECT json_agg(json_build_object('orden', p.orden, 'localidad', p.localidad, 'hora_estimada', to_char(p.hora_estimada, 'HH24:MI')) ORDER BY p.orden)
+    FROM paradas_viaje p WHERE p.viaje_id = v.id), '[]'::json) AS paradas,
   v.duracion_min,
   CASE WHEN cm.precio_km IS NOT NULL AND v.distancia_km IS NOT NULL THEN ROUND(cm.precio_km * v.distancia_km, 2) END AS precio_pasajero,
   v.cupo_total, ${SQL_OCUPADOS} AS ocupados,
@@ -73,14 +76,28 @@ export async function listarViajesDisponibles(req, res, next) {
     const { origen, destino, fecha } = req.query
     const params = [req.usuario.id]
     let filtros = ''
-    if (origen) { params.push(`%${String(origen).trim()}%`); filtros += ` AND v.origen ILIKE $${params.length}` }
-    if (destino) { params.push(`%${String(destino).trim()}%`); filtros += ` AND v.destino ILIKE $${params.length}` }
+    if (origen) params.push(`%${String(origen).trim()}%`)
+    if (destino) params.push(`%${String(destino).trim()}%`)
+    const puntos = `(SELECT 0::int AS orden, v.origen AS localidad UNION ALL
+      SELECT p.orden, p.localidad FROM paradas_viaje p WHERE p.viaje_id = v.id UNION ALL
+      SELECT 2147483647::int, v.destino)`
+    if (origen && destino) {
+      filtros += ` AND EXISTS (SELECT 1 FROM ${puntos} o JOIN ${puntos} d ON o.orden < d.orden
+        WHERE o.localidad ILIKE $${params.length - 1} AND d.localidad ILIKE $${params.length})`
+    } else if (origen || destino) {
+      const n = params.length
+      filtros += ` AND EXISTS (SELECT 1 FROM ${puntos} p WHERE p.localidad ILIKE $${n})`
+    }
     if (fecha) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha))) return res.status(400).json({ mensaje: 'La fecha de búsqueda no es válida' })
       params.push(fecha); filtros += ` AND v.fecha = $${params.length}::date`
     }
     const { rows } = await query(
       `SELECT ${CAMPOS_VIAJE_DISPONIBLE},
+              COALESCE((SELECT json_agg(json_build_object('cantidad_pasajeros', s.cantidad_pasajeros,
+                'origen_localidad', s.origen_localidad, 'destino_localidad', s.destino_localidad))
+                FROM solicitudes_viaje s WHERE s.viaje_id = v.id AND s.tipo = 'pasajero' AND s.estado = 'aceptada'
+                  AND COALESCE(s.estado_pasajero, '') NOT IN ('ausente', 'cancelado_comisionista')), '[]'::json) AS reservas_capacidad,
               ${SQL_MIS_SOLICITUDES(1)}
        FROM viajes v JOIN usuarios u ON u.id = v.usuario_id
        LEFT JOIN comisionistas cm ON cm.usuario_id = v.usuario_id
@@ -89,7 +106,30 @@ export async function listarViajesDisponibles(req, res, next) {
        LIMIT 200`,
       params,
     )
-    res.json(rows)
+    const opciones = rows.flatMap(({ reservas_capacidad: reservas, ...viaje }) => {
+      const puntos = [
+        { localidad: viaje.origen, hora: viaje.hora_salida },
+        ...(viaje.paradas ?? []).map((p) => ({ localidad: p.localidad, hora: p.hora_estimada })),
+        { localidad: viaje.destino, hora: viaje.hora_llegada },
+      ]
+      const opcionesViaje = []
+      for (let i = 0; i < puntos.length - 1; i++) for (let j = i + 1; j < puntos.length; j++) {
+        if (origen && !puntos[i].localidad.toLocaleLowerCase().includes(String(origen).trim().toLocaleLowerCase())) continue
+        if (destino && !puntos[j].localidad.toLocaleLowerCase().includes(String(destino).trim().toLocaleLowerCase())) continue
+        const ocupados = lugaresEnTramo({ paradas: viaje.paradas ?? [], reservas: reservas ?? [], origen: viaje.origen, destino: viaje.destino,
+          desde: puntos[i].localidad, hasta: puntos[j].localidad })
+        const a = puntos[i].hora?.slice(0, 5) ?? viaje.hora_salida?.slice(0, 5)
+        const b = puntos[j].hora?.slice(0, 5) ?? viaje.hora_llegada?.slice(0, 5)
+        const minutos = a && b ? (Number(b.slice(0, 2)) * 60 + Number(b.slice(3)) - Number(a.slice(0, 2)) * 60 - Number(a.slice(3))) : viaje.duracion_min
+        opcionesViaje.push({ ...viaje, opcion_id: `${viaje.viaje_id}:${i}-${j}`, origen_viaje: viaje.origen, destino_viaje: viaje.destino,
+          origen: puntos[i].localidad, destino: puntos[j].localidad, hora_salida: a, hora_llegada: b,
+          duracion_min: minutos > 0 ? minutos : viaje.duracion_min, precio_pasajero: i === 0 && j === puntos.length - 1 ? viaje.precio_pasajero : null,
+          requiere_calculo_tramo: !(i === 0 && j === puntos.length - 1),
+          ocupados, cupos_disponibles: Math.max(Number(viaje.cupo_total ?? 0) - ocupados, 0) })
+      }
+      return opcionesViaje
+    })
+    res.json(opciones.slice(0, 200))
   } catch (e) { next(e) }
 }
 
@@ -150,7 +190,7 @@ const precioDePersona = (precioKm, km) => calcularMonto({ precioKm, distanciaKm:
 // Datos del viaje + tarifa del comisionista.
 async function datosDeViaje(viajeId) {
   const { rows } = await query(
-    `SELECT v.id, v.origen, v.destino, v.hora_salida, v.distancia_km, v.duracion_min, cm.precio_km
+    `SELECT v.id, v.origen, v.destino, v.hora_salida, v.distancia_km, v.duracion_min, v.cupo_total, cm.precio_km
      FROM viajes v LEFT JOIN comisionistas cm ON cm.usuario_id = v.usuario_id WHERE v.id = $1`,
     [viajeId],
   )
@@ -191,6 +231,13 @@ export async function tramoDeViaje(req, res, next) {
       desdeCp: q('desde_cp'), hastaCp: q('hasta_cp'),
     })
     if (r.error) return res.json({ estado: r.error.status === 400 ? 'invalido' : 'no_disponible', mensaje: r.error.mensaje })
+    const [{ rows: puntos }, { rows: reservas }] = await Promise.all([
+      query('SELECT localidad, orden FROM paradas_viaje WHERE viaje_id = $1 ORDER BY orden', [viajeId]),
+      query(`SELECT cantidad_pasajeros, origen_localidad, destino_localidad FROM solicitudes_viaje
+        WHERE viaje_id = $1 AND tipo = 'pasajero' AND estado = 'aceptada'
+        AND COALESCE(estado_pasajero, '') NOT IN ('ausente', 'cancelado_comisionista')`, [viajeId]),
+    ])
+    const ocupadosTramo = lugaresEnTramo({ paradas: puntos, reservas, origen: viaje.origen, destino: viaje.destino, desde, hasta })
     const precio = precioDePersona(r.precio_km, r.distancia_km)
     // Sin tramo calculado (viaje completo) el mapa usa la ruta completa del viaje.
     res.json({
@@ -200,6 +247,8 @@ export async function tramoDeViaje(req, res, next) {
       desde: r.tramo?.desde ?? null,
       hasta: r.tramo?.hasta ?? null,
       geometria: r.tramo?.geometria ?? null,
+      ocupados_tramo: ocupadosTramo,
+      cupos_disponibles_tramo: Math.max(Number(viaje.cupo_total ?? 0) - ocupadosTramo, 0),
     })
   } catch (e) { next(e) }
 }
@@ -255,7 +304,7 @@ export async function crear(req, res, next) {
 
   await conTransaccion(res, next, async (db) => {
     const { rows: viajes } = await db.query(
-      `SELECT v.id, v.estado, v.cupo_total, ${INICIO} > (${TZ}) AS antes_del_inicio, ${SQL_OCUPADOS} AS ocupados
+      `SELECT v.id, v.origen, v.destino, v.estado, v.cupo_total, ${INICIO} > (${TZ}) AS antes_del_inicio, ${SQL_OCUPADOS} AS ocupados
        FROM viajes v WHERE v.id = $1 FOR UPDATE OF v`,
       [viajeId],
     )
@@ -283,7 +332,15 @@ export async function crear(req, res, next) {
     }
 
     if (datos.tipo === 'pasajero') {
-      const libres = Math.max(Number(viaje.cupo_total ?? 0) - viaje.ocupados, 0)
+      const [{ rows: puntos }, { rows: reservas }] = await Promise.all([
+        db.query('SELECT localidad, orden FROM paradas_viaje WHERE viaje_id = $1 ORDER BY orden', [viajeId]),
+        db.query(`SELECT cantidad_pasajeros, origen_localidad, destino_localidad FROM solicitudes_viaje
+          WHERE viaje_id = $1 AND tipo = 'pasajero' AND estado = 'aceptada'
+          AND COALESCE(estado_pasajero, '') NOT IN ('ausente', 'cancelado_comisionista')`, [viajeId]),
+      ])
+      const ocupadosTramo = lugaresEnTramo({ paradas: puntos, reservas, origen: viaje.origen, destino: viaje.destino,
+        desde: datos.origen_localidad, hasta: datos.destino_localidad })
+      const libres = Math.max(Number(viaje.cupo_total ?? 0) - ocupadosTramo, 0)
       if (libres === 0) return abortar(409, 'El viaje ya no tiene cupos disponibles para pasajeros')
       if (datos.cantidad_pasajeros > libres) {
         return abortar(409, `Solo quedan ${libres} lugar${libres === 1 ? '' : 'es'} disponible${libres === 1 ? '' : 's'} en este viaje`)

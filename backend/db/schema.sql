@@ -76,6 +76,21 @@ CREATE TABLE IF NOT EXISTS viajes (
   creado_en         TIMESTAMP DEFAULT NOW()
 );
 
+-- Itinerario declarado por el comisionista. El origen y el destino siguen en viajes;
+-- las filas de esta tabla representan solamente las paradas intermedias. Los viajes
+-- anteriores conservan su recorrido directo sin necesitar filas de migracion.
+CREATE TABLE IF NOT EXISTS paradas_viaje (
+  id             SERIAL PRIMARY KEY,
+  viaje_id       INTEGER NOT NULL REFERENCES viajes(id) ON DELETE CASCADE,
+  orden          INTEGER NOT NULL CHECK (orden > 0),
+  localidad      VARCHAR(120) NOT NULL,
+  hora_estimada  TIME NOT NULL,
+  creado_en      TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE (viaje_id, orden),
+  UNIQUE (viaje_id, localidad)
+);
+CREATE INDEX IF NOT EXISTS paradas_viaje_recorrido_idx ON paradas_viaje (viaje_id, orden);
+
 -- US26: recordatorio automatico del comisionista para un viaje.
 CREATE TABLE IF NOT EXISTS recordatorios_viaje (
   id                       SERIAL PRIMARY KEY,

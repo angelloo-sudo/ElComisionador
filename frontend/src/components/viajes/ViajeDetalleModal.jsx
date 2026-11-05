@@ -137,10 +137,14 @@ export default function ViajeDetalleModal({ viajeId, onClose, onCancelar, onModi
               </form>
             )}
             <ParadasViaje datos={paradas} verSugerida={verSugerida} onVerSugerida={setVerSugerida} />
+            {viaje.paradas?.length > 0 && <div className="seccion">
+              <p className="seccion-titulo">Itinerario publicado</p>
+              <ol>{viaje.paradas.map((p) => <li key={p.orden}>{p.localidad} · {p.hora_estimada}</li>)}</ol>
+            </div>}
             <PasajerosViaje viajeId={viaje.id} estadoViaje={viaje.estado} onCambio={recargar} />
           </div>
           <div className="detalle-mapa">
-            <MapaRuta origen={viaje.origen} destino={viaje.destino} alto={460}
+            <MapaRuta origen={viaje.origen} destino={viaje.destino} paradasRecorrido={viaje.paradas ?? []} alto={460}
               paradas={pines} rutaSugerida={geometriaSugerida} mostrarKm={!verSugerida} />
           </div>
         </div>

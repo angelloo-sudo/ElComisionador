@@ -22,7 +22,7 @@ function validar(body) {
 
 const viajeBase = {
   origen: 'Achiras',
-  destino: 'Achiras',
+  destino: 'Córdoba (Capital)',
   fecha: '2028-02-29',
   hora_salida: '10:00',
   cupo_total: 2,
@@ -44,10 +44,35 @@ describe('validador de fechas de viaje', () => {
     assert.equal(res.statusCode, null)
   })
 
+  it('acepta registrar un viaje con cupo inicial de cero', () => {
+    const { continuo, res } = validar({ ...viajeBase, cupo_total: 0 })
+    assert.equal(continuo, true)
+    assert.equal(res.statusCode, null)
+  })
+
   it('acepta una hora estimada de llegada posterior a la salida', () => {
     const { continuo, res } = validar({ ...viajeBase, hora_llegada: '11:30' })
     assert.equal(continuo, true)
     assert.equal(res.statusCode, null)
+  })
+
+  it('acepta paradas intermedias en orden horario y con localidades distintas', () => {
+    const { continuo, res } = validar({ ...viajeBase, hora_llegada: '14:00', paradas: [
+      { localidad: 'Río Cuarto', hora_estimada: '11:00' },
+      { localidad: 'Villa María', hora_estimada: '12:30' },
+    ] })
+    assert.equal(continuo, true)
+    assert.equal(res.statusCode, null)
+  })
+
+  it('rechaza paradas duplicadas y horarios fuera del orden del viaje', () => {
+    const { continuo, res } = validar({ ...viajeBase, hora_llegada: '14:00', paradas: [
+      { localidad: 'Río Cuarto', hora_estimada: '12:00' },
+      { localidad: 'Río Cuarto', hora_estimada: '11:00' },
+    ] })
+    assert.equal(continuo, false)
+    assert.ok(res.body.errores.some((error) => error.includes('repetida')))
+    assert.ok(res.body.errores.some((error) => error.includes('ordenados')))
   })
 
   it('acepta una duración estimada que termina el mismo día', () => {
