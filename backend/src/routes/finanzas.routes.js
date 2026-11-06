@@ -3,6 +3,8 @@ import * as finanzas from '../controllers/finanzas.controller.js'
 import * as gastos from '../controllers/gastos.controller.js'
 import * as ingresos from '../controllers/ingresos.controller.js'
 import * as tiposGasto from '../controllers/tipos-gasto.controller.js'
+import * as reportesRentabilidad from '../controllers/reportes-rentabilidad.controller.js'
+import * as graficosRentabilidad from '../controllers/graficos-rentabilidad.controller.js'
 import { validarGasto, validarTipoGasto } from '../validators/gasto.validador.js'
 import { autenticar, permitirRoles } from '../middlewares/auth.middleware.js'
 
@@ -18,7 +20,11 @@ router.get('/ingresos/:id', soloComisionista, ingresos.obtener)                 
 router.put('/ingresos/:id', soloComisionista, ingresos.modificar)                            // US38
 router.patch('/ingresos/:id/anular', soloComisionista, ingresos.anular)                      // US39
 router.get('/viaje/:viajeId/ganancia', finanzas.gananciaViaje) // Epica 8 (pendiente)
-router.get('/rentabilidad', finanzas.rentabilidad)  // Epica 8 (pendiente)
+router.get('/rentabilidad', soloComisionista, finanzas.rentabilidad) // US49
+router.get('/reportes-rentabilidad', soloComisionista, reportesRentabilidad.listar) // US50
+router.get('/reportes-rentabilidad/:id', soloComisionista, reportesRentabilidad.obtener) // US50
+router.get('/graficos-rentabilidad/periodos', soloComisionista, graficosRentabilidad.porPeriodo) // US51
+router.get('/graficos-rentabilidad/viajes', soloComisionista, graficosRentabilidad.porViaje) // US51
 
 // Epica 7 - Tipos de gasto (se declaran antes que /gastos/:id para no mezclar rutas).
 router.get('/tipos-gasto', soloComisionista, tiposGasto.listar)                              // US47

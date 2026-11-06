@@ -11,6 +11,8 @@ import geoRoutes from './geo.routes.js'
 import tarifaRoutes from './tarifa.routes.js'
 import resumenRoutes from './resumen.routes.js'
 import notificacionesRoutes from './notificaciones.routes.js'
+import verificacionesRoutes from './verificaciones.routes.js'
+import historialRoutes from './historial.routes.js'
 
 const router = Router()
 
@@ -26,5 +28,7 @@ router.use('/geo', geoRoutes)
 router.use('/tarifa', tarifaRoutes)
 router.use('/resumen', resumenRoutes)
 router.use('/notificaciones', notificacionesRoutes)
+router.use('/verificaciones', verificacionesRoutes)
+router.use('/historial', historialRoutes)
 
 export default router

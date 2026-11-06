@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import { api, guardarSesion, cerrarSesion } from '../api/client.js'
 import Avatar from '../components/Avatar.jsx'
 import Icon from '../components/Icon.jsx'
 import { Campo, CampoPassword, Alerta, Toast, Modal, formatoFecha } from '../components/ui.jsx'
 import { prepararFotoPerfil, ACEPTA_FOTOS } from '../utils/imagen.js'
+import '../styles/verificacion.css'
 
 const formularioInicial = {
   nombre: '', apellido: '', email: '', password: '', confirmarPassword: '',
@@ -342,6 +344,13 @@ export default function Perfil({ onCuentaDadaDeBaja }) {
               )}
             </div>
           </div>
+
+          {['cliente', 'comisionista'].includes(perfil.rol) && (
+            <div className="card verif-perfil-acceso">
+              <div><h3>Verificación preliminar de identidad</h3><p>Consultá el estado de tu solicitud o comenzá una verificación para comparar tus datos.</p></div>
+              <Link className="btn btn-primario" to="/verificacion"><Icon nombre="idcard" tamano={16} /> Abrir verificación</Link>
+            </div>
+          )}
 
           <div className="baja-card">
             <div>

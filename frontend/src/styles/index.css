@@ -473,6 +473,31 @@ textarea.area:focus { border-color: var(--foco); }
 .filtros { padding: 18px 20px; margin-bottom: 20px; display: grid; grid-template-columns: repeat(4, 1fr) auto; gap: 14px; align-items: end; }
 .filtros .acciones { display: flex; gap: 8px; }
 .tabla-wrap { overflow-x: auto; }
+.historial-lista { display: grid; gap: 12px; }
+.historial-modal-cabecera { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 14px; }
+.historial-modal-cabecera h2 { font-size: 18px; }
+.modal.modal-extra { max-width: 760px; }
+.historial-filtros { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.historial-filtros .acciones { grid-column: 1 / -1; }
+.historial-nota-filtro { grid-column: 1 / -1; color: var(--texto-3); }
+.historial-item { padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.historial-item p { color: var(--texto-2); margin: 5px 0; }
+.historial-item small { color: var(--texto-3); }
+.historial-item-acciones { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.historial-vacio { padding: 26px; color: var(--texto-2); text-align: center; }
+.historial-detalle { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 22px; margin: 20px 0; }
+.historial-detalle > div { padding: 11px 0; border-bottom: 1px solid var(--divisor); }
+.historial-detalle dt { color: var(--texto-3); font-size: 12px; margin-bottom: 3px; }
+.historial-detalle dd { margin: 0; overflow-wrap: anywhere; }
+.historial-detalle-seccion { border-top: 1px solid var(--divisor); padding-top: 16px; margin-top: 16px; }
+.historial-detalle-seccion h3 { font-size: 15px; margin-bottom: 10px; }
+.historial-detalle-seccion ol { padding-left: 23px; color: var(--texto-2); }
+.historial-detalle-seccion li { padding: 4px 0; }
+@media (max-width: 600px) {
+  .historial-item { align-items: flex-start; flex-direction: column; }
+  .historial-item-acciones { width: 100%; justify-content: space-between; }
+  .historial-detalle { grid-template-columns: 1fr; }
+}
 .tabla { width: 100%; border-collapse: collapse; }
 .tabla th { text-align: left; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--texto-3); font-weight: 600; padding: 14px 12px; border-bottom: 1px solid var(--divisor); white-space: nowrap; }
 .tabla td { padding: 14px 12px; border-bottom: 1px solid var(--divisor); white-space: nowrap; }
@@ -1081,3 +1106,99 @@ textarea.area:focus { border-color: var(--foco); }
 .select-inline:focus-visible { outline: 2px solid var(--foco); outline-offset: 1px; }
 .select-inline:disabled { opacity: .6; cursor: progress; }
 .select-inline option { background: var(--card); color: var(--texto); }
+/* US49 - Reporte de rentabilidad */
+.rentabilidad-filtros { grid-template-columns: repeat(2, minmax(180px, 1fr)) auto; }
+.rentabilidad-resumen { margin: 20px 0; padding: 22px; }
+.rentabilidad-resumen-cabecera { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.rentabilidad-resumen-cabecera h3 { font-size: 16px; font-weight: 600; }
+.rentabilidad-resumen-cabecera p { margin-top: 4px; color: var(--texto-2); }
+.rentabilidad-estado { display: inline-flex; align-items: center; border: 1px solid; border-radius: 999px; padding: 5px 11px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.rentabilidad-estado.positivo { color: var(--verde-texto); background: var(--verde-fondo); border-color: var(--verde-borde); }
+.rentabilidad-estado.negativo { color: var(--rojo-texto); background: var(--rojo-fondo); border-color: var(--rojo-borde); }
+.rentabilidad-estado.neutro { color: var(--texto-2); background: var(--hover); border-color: var(--borde); }
+.rentabilidad-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }
+.rentabilidad-kpis > div { min-width: 0; padding: 14px; border: 1px solid var(--borde); border-radius: 12px; background: var(--input); }
+.rentabilidad-kpis span { display: block; color: var(--texto-2); font-size: 12px; }
+.rentabilidad-kpis strong { display: block; margin-top: 6px; font-size: clamp(17px, 2vw, 22px); font-weight: 650; overflow-wrap: anywhere; }
+.rentabilidad-resultado { border-color: var(--borde-fuerte) !important; }
+.rentabilidad-acciones { display: flex; justify-content: flex-end; margin-top: 16px; }
+.rentabilidad-detalles { display: grid; gap: 18px; }
+.rentabilidad-tabla-card { overflow: hidden; }
+.rentabilidad-tabla-card .num { text-align: right; }
+.rentabilidad-tabla-card tfoot th { padding: 14px 12px; border-top: 1px solid var(--borde-fuerte); color: var(--texto); }
+.rentabilidad-vacio { padding: 20px 16px; }
+.rentabilidad-total-vacio { display: flex; justify-content: space-between; padding: 14px 20px; border-top: 1px solid var(--divisor); }
+@media (max-width: 1000px) {
+  .rentabilidad-filtros { grid-template-columns: 1fr 1fr; }
+  .rentabilidad-filtros > button { justify-self: start; }
+}
+@media (max-width: 760px) {
+  .rentabilidad-kpis { grid-template-columns: 1fr; }
+  .rentabilidad-resumen { padding: 17px; }
+  .rentabilidad-resumen-cabecera { flex-direction: column; }
+  .rentabilidad-filtros { grid-template-columns: 1fr; }
+}
+.reportes-sin-datos { display: grid; justify-items: center; gap: 12px; padding: 42px 20px; text-align: center; }
+.reportes-filtros { margin: 0 0 18px; grid-template-columns: repeat(2, minmax(170px, 1fr)) auto; }
+.reportes-filtros .acciones { align-self: end; }
+.reportes-sin-datos > .icono { color: var(--texto-2); }
+.reportes-sin-datos p { color: var(--texto-2); max-width: 440px; }
+.badge-demo { display: inline-flex; margin-left: 8px; padding: 2px 7px; border-radius: 999px; background: var(--ambar-fondo); border: 1px solid var(--ambar-borde); color: var(--ambar-texto); font-size: 10px; font-weight: 600; }
+.reportes-paginacion { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 2px; color: var(--texto-2); }
+.reportes-paginacion > div { display: flex; gap: 8px; }
+.rentabilidad-viajes { margin-top: 20px; }
+.rentabilidad-generales { margin-top: 18px; padding: 0 20px 16px; }
+.rentabilidad-general-cantidad { margin-top: 12px; color: var(--texto-2); font-size: 12px; }
+.rentabilidad-viajes-grilla { display: grid; gap: 12px; }
+.rentabilidad-viaje { padding: 18px 20px; }
+.rentabilidad-viaje-titulo { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.rentabilidad-viaje-titulo strong, .rentabilidad-viaje-titulo span { display: block; }
+.rentabilidad-viaje-titulo > div > span { margin-top: 3px; color: var(--texto-2); font-size: 12px; }
+.rentabilidad-viaje-valores { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding-top: 15px; margin-top: 14px; border-top: 1px solid var(--divisor); }
+.rentabilidad-viaje-valores span { color: var(--texto-2); font-size: 12px; }
+.rentabilidad-viaje-valores strong { display: block; color: var(--texto); margin-top: 4px; font-size: 15px; }
+@media (max-width: 760px) {
+  .reportes-paginacion { align-items: flex-start; flex-direction: column; }
+  .rentabilidad-viaje-titulo { flex-direction: column; }
+  .rentabilidad-viaje-valores { grid-template-columns: 1fr; }
+  .reportes-filtros { grid-template-columns: 1fr; }
+  .reportes-filtros .acciones { flex-wrap: wrap; }
+}
+
+/* US51 - Gráficos actuales de rentabilidad */
+.graficos-rentabilidad { display: grid; gap: 18px; }
+.graficos-controles { padding: 18px 20px 4px; }
+.graficos-modalidades { margin-bottom: 18px; }
+.graficos-filtros { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; align-items: end; padding-bottom: 16px; }
+.graficos-filtros label { display: grid; gap: 7px; color: var(--texto-2); font-size: 13px; }
+.graficos-filtros input, .graficos-filtros select { min-width: 0; height: 42px; padding: 0 11px; border: 1px solid var(--borde); border-radius: 10px; background: var(--input); color: var(--texto); font: inherit; }
+.graficos-card, .graficos-tabla-card { min-width: 0; padding: 20px; }
+.graficos-card-titulo { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.graficos-card-titulo h3, .graficos-tabla-card h3, .graficos-generales h3 { font-size: 16px; font-weight: 600; }
+.graficos-card-titulo p, .graficos-generales > p { margin-top: 5px; color: var(--texto-2); font-size: 13px; }
+.graficos-leyenda { display: flex; flex-wrap: wrap; gap: 12px 18px; color: var(--texto-2); font-size: 12px; }
+.graficos-leyenda > span { display: inline-flex; align-items: center; gap: 6px; }
+.graficos-swatch { width: 11px; height: 11px; border-radius: 3px; }
+.graficos-swatch.resultado { background: linear-gradient(135deg, var(--verde-texto) 0 50%, var(--rojo-texto) 50%); }
+.graficos-svg-scroll { width: 100%; margin-top: 12px; overflow-x: auto; overscroll-behavior-inline: contain; }
+.graficos-svg { display: block; width: 100%; min-width: 640px; height: auto; overflow: visible; }
+.graficos-cuadricula { stroke: var(--borde); stroke-width: 1; stroke-dasharray: 3 5; }
+.graficos-eje-cero { stroke: var(--texto-2); stroke-width: 1.5; }
+.graficos-eje-texto, .graficos-etiqueta { fill: var(--texto-2); font-size: 11px; }
+.graficos-etiqueta { font-size: 10px; }
+.graficos-vacio { padding: 28px 12px; color: var(--texto-2); text-align: center; }
+.graficos-tabla-card { overflow: hidden; }
+.graficos-tabla-card h3 { margin-bottom: 14px; }
+.graficos-subtexto { display: block; margin-top: 3px; color: var(--texto-2); font-size: 11px; }
+.graficos-generales { padding: 18px 20px; }
+.graficos-generales dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+.graficos-generales dl > div { min-width: 0; padding: 12px; border: 1px solid var(--borde); border-radius: 10px; background: var(--input); }
+.graficos-generales dt { color: var(--texto-2); font-size: 12px; }
+.graficos-generales dd { margin: 5px 0 0; font-weight: 600; overflow-wrap: anywhere; }
+.graficos-cargando { padding: 8px 4px; color: var(--texto-2); }
+@media (max-width: 760px) {
+  .graficos-controles, .graficos-card, .graficos-tabla-card { padding: 15px; }
+  .graficos-card-titulo { flex-direction: column; }
+  .graficos-generales dl { grid-template-columns: 1fr; }
+  .graficos-svg { min-width: 600px; }
+}

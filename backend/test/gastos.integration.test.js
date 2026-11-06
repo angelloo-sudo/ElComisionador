@@ -13,11 +13,18 @@ const password = 'ClaveSegura-2026!'
 const createdEmails = new Set()
 let emailSequence = 0
 
+function dniDePrueba() {
+  const aleatorio = Number.parseInt(randomUUID().replaceAll('-', '').slice(0, 8), 16)
+  return String(10_000_000 + (aleatorio % 90_000_000))
+}
+
 async function registrarYLoguear(ruta, rol, dni) {
-  const email = `${emailPrefix}${rol}-${++emailSequence}@example.test`
+  const userSequence = ++emailSequence
+  const email = `${emailPrefix}${rol}-${userSequence}@example.test`
   createdEmails.add(email)
   const registro = await api.post(ruta).send({
-    nombre: 'Prueba', apellido: 'Gastos', email, password, confirmarPassword: password, dni, telefono: '3511234567',
+    nombre: 'Prueba', apellido: 'Gastos', email, password, confirmarPassword: password, dni,
+    telefono: String(3_510_000_000 + userSequence),
   })
   assert.equal(registro.status, 201, JSON.stringify(registro.body))
   await query('UPDATE usuarios SET email_verificado = true WHERE email = $1', [email])
@@ -26,8 +33,8 @@ async function registrarYLoguear(ruta, rol, dni) {
   return login.body
 }
 
-const comisionista = () => registrarYLoguear('/api/auth/register-comisionista', 'comisionista', '87654321')
-const cliente = () => registrarYLoguear('/api/auth/register', 'cliente', '12345678')
+const comisionista = () => registrarYLoguear('/api/auth/register-comisionista', 'comisionista', dniDePrueba())
+const cliente = () => registrarYLoguear('/api/auth/register', 'cliente', dniDePrueba())
 
 const como = (sesion) => ({
   get: (url) => api.get(url).set('Authorization', `Bearer ${sesion.token}`),

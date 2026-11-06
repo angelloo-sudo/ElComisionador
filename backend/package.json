@@ -28,7 +28,14 @@
     "test:retiro": "node --test test/solicitud-retiro.integration.test.js",
     "test:pasajero": "node --test test/pasajero-estado.integration.test.js",
     "test:ingresos": "node --test test/ingresos.integration.test.js",
+    "test:rentabilidad": "node --test test/rentabilidad.test.js test/rentabilidad.integration.test.js test/reportes-rentabilidad.integration.test.js",
+    "test:graficos-rentabilidad": "node --test test/graficos-rentabilidad.test.js",
+    "test:graficos-rentabilidad:integration": "node --test test/graficos-rentabilidad.integration.test.js",
+    "test:reportes-filtros": "node --test test/reportes-filtros.test.js",
     "test:gastos": "node --test test/gasto-validador.test.js test/gastos.integration.test.js",
+    "test:verificaciones": "node --test test/verificacion.validador.test.js test/verificaciones.integration.test.js",
+    "test:historiales": "node --test test/historial-filtros.test.js test/historial-auth.test.js",
+    "test:historiales:integration": "node --test test/historial.integration.test.js",
     "test:auth:10": "node test/run-auth-10.mjs"
   },
   "dependencies": {

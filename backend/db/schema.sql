@@ -1,6 +1,7 @@
--- Esquema actual de ComiTrack (PostgreSQL).
--- Se puede ejecutar sobre una base nueva O sobre una ya existente (no borra datos): crea lo que falta
--- y agrega las columnas nuevas. psql -d comitrack -v ON_ERROR_STOP=1 -f backend/db/schema.sql
+-- Esquema de referencia de ComiTrack (PostgreSQL) para instalaciones nuevas.
+-- No ejecutar íntegramente sobre una base existente sin analizar antes su contenido y los efectos.
+-- Las actualizaciones de bases existentes se aplican mediante SQL puntual, revisado y manual.
+-- psql -d comitrack -v ON_ERROR_STOP=1 -f backend/db/schema.sql
 
 CREATE TABLE IF NOT EXISTS usuarios (
   id                    SERIAL PRIMARY KEY,
@@ -238,6 +239,34 @@ CREATE TABLE IF NOT EXISTS solicitudes_viaje (
 CREATE INDEX IF NOT EXISTS solicitudes_viaje_viaje_idx ON solicitudes_viaje (viaje_id, estado);
 CREATE INDEX IF NOT EXISTS solicitudes_viaje_cliente_idx ON solicitudes_viaje (cliente_id);
 
+-- US55: historial de estados para las encomiendas que se gestionan como solicitudes.
+-- No se reconstruyen eventos pasados: solo se registra el alta y cada cambio futuro de estado.
+CREATE TABLE IF NOT EXISTS historial_solicitudes_encomienda (
+  id             SERIAL PRIMARY KEY,
+  solicitud_id   INTEGER NOT NULL REFERENCES solicitudes_viaje(id) ON DELETE CASCADE,
+  estado         VARCHAR(12) NOT NULL
+                 CHECK (estado IN ('pendiente', 'aceptada', 'rechazada', 'cancelada')),
+  fecha_hora     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS historial_solicitudes_encomienda_fecha_idx
+  ON historial_solicitudes_encomienda (solicitud_id, fecha_hora, id);
+
+CREATE OR REPLACE FUNCTION registrar_historial_estado_solicitud_encomienda()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.tipo = 'encomienda' AND (TG_OP = 'INSERT' OR OLD.estado IS DISTINCT FROM NEW.estado) THEN
+    INSERT INTO historial_solicitudes_encomienda (solicitud_id, estado)
+    VALUES (NEW.id, NEW.estado);
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS solicitudes_encomienda_historial_estado ON solicitudes_viaje;
+CREATE TRIGGER solicitudes_encomienda_historial_estado
+AFTER INSERT OR UPDATE ON solicitudes_viaje
+FOR EACH ROW EXECUTE FUNCTION registrar_historial_estado_solicitud_encomienda();
+
 CREATE TABLE IF NOT EXISTS ingresos (
   id        SERIAL PRIMARY KEY,
   viaje_id  INTEGER REFERENCES viajes(id) ON DELETE CASCADE,
@@ -383,3 +412,48 @@ ALTER TABLE encomiendas ADD CONSTRAINT encomiendas_estado_check
 ALTER TABLE historial_encomiendas DROP CONSTRAINT IF EXISTS historial_encomiendas_estado_check;
 ALTER TABLE historial_encomiendas ADD CONSTRAINT historial_encomiendas_estado_check
   CHECK (estado IN ('pendiente', 'aceptado', 'retirado', 'recibido', 'en_viaje', 'entregado', 'cancelada'));
+
+-- Solicitudes de verificación preliminar. Las imágenes y vectores faciales se procesan localmente
+-- en el dispositivo y no se persisten en esta tabla.
+CREATE TABLE IF NOT EXISTS verificaciones_identidad (
+  id                  SERIAL PRIMARY KEY,
+  usuario_id          INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  estado              VARCHAR(32) NOT NULL DEFAULT 'NO_INICIADA'
+                      CHECK (estado IN ('NO_INICIADA', 'EN_PROCESO', 'PENDIENTE_REVISION', 'APROBADA_MANUALMENTE', 'RECHAZADA', 'REQUIERE_CORRECCION')),
+  consentimiento_en   TIMESTAMPTZ NOT NULL,
+  dni_parcial         VARCHAR(16) CHECK (dni_parcial IS NULL OR dni_parcial ~ '^[*•]{4,8}[0-9]{4}$'),
+  resultado_ocr       VARCHAR(24) CHECK (resultado_ocr IS NULL OR resultado_ocr IN ('legible', 'requiere_revision', 'no_legible')),
+  coincidencias       JSONB CHECK (coincidencias IS NULL OR jsonb_typeof(coincidencias) = 'object'),
+  controles_faciales  JSONB CHECK (controles_faciales IS NULL OR jsonb_typeof(controles_faciales) = 'object'),
+  iniciada_en         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  actualizada_en      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  enviada_en          TIMESTAMPTZ,
+  resuelta_en         TIMESTAMPTZ,
+  resuelta_por        INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  motivo_resolucion   VARCHAR(500),
+  CHECK (
+    (estado IN ('NO_INICIADA', 'EN_PROCESO', 'PENDIENTE_REVISION') AND resuelta_en IS NULL AND resuelta_por IS NULL)
+    OR (estado IN ('APROBADA_MANUALMENTE', 'RECHAZADA', 'REQUIERE_CORRECCION') AND resuelta_en IS NOT NULL AND resuelta_por IS NOT NULL)
+  )
+);
+CREATE INDEX IF NOT EXISTS verificaciones_identidad_usuario_fecha_idx ON verificaciones_identidad (usuario_id, iniciada_en DESC);
+CREATE INDEX IF NOT EXISTS verificaciones_identidad_pendientes_idx ON verificaciones_identidad (enviada_en DESC) WHERE estado = 'PENDIENTE_REVISION';
+CREATE UNIQUE INDEX IF NOT EXISTS verificaciones_identidad_activas_uq ON verificaciones_identidad (usuario_id) WHERE estado IN ('EN_PROCESO', 'PENDIENTE_REVISION');
+
+-- US49 / US50: cada emisión se conserva como snapshot inmutable para poder
+-- consultar valores históricos aunque los movimientos o viajes operativos cambien.
+CREATE TABLE IF NOT EXISTS reportes_rentabilidad (
+  id                  BIGSERIAL PRIMARY KEY,
+  usuario_id          INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  periodo_desde       DATE NOT NULL,
+  periodo_hasta       DATE NOT NULL,
+  generado_en         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  total_ingresos      NUMERIC(12,2) NOT NULL,
+  total_gastos        NUMERIC(12,2) NOT NULL,
+  resultado_economico NUMERIC(12,2) NOT NULL,
+  version_snapshot    SMALLINT NOT NULL DEFAULT 1 CHECK (version_snapshot > 0),
+  datos_snapshot      JSONB NOT NULL CHECK (jsonb_typeof(datos_snapshot) = 'object'),
+  CHECK (periodo_desde <= periodo_hasta)
+);
+CREATE INDEX IF NOT EXISTS reportes_rentabilidad_usuario_fecha_idx
+  ON reportes_rentabilidad (usuario_id, generado_en DESC, id DESC);

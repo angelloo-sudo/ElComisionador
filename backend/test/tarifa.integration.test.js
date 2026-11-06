@@ -256,22 +256,56 @@ describe('tarifa por km y duracion automatica', () => {
     assert.equal(r.body.monto, null)
   })
 
-  it('modificar un viaje recalcula la duracion y la llegada', async () => {
+  it('modificar los horarios conserva el recorrido y actualiza duracion y llegada', async () => {
     const { body: viaje } = await api.post('/api/viajes').set(comisionista.auth).send(viajeBase({ fecha: fechaFutura(15), hora_salida: '06:00' }))
     const r = await api.put(`/api/viajes/${viaje.id}`).set(comisionista.auth).send({
-      origen: 'Córdoba (Capital)', destino: 'Villa Carlos Paz', fecha: fechaFutura(15), hora_salida: '07:00', cupo_total: 4,
+      hora_salida: '07:00', hora_llegada: '07:45', cupo_total: 4,
     })
     assert.equal(r.status, 200, JSON.stringify(r.body))
-    assert.equal(r.body.viajes[0].hora_llegada.slice(0, 5), '07:45')
-    assert.equal(r.body.viajes[0].duracion_min, 45)
+    assert.equal(r.body.hora_llegada.slice(0, 5), '07:45')
+    assert.equal(r.body.duracion_min, 45)
     // Si el mapa falla al modificar, se conservan los datos que ya tenia (mismo recorrido).
     osrmCaido = true
     limpiarCache()
     const r2 = await api.put(`/api/viajes/${viaje.id}`).set(comisionista.auth).send({
-      origen: 'Córdoba (Capital)', destino: 'Villa Carlos Paz', fecha: fechaFutura(15), hora_salida: '07:00', cupo_total: 5,
+      hora_salida: '07:00', hora_llegada: '07:45', cupo_total: 5,
     })
     assert.equal(r2.status, 200, JSON.stringify(r2.body))
-    assert.equal(r2.body.viajes[0].duracion_min, 45)
+    assert.equal(r2.body.duracion_min, 45)
+  })
+  it('persiste paradas reordenadas como registros completos y conserva sus IDs al editarlas', async () => {
+    const alta = await api.post('/api/viajes').set(comisionista.auth).send(viajeBase({
+      fecha: fechaFutura(31), hora_salida: '15:00', paradas: [
+        { localidad: 'Alta Gracia', hora_estimada: '15:30' },
+        { localidad: 'La Falda', hora_estimada: '15:45' },
+      ],
+    }))
+    assert.equal(alta.status, 201, JSON.stringify(alta.body))
+    const viaje = alta.body
+    const original = await api.get(`/api/viajes/${viaje.id}`).set(comisionista.auth)
+    assert.deepEqual(original.body.paradas.map((p) => p.localidad), ['Alta Gracia', 'La Falda'])
+    assert.equal(new Set(original.body.paradas.map((p) => p.id)).size, 2)
+
+    // El orden que contradice el recorrido geográfico se rechaza sin intercambiar datos.
+    const invalido = await api.put(`/api/viajes/${viaje.id}`).set(comisionista.auth).send({
+      hora_salida: '15:00', hora_llegada: '16:30', cupo_total: 4,
+      paradas: [...original.body.paradas].reverse(),
+    })
+    assert.equal(invalido.status, 400)
+    const trasRechazo = await api.get(`/api/viajes/${viaje.id}`).set(comisionista.auth)
+    assert.deepEqual(trasRechazo.body.paradas.map((p) => [p.id, p.localidad, p.hora_estimada]),
+      original.body.paradas.map((p) => [p.id, p.localidad, p.hora_estimada]))
+
+    const editado = await api.put(`/api/viajes/${viaje.id}`).set(comisionista.auth).send({
+      hora_salida: '16:00', hora_llegada: '17:30', cupo_total: 4,
+      paradas: original.body.paradas.map((p, i) => ({ ...p, hora_estimada: i ? '16:45' : '16:30' })),
+    })
+    assert.equal(editado.status, 200, JSON.stringify(editado.body))
+    const persistido = await api.get(`/api/viajes/${viaje.id}`).set(comisionista.auth)
+    assert.deepEqual(persistido.body.paradas.map((p) => p.id), original.body.paradas.map((p) => p.id))
+    assert.deepEqual(persistido.body.paradas.map((p) => p.localidad), ['Alta Gracia', 'La Falda'])
+    assert.ok(persistido.body.paradas.every((p, i) => p.hora_estimada > (i ? persistido.body.paradas[i - 1].hora_estimada : '16:00')))
+    assert.equal(persistido.body.hora_salida.slice(0, 5), '16:00')
   })
   it('paradas: si baja antes del destino, el tramo y el precio son menores', async () => {
     const { body: viaje } = await api.post('/api/viajes').set(comisionista.auth).send(viajeBase({ fecha: fechaFutura(16) }))

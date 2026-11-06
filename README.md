@@ -87,12 +87,14 @@ ecto:
    psql -U postgres -d comitrack -v ON_ERROR_STOP=1 -f backend/db/schema.sql
    ```
 
-   `backend/db/schema.sql` es la fuente de verdad para crear una base desde cero.
+   `backend/db/schema.sql` contiene la definición de referencia de la estructura
+   PostgreSQL para instalaciones nuevas. No lo ejecutes sobre una base existente
+   sin analizar antes su contenido y los posibles efectos: el proyecto no utiliza
+   un sistema de migraciones automáticas.
 
-   `schema.sql` define el estado completo de una base nueva. No lo ejecutes sobre una
-   base que ya contiene tablas o datos: no es un actualizador incremental. La base
-   remota configurada en este proyecto ya tiene aplicados los cambios de gastos y
-   constraints de encomiendas.
+   Los cambios futuros sobre bases existentes se prepararán como sentencias SQL
+   puntuales, se revisarán y se ejecutarán manualmente. No se aplican automáticamente
+   durante el inicio o despliegue de la aplicación.
 
 4. Cargar las dos cuentas de prueba:
 
@@ -126,3 +128,7 @@ ecto:
 
 - Ramas: `main` (estable) + una rama por historia de usuario, ej: `feature/US10-registrar-encomienda`.
 - Commits cortos y descriptivos en español.
+
+## Documentación técnica
+
+- [Verificación preliminar de identidad](docs/verificacion-identidad.md): flujo, endpoints, recursos locales, privacidad, límites e instrucciones de prueba.

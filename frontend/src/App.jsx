@@ -13,10 +13,17 @@ import MisTraslados from './pages/MisTraslados.jsx'
 import Postulaciones from './pages/Postulaciones.jsx'
 import Gastos from './pages/Gastos.jsx'
 import Ingresos from './pages/Ingresos.jsx'
+import ReporteRentabilidad from './pages/ReporteRentabilidad.jsx'
+import ReportesRentabilidad from './pages/ReportesRentabilidad.jsx'
+import ReporteRentabilidadDetalle from './pages/ReporteRentabilidadDetalle.jsx'
+import GraficosRentabilidad from './pages/GraficosRentabilidad.jsx'
 import Tarifa from './pages/Tarifa.jsx'
 import SolicitarViaje from './pages/SolicitarViaje.jsx'
 import Landing from './pages/Landing.jsx'
 import Notificaciones from './pages/Notificaciones.jsx'
+import VerificacionIdentidad from './pages/VerificacionIdentidad.jsx'
+import VerificacionesAdmin from './pages/VerificacionesAdmin.jsx'
+import Historiales from './pages/Historiales.jsx'
 import Bienvenida from './components/Bienvenida.jsx'
 import Icon from './components/Icon.jsx'
 import Avatar from './components/Avatar.jsx'
@@ -36,15 +43,24 @@ function fechaDeHoy() {
 }
 
 function tituloDePagina(ruta, rol) {
+  if (ruta.startsWith('/historial/viajes')) return 'Historial de viajes'
+  if (ruta.startsWith('/historial/clientes')) return 'Operaciones de clientes'
+  if (ruta.startsWith('/historial/encomiendas')) return 'Historial de encomiendas'
+  if (ruta.startsWith('/historial/pasajeros')) return 'Historial de pasajeros'
   if (ruta.startsWith('/mis-traslados/solicitar')) return 'Solicitar viaje'
   if (ruta.startsWith('/mis-traslados')) return 'Viajes'
   if (ruta.startsWith('/notificaciones')) return 'Notificaciones'
+  if (ruta.startsWith('/verificacion')) return 'Verificación de identidad'
+  if (ruta.startsWith('/admin/verificaciones')) return 'Revisión de identidad'
   if (ruta.startsWith('/solicitudes')) return 'Solicitudes'
   if (ruta.endsWith('/editar')) return 'Modificar viaje'
   if (ruta.startsWith('/viajes/nuevo')) return 'Registrar viaje'
   if (ruta.startsWith('/viajes')) return 'Viajes'
   if (ruta.startsWith('/clientes')) return 'Clientes'
   if (ruta.startsWith('/ingresos')) return 'Ingresos'
+  if (ruta.startsWith('/graficos-rentabilidad')) return 'Gráficos de rentabilidad'
+  if (ruta.startsWith('/rentabilidad')) return 'Rentabilidad'
+  if (ruta.startsWith('/reportes-rentabilidad')) return 'Reportes de rentabilidad'
   if (ruta.startsWith('/gastos')) return 'Gastos'
   if (ruta.startsWith('/tarifa')) return 'Mi tarifa'
   if (ruta.startsWith('/perfil')) return 'Mi perfil'
@@ -137,7 +153,7 @@ export default function App() {
             <div className="topbar-usuario">
               <div>
                 <strong>{nombreCompleto || usuario?.email}</strong>
-                <span>{esComisionista ? 'Comisionista' : 'Cliente'}</span>
+                <span>{usuario?.rol === 'administrador' ? 'Administrador' : esComisionista ? 'Comisionista' : 'Cliente'}</span>
               </div>
               <Avatar nombre={usuario?.nombre ?? ''} apellido={usuario?.apellido ?? ''} tamano={40} />
             </div>
@@ -152,11 +168,20 @@ export default function App() {
           {esComisionista && <NavLink to="/viajes" className={claseNav}><Icon nombre="logo" /> Viajes</NavLink>}
           {esComisionista && <NavLink to="/solicitudes" className={claseNav}><Icon nombre="checkcircle" /> Solicitudes</NavLink>}
           {esComisionista && <NavLink to="/clientes" className={claseNav}><Icon nombre="users" /> Clientes</NavLink>}
+          {usuario?.rol === 'comisionista' && <NavLink to="/historial/viajes" className={claseNav}>Historial viajes</NavLink>}
+          {usuario?.rol === 'comisionista' && <NavLink to="/historial/clientes" className={claseNav}>Operaciones clientes</NavLink>}
+          {usuario?.rol === 'comisionista' && <NavLink to="/historial/encomiendas" className={claseNav}>Historial encomiendas</NavLink>}
+          {usuario?.rol === 'comisionista' && <NavLink to="/historial/pasajeros" className={claseNav}>Historial pasajeros</NavLink>}
           {usuario?.rol === 'comisionista' && <NavLink to="/tarifa" className={claseNav}><Icon nombre="tag" /> Tarifa</NavLink>}
           {usuario?.rol === 'comisionista' && <NavLink to="/ingresos" className={claseNav}><Icon nombre="wallet" /> Ingresos</NavLink>}
           {usuario?.rol === 'comisionista' && <NavLink to="/gastos" className={claseNav}><Icon nombre="wallet" /> Gastos</NavLink>}
+          {usuario?.rol === 'comisionista' && <NavLink to="/rentabilidad" className={claseNav}><Icon nombre="wallet" /> Rentabilidad</NavLink>}
+          {usuario?.rol === 'comisionista' && <NavLink to="/graficos-rentabilidad" className={claseNav}><Icon nombre="wallet" /> Gráficos</NavLink>}
+          {usuario?.rol === 'comisionista' && <NavLink to="/reportes-rentabilidad" className={claseNav}><Icon nombre="wallet" /> Reportes</NavLink>}
           {usuario?.rol === 'cliente' && <NavLink to="/mis-traslados" className={claseNav}><Icon nombre="logo" /> Viajes</NavLink>}
           {usuario?.rol === 'cliente' && <NavLink to="/notificaciones" className={claseNav}><Icon nombre="bell" /> Notificaciones</NavLink>}
+          {(esCliente || usuario?.rol === 'comisionista') && <NavLink to="/verificacion" className={claseNav}><Icon nombre="idcard" /> Verificación</NavLink>}
+          {usuario?.rol === 'administrador' && <NavLink to="/admin/verificaciones" className={claseNav}><Icon nombre="idcard" /> Verificaciones</NavLink>}
         </nav>
       </header>
 
@@ -169,12 +194,19 @@ export default function App() {
             {esComisionista && <Route path="/viajes/:id/editar" element={<ViajeEditar />} />}
             {esComisionista && <Route path="/solicitudes" element={<Postulaciones />} />}
             {esComisionista && <Route path="/clientes" element={<Clientes />} />}
+            {usuario?.rol === 'comisionista' && <Route path="/historial/:seccion" element={<Historiales />} />}
             {usuario?.rol === 'comisionista' && <Route path="/tarifa" element={<Tarifa />} />}
             {usuario?.rol === 'comisionista' && <Route path="/ingresos" element={<Ingresos />} />}
             {usuario?.rol === 'comisionista' && <Route path="/gastos" element={<Gastos />} />}
+            {usuario?.rol === 'comisionista' && <Route path="/rentabilidad" element={<ReporteRentabilidad />} />}
+            {usuario?.rol === 'comisionista' && <Route path="/graficos-rentabilidad" element={<GraficosRentabilidad />} />}
+            {usuario?.rol === 'comisionista' && <Route path="/reportes-rentabilidad" element={<ReportesRentabilidad />} />}
+            {usuario?.rol === 'comisionista' && <Route path="/reportes-rentabilidad/:id" element={<ReporteRentabilidadDetalle />} />}
             {usuario?.rol === 'cliente' && <Route path="/mis-traslados" element={<MisTraslados />} />}
             {usuario?.rol === 'cliente' && <Route path="/notificaciones" element={<Notificaciones />} />}
             {usuario?.rol === 'cliente' && <Route path="/mis-traslados/solicitar/:id" element={<SolicitarViaje />} />}
+            {(esCliente || usuario?.rol === 'comisionista') && <Route path="/verificacion" element={<VerificacionIdentidad />} />}
+            {usuario?.rol === 'administrador' && <Route path="/admin/verificaciones" element={<VerificacionesAdmin />} />}
             <Route path="/perfil" element={<Perfil onCuentaDadaDeBaja={() => salir('baja')} />} />
           </Routes>
         </main>
