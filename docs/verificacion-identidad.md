@@ -7,7 +7,7 @@ El módulo permite que clientes y comisionistas compartan resultados mínimos de
 1. Instalar dependencias desde la raíz con `npm run install:all`.
 2. Configurar el backend y PostgreSQL como indica el README. La aplicación no crea ni actualiza las tablas al iniciar; `verificaciones_identidad` ya está definida en `backend/db/schema.sql` para bases nuevas.
 3. Iniciar backend y frontend con `npm run dev`.
-4. Ingresar como cliente o comisionista, abrir **Verificación** desde la navegación o **Mi perfil**, aceptar el consentimiento, capturar o seleccionar frente y dorso del DNI, revisar/corregir la lectura, completar el desafío facial y enviar.
+4. Para una cuenta nueva, elegir cliente o comisionista y completar la verificación dentro del alta, antes de que el backend cree la cuenta. El OCR y los controles faciales son los mismos del módulo; el envío crea la cuenta y su solicitud `PENDIENTE_REVISION` en una única transacción. Una cuenta existente puede seguir usando **Verificación** desde la navegación o **Mi perfil**.
 5. Una cuenta con rol `administrador` puede abrir **Verificaciones**, buscar por usuario, filtrar el estado y resolver solicitudes.
 
 La cámara requiere permiso explícito y un contexto seguro: HTTPS o `localhost`. Para una computadora sin cámara frontal se puede conectar una cámara compatible; si el navegador o dispositivo no permite `getUserMedia`, la comprobación no se completa.
@@ -37,9 +37,10 @@ Todas las rutas requieren el JWT existente. El backend verifica rol y propiedad;
 | `GET /api/verificaciones/mias` | Consultar estado e historial propios | Devuelve las solicitudes del usuario autenticado, con resultados mínimos y motivo de resolución. |
 | `PATCH /api/verificaciones/:id/enviar` | Enviar resultados | `dni_parcial`, `resultado_ocr`, `coincidencias` (`nombre`, `apellido`, `dni`) y `controles_faciales` (`rostro_unico`, `parpadeo`, `giro`, `frente`). El servidor fija `PENDIENTE_REVISION`. |
 | `GET /api/verificaciones/admin?estado=...` | Administrador lista solicitudes | Puede filtrar por estado; devuelve datos de cuenta, DNI parcialmente oculto, resultados y antecedentes de resolución. |
+| `GET /api/verificaciones/admin/:id` | Administrador consulta el detalle | Devuelve los mismos datos mínimos de una solicitud individual; requiere rol administrador. |
 | `PATCH /api/verificaciones/admin/:id/resolver` | Administrador resuelve | `{ "decision": "APROBADA_MANUALMENTE" }` o decisión `RECHAZADA` / `REQUIERE_CORRECCION` con `motivo` de 3 a 500 caracteres. |
 
-El payload de envío no contiene imágenes, selfie, DNI completo, OCR textual, fechas de nacimiento/vencimiento, número de trámite ni vectores faciales. En PostgreSQL se persisten solo los campos ya contemplados por `verificaciones_identidad`: DNI parcial, calidad OCR, comparaciones booleanas, controles booleanos, marcas de tiempo y resolución.
+El payload de envío no contiene imágenes, selfie, DNI completo, OCR textual, fechas de nacimiento/vencimiento, número de trámite ni vectores faciales. El servidor rechaza OCR distinto de `legible` y controles faciales incompletos. En PostgreSQL se persisten solo los campos ya contemplados por `verificaciones_identidad`: DNI parcial, calidad OCR, comparaciones booleanas, controles booleanos, marcas de tiempo y resolución.
 
 ## Estados
 

@@ -85,6 +85,24 @@ export async function listarAdministrativas(req, res, next) {
   } catch (error) { next(error) }
 }
 
+export async function detalleAdministrativo(req, res, next) {
+  try {
+    if (!validarIdVerificacion(req.params.id)) return res.status(400).json({ mensaje: 'La solicitud indicada no es válida' })
+    const { rows } = await query(
+      `SELECT v.id, v.usuario_id, u.rol, u.nombre, u.apellido, u.email,
+              CASE WHEN u.dni IS NULL THEN NULL ELSE '••••' || RIGHT(regexp_replace(u.dni, '\\D', '', 'g'), 4) END AS dni_cuenta_parcial,
+              v.estado, v.dni_parcial, v.resultado_ocr, v.coincidencias, v.controles_faciales,
+              v.iniciada_en, v.actualizada_en, v.enviada_en, v.resuelta_en,
+              v.motivo_resolucion, v.resuelta_por
+       FROM verificaciones_identidad v JOIN usuarios u ON u.id = v.usuario_id
+       WHERE v.id = $1`,
+      [req.params.id],
+    )
+    if (!rows[0]) return res.status(404).json({ mensaje: 'No se encontró la solicitud indicada' })
+    res.json(rows[0])
+  } catch (error) { next(error) }
+}
+
 export async function resolver(req, res, next) {
   try {
     if (!validarIdVerificacion(req.params.id)) return res.status(400).json({ mensaje: 'La solicitud indicada no es válida' })

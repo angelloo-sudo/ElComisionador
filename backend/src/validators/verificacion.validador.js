@@ -9,8 +9,8 @@ export function validarEnvioVerificacion(body) {
   if (typeof body.dni_parcial !== 'string' || !/^[*•]{4,8}\d{4}$/.test(body.dni_parcial)) {
     return 'El DNI debe enviarse parcialmente oculto y mostrar solo los últimos cuatro dígitos'
   }
-  if (!['legible', 'requiere_revision', 'no_legible'].includes(body.resultado_ocr)) {
-    return 'El resultado OCR no es válido'
+  if (body.resultado_ocr !== 'legible') {
+    return 'El OCR debe haber identificado correctamente los datos necesarios antes de enviar'
   }
   if (!body.coincidencias || typeof body.coincidencias !== 'object' || Array.isArray(body.coincidencias)
       || Object.keys(body.coincidencias).some((campo) => !CAMPOS_COINCIDENCIA.includes(campo))
@@ -19,10 +19,24 @@ export function validarEnvioVerificacion(body) {
   }
   if (!body.controles_faciales || typeof body.controles_faciales !== 'object' || Array.isArray(body.controles_faciales)
       || Object.keys(body.controles_faciales).some((campo) => !CAMPOS_FACIALES.includes(campo))
-      || CAMPOS_FACIALES.some((campo) => typeof body.controles_faciales[campo] !== 'boolean')) {
-    return 'Los controles faciales deben contener resultados booleanos para rostro, parpadeo, giro y mirada al frente'
+      || CAMPOS_FACIALES.some((campo) => body.controles_faciales[campo] !== true)) {
+    return 'Deben completarse la detección de rostro único, parpadeo, giro y regreso al frente'
   }
   return null
+}
+
+export function validarVerificacionRegistro(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return 'Completá la verificación de identidad durante el registro'
+  const permitidos = new Set(['consentimiento', 'dni_parcial', 'resultado_ocr', 'coincidencias', 'controles_faciales'])
+  if (Object.keys(body).some((campo) => !permitidos.has(campo)) || body.consentimiento !== true) {
+    return 'La solicitud de verificación del registro no es válida'
+  }
+  return validarEnvioVerificacion({
+    dni_parcial: body.dni_parcial,
+    resultado_ocr: body.resultado_ocr,
+    coincidencias: body.coincidencias,
+    controles_faciales: body.controles_faciales,
+  })
 }
 
 export function validarResolucion(body) {

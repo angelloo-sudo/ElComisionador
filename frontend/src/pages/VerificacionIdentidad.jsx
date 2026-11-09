@@ -11,7 +11,7 @@ const DATOS_VACIOS = {
   dni: '', nombre: '', apellido: '', fecha_nacimiento: '', fecha_vencimiento: '', numero_tramite: '', resultado_ocr: 'no_legible',
 }
 
-function ImagenDocumento({ titulo, archivo, onChange }) {
+function ImagenDocumento({ titulo, archivo, onChange, onInvalid }) {
   const [preview, setPreview] = useState('')
   useEffect(() => {
     if (!archivo) { setPreview(''); return undefined }
@@ -29,7 +29,17 @@ function ImagenDocumento({ titulo, archivo, onChange }) {
         <strong>{titulo}</strong>
         <label className="btn verif-archivo">
           {archivo ? 'Cambiar imagen' : 'Elegir o capturar'}
-          <input type="file" accept="image/*" capture="environment" onChange={(e) => { onChange(e.target.files?.[0] || null); e.target.value = '' }} />
+          <input type="file" accept="image/*" capture="environment" onChange={(e) => {
+            const file = e.target.files?.[0] || null
+            if (file && (!file.type.startsWith('image/') || file.size === 0 || file.size > 15 * 1024 * 1024)) {
+              onChange(null)
+              onInvalid('Elegí una imagen válida de hasta 15 MB para cada lado del DNI.')
+            } else {
+              onInvalid('')
+              onChange(file)
+            }
+            e.target.value = ''
+          }} />
         </label>
         {archivo && <button type="button" className="verif-link" onClick={() => onChange(null)}>Quitar</button>}
       </div>
@@ -47,13 +57,14 @@ function ResultadoOcr({ resultado }) {
   return <span className={`verif-pill ${resultado === 'legible' ? 'exito' : 'pendiente'}`}>{texto}</span>
 }
 
-export default function VerificacionIdentidad() {
-  const [perfil, setPerfil] = useState(null)
+export default function VerificacionIdentidad({ perfilRegistro, onRegistroCompleto, onCancelarRegistro }) {
+  const registro = Boolean(perfilRegistro)
+  const [perfil, setPerfil] = useState(perfilRegistro || null)
   const [solicitudes, setSolicitudes] = useState([])
-  const [cargando, setCargando] = useState(true)
+  const [cargando, setCargando] = useState(!registro)
   const [consentimiento, setConsentimiento] = useState(false)
   const [solicitudId, setSolicitudId] = useState(null)
-  const [etapa, setEtapa] = useState('inicio')
+  const [etapa, setEtapa] = useState(registro ? 'consentimiento' : 'inicio')
   const [imagenes, setImagenes] = useState({ frente: null, dorso: null })
   const [datos, setDatos] = useState(DATOS_VACIOS)
   const [controles, setControles] = useState(null)
@@ -74,7 +85,7 @@ export default function VerificacionIdentidad() {
     finally { setCargando(false) }
   }
 
-  useEffect(() => { cargar() }, [])
+  useEffect(() => { if (!registro) cargar() }, [registro])
 
   useEffect(() => {
     if (!selfie) { setSelfiePreview(''); return undefined }
@@ -89,6 +100,14 @@ export default function VerificacionIdentidad() {
 
   async function iniciar() {
     setError('')
+    if (registro) {
+      setEtapa('dni')
+      setDatos(DATOS_VACIOS)
+      setImagenes({ frente: null, dorso: null })
+      setControles(null)
+      setSelfie(null)
+      return
+    }
     try {
       const nueva = await api.post('/verificaciones', { consentimiento: true })
       setSolicitudId(nueva.id)
@@ -160,8 +179,8 @@ export default function VerificacionIdentidad() {
 
   function continuarSelfie() {
     const dni = String(datos.dni || '').replace(/\D/g, '')
-    if (!/^\d{7,8}$/.test(dni)) {
-      setError('Revisá el DNI leído e ingresá sus 7 u 8 dígitos para poder continuar. El número se mantiene solo en este dispositivo.')
+    if (datos.resultado_ocr !== 'legible' || !/^\d{7,8}$/.test(dni) || !datos.nombre.trim() || !datos.apellido.trim()) {
+      setError('El OCR debe poder leer el DNI, el nombre y el apellido. Revisá las imágenes y repetí el análisis si no se identificaron los datos necesarios.')
       return
     }
     setDatos((actual) => ({ ...actual, dni }))
@@ -178,6 +197,14 @@ export default function VerificacionIdentidad() {
     setError('')
     setProcesando(true)
     try {
+      if (registro) {
+        await onRegistroCompleto({ consentimiento: true, dni_parcial: dniParcial, resultado_ocr: datos.resultado_ocr, coincidencias: diferencias, controles_faciales: controles })
+        setImagenes({ frente: null, dorso: null })
+        setDatos(DATOS_VACIOS)
+        setControles(null)
+        setSelfie(null)
+        return
+      }
       await api.patch(`/verificaciones/${solicitudId}/enviar`, {
         dni_parcial: dniParcial,
         resultado_ocr: datos.resultado_ocr,
@@ -196,6 +223,14 @@ export default function VerificacionIdentidad() {
   }
 
   function volverInicio() {
+    if (registro) {
+      setEtapa('consentimiento')
+      setError('')
+      setImagenes({ frente: null, dorso: null })
+      setControles(null)
+      setSelfie(null)
+      return
+    }
     setEtapa('inicio')
     setError('')
     setImagenes({ frente: null, dorso: null })
@@ -210,15 +245,27 @@ export default function VerificacionIdentidad() {
 
   return (
     <section className="verif-pagina">
-      <header className="verif-encabezado">
+      {!registro && <header className="verif-encabezado">
         <p className="auth-kicker">Verificación preliminar</p>
         <h2>Comprobá tus datos de identidad</h2>
         <p>Las imágenes se analizan en este dispositivo. La solicitud guarda solo resultados mínimos para revisión administrativa.</p>
-      </header>
+      </header>}
 
       {error && <Alerta tipo="error" titulo="No se pudo completar el paso">{error}</Alerta>}
 
-      {etapa === 'inicio' && (
+      {etapa === 'consentimiento' && (
+        <div className="verif-card card">
+          <div className="card-cabecera"><div><h3>Verificá tu identidad para crear la cuenta</h3><p>Este paso forma parte del registro; todavía no se creó ninguna cuenta.</p></div><span className="verif-paso">Identidad · 1 de 3</span></div>
+          <div className="verif-consentimiento">
+            <h4>Privacidad y revisión</h4>
+            <p>El frente y dorso del DNI se analizan localmente con OCR. La cámara se usa para los controles faciales y la vista previa se elimina al terminar. No se envían ni guardan imágenes, selfie, DNI completo ni puntos faciales. Solo se enviarán el DNI parcialmente oculto y los resultados de lectura, comparación y controles para revisión administrativa. Los controles son preliminares y no certifican oficialmente tu identidad.</p>
+            <label className="check-linea"><input type="checkbox" checked={consentimiento} onChange={(e) => setConsentimiento(e.target.checked)} /><span>Leí la información y doy mi consentimiento para procesar estos datos localmente y registrar los resultados mínimos.</span></label>
+            <div className="verif-botones"><button type="button" className="btn" onClick={onCancelarRegistro}>Cancelar registro</button><button type="button" className="btn btn-primario" disabled={!consentimiento} onClick={iniciar}>Continuar</button></div>
+          </div>
+        </div>
+      )}
+
+      {etapa === 'inicio' && !registro && (
         <>
           {enviada && <Alerta tipo="exito" titulo="Solicitud registrada">Quedó pendiente de revisión administrativa. Podés consultar su estado en esta pantalla.</Alerta>}
           <div className="verif-card card">
@@ -261,8 +308,8 @@ export default function VerificacionIdentidad() {
           <div className="card-cabecera"><div><h3>Fotografiá el DNI</h3><p>Seleccioná una imagen del frente y otra del dorso.</p></div><span className="verif-paso">Paso 1 de 3</span></div>
           <Alerta tipo="aviso" titulo="Para una lectura más clara">Usá buena iluminación, mantené el documento completo dentro del encuadre, evitá reflejos y verificá que esté enfocado.</Alerta>
           <div className="verif-documentos">
-            <ImagenDocumento titulo="Frente del DNI" archivo={imagenes.frente} onChange={(frente) => setImagenes((a) => ({ ...a, frente }))} />
-            <ImagenDocumento titulo="Dorso del DNI" archivo={imagenes.dorso} onChange={(dorso) => setImagenes((a) => ({ ...a, dorso }))} />
+            <ImagenDocumento titulo="Frente del DNI" archivo={imagenes.frente} onChange={(frente) => setImagenes((a) => ({ ...a, frente }))} onInvalid={setError} />
+            <ImagenDocumento titulo="Dorso del DNI" archivo={imagenes.dorso} onChange={(dorso) => setImagenes((a) => ({ ...a, dorso }))} onInvalid={setError} />
           </div>
           {procesando && <p className="campo-ayuda" role="status">{progreso}</p>}
           <div className="verif-botones"><button type="button" className="btn" onClick={volverInicio} disabled={procesando}>Cancelar</button><button type="button" className="btn btn-primario" disabled={procesando || !imagenes.frente || !imagenes.dorso} onClick={analizarDni}>{procesando ? 'Procesando…' : 'Analizar ambas imágenes en este dispositivo'}</button></div>

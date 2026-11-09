@@ -9,6 +9,7 @@ router.get('/mias', permitirRoles('cliente', 'comisionista'), verificaciones.lis
 router.post('/', permitirRoles('cliente', 'comisionista'), verificaciones.iniciar)
 router.patch('/:id/enviar', permitirRoles('cliente', 'comisionista'), verificaciones.enviar)
 router.get('/admin', permitirRoles('administrador'), verificaciones.listarAdministrativas)
+router.get('/admin/:id', permitirRoles('administrador'), verificaciones.detalleAdministrativo)
 router.patch('/admin/:id/resolver', permitirRoles('administrador'), verificaciones.resolver)
 
 export default router

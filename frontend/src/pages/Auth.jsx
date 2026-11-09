@@ -4,6 +4,7 @@ import Icon from '../components/Icon.jsx'
 import { Logo, Campo, CampoPassword, Alerta } from '../components/ui.jsx'
 import Avatar from '../components/Avatar.jsx'
 import { prepararFotoPerfil, ACEPTA_FOTOS } from '../utils/imagen.js'
+import VerificacionIdentidad from './VerificacionIdentidad.jsx'
 
 const formularioInicial = { nombre: '', apellido: '', email: '', password: '', confirmarPassword: '', dni: '', telefono: '', presentacion: '', foto_perfil: '' }
 const REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -60,6 +61,7 @@ export default function Auth({ onAuthenticated }) {
   const [ahora, setAhora] = useState(Date.now())
   const [cargando, setCargando] = useState(false)
   const [registroExitoso, setRegistroExitoso] = useState(null) // rol con el que se registro
+  const [pasoRegistro, setPasoRegistro] = useState('datos')
   const [recuperacionEnviada, setRecuperacionEnviada] = useState(false)
   const [restablecimientoExitoso, setRestablecimientoExitoso] = useState(false)
   const [requiereVerificacion, setRequiereVerificacion] = useState(false)
@@ -124,7 +126,25 @@ function cambiarModo(nuevo) {
   setMensajeReenvio('')
   setErrorReenvio('')
   setForm((f) => ({ ...formularioInicial, email: f.email }))
+  setPasoRegistro('datos')
 }
+
+  async function completarRegistro(verificacion) {
+    setCargando(true)
+    setError(null)
+    try {
+      const endpoint = rol === 'comisionista' ? '/auth/register-comisionista' : '/auth/register'
+      const datos = { ...form, dni: form.dni.replace(/\D/g, ''), verificacion }
+      const respuesta = await api.post(endpoint, datos)
+      setRegistroExitoso({ rol, email: respuesta.email ?? form.email, verificacionEnviada: respuesta.verificacionEnviada, identidadPendiente: respuesta.estadoVerificacionIdentidad === 'PENDIENTE_REVISION' })
+      setPasoRegistro('datos')
+    } catch (err) {
+      setError(err.message || 'No se pudo completar el registro. Tus datos siguen en esta pantalla para que puedas corregirlos o reintentar.')
+      throw err
+    } finally {
+      setCargando(false)
+    }
+  }
 
   async function reenviarVerificacion() {
     const email = registroExitoso?.email || form.email.trim()
@@ -177,6 +197,11 @@ function cambiarModo(nuevo) {
         return
       }
 
+      if (registrando) {
+        setPasoRegistro('identidad')
+        return
+      }
+
       // US11 (cliente) pega a /auth/register; US06 (comisionista) pega a
       // /auth/register-comisionista. El login es el mismo endpoint para cualquier rol.
       const endpoint =
@@ -211,9 +236,10 @@ function cambiarModo(nuevo) {
         <div className="auth-card auth-centro">
           <span className={`icono-caja ${registroExitoso.verificacionEnviada ? '' : 'rojo'}`}><Icon nombre={registroExitoso.verificacionEnviada ? 'checkcircle' : 'alert'} tamano={26} /></span>
           <p className="auth-kicker">ComiTrack</p>
-          <h1>{registroExitoso.verificacionEnviada ? 'Revisa tu correo' : 'Cuenta creada, falta verificarla'}</h1>
+          <h1>{registroExitoso.identidadPendiente ? 'Cuenta creada · revisión pendiente' : registroExitoso.verificacionEnviada ? 'Revisa tu correo' : 'Cuenta creada, falta verificarla'}</h1>
           <p>
             Tu cuenta de {registroExitoso.rol === 'comisionista' ? 'comisionista' : 'cliente'} fue creada para {registroExitoso.email}.
+            {registroExitoso.identidadPendiente && ' La verificación de identidad quedó pendiente de revisión administrativa; no fue aprobada automáticamente.'}
             {registroExitoso.verificacionEnviada
               ? ' Abrí el enlace que te enviamos para verificar el correo; vence en una hora.'
               : ' No pudimos enviar el enlace. Revisá la configuración de correo o solicitá uno nuevo.'}
@@ -324,6 +350,27 @@ function cambiarModo(nuevo) {
             <button type="button" onClick={() => cambiarModo('login')}>Volver a iniciar sesión</button>
           </p>
         </form>
+      </main>
+    )
+  }
+
+  if (registrando && pasoRegistro === 'identidad') {
+    return (
+      <main className="auth-pagina">
+        <div className="auth-card">
+          <Logo />
+          <p className="auth-kicker">Crear cuenta · Identidad</p>
+          <h1>Verificá tu identidad</h1>
+          <p className="auth-sub">Paso 2 de 2. Al enviar se creará tu cuenta y quedará pendiente de revisión administrativa.</p>
+          {error && <Alerta tipo="error" titulo="No se pudo completar el registro">{error}</Alerta>}
+          {cargando && <Alerta tipo="aviso">Enviando los resultados y creando tu cuenta…</Alerta>}
+          <VerificacionIdentidad
+            perfilRegistro={{ nombre: form.nombre, apellido: form.apellido, dni: form.dni.replace(/\D/g, ''), rol }}
+            onRegistroCompleto={completarRegistro}
+            onCancelarRegistro={() => { setError(null); setPasoRegistro('datos') }}
+          />
+          <p className="auth-pie"><button type="button" onClick={() => { setError(null); setPasoRegistro('datos') }}>Volver a los datos</button></p>
+        </div>
       </main>
     )
   }

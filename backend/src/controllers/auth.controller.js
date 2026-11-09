@@ -7,6 +7,7 @@ import {
 } from '../validators/comunes.validador.js'
 import crypto from 'crypto'
 import { enviarEmailRecuperacion } from '../services/mail.service.js'
+import { validarVerificacionRegistro } from '../validators/verificacion.validador.js'
 
 const JWT_SECRET = process.env.JWT_SECRET
 
@@ -93,8 +94,8 @@ function datosPerfil(fila, { conPerfilPublico = false } = {}) {
   }
 }
 
-async function buscarPerfilPorId(usuarioId) {
-  const { rows } = await query(`${SELECT_PERFIL} WHERE u.id = $1`, [usuarioId])
+async function buscarPerfilPorId(usuarioId, executor = { query }) {
+  const { rows } = await executor.query(`${SELECT_PERFIL} WHERE u.id = $1`, [usuarioId])
   return rows[0] ?? null
 }
 
@@ -124,24 +125,24 @@ async function buscarConflictoContacto(usuarioId, dni, telefono) {
 // Inserta/actualiza la fila de "clientes" con los datos de contacto. Solo se usa
 // cuando el usuario en cuestion tiene rol = 'cliente' (dni/telefono ya validados
 // como obligatorios antes de llegar aca).
-async function upsertDatosContacto(usuarioId, { dni, telefono }) {
-  await query(
+async function upsertDatosContacto(usuarioId, { dni, telefono }, executor = { query }) {
+  await executor.query(
     `INSERT INTO clientes (usuario_id, dni, telefono)
      VALUES ($1, $2, $3)
      ON CONFLICT (usuario_id) DO UPDATE SET
        dni = EXCLUDED.dni, telefono = EXCLUDED.telefono`,
     [usuarioId, dni.trim(), telefono.trim()],
   )
-  await query('UPDATE usuarios SET dni = $1 WHERE id = $2', [dni.trim(), usuarioId])
+  await executor.query('UPDATE usuarios SET dni = $1 WHERE id = $2', [dni.trim(), usuarioId])
 }
 
 // Inserta/actualiza la fila de "comisionistas". dni/telefono ya vienen validados como
 // obligatorios. presentacion y foto son opcionales: si NO vienen en el pedido
 // (undefined) se conservan los valores guardados; si vienen vacios, se borran.
-async function upsertDatosComisionista(usuarioId, { dni, telefono, presentacion, foto }) {
+async function upsertDatosComisionista(usuarioId, { dni, telefono, presentacion, foto }, executor = { query }) {
   const cambiaPresentacion = presentacion !== undefined
   const cambiaFoto = foto !== undefined
-  await query(
+  await executor.query(
     `INSERT INTO comisionistas (usuario_id, dni, telefono, presentacion, foto_perfil)
      VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT (usuario_id) DO UPDATE SET
@@ -155,7 +156,7 @@ async function upsertDatosComisionista(usuarioId, { dni, telefono, presentacion,
       cambiaPresentacion, cambiaFoto,
     ],
   )
-  await query('UPDATE usuarios SET dni = $1 WHERE id = $2', [dni.trim(), usuarioId])
+  await executor.query('UPDATE usuarios SET dni = $1 WHERE id = $2', [dni.trim(), usuarioId])
 }
 
 // NOTA: el viejo endpoint publico GET /auth/perfil/:id (sin `autenticar`) se elimino:
@@ -353,7 +354,7 @@ export async function darDeBajaMiCuenta(req, res, next) {
 // interno (nunca se toma del body) para que nadie pueda autoasignarse un rol.
 async function registrarConRol(req, res, next, rolFijo) {
   try {
-    const { nombre, apellido, email, password, confirmarPassword, dni, telefono, presentacion, foto_perfil } = req.body
+    const { nombre, apellido, email, password, confirmarPassword, dni, telefono, presentacion, foto_perfil, verificacion } = req.body
     const esCliente = rolFijo === 'cliente'
 
     // Cliente y comisionista deben dejar DNI y telefono al registrarse.
@@ -378,6 +379,9 @@ async function registrarConRol(req, res, next, rolFijo) {
       if (errorExtras) return res.status(400).json({ mensaje: errorExtras })
     }
 
+    const errorVerificacion = validarVerificacionRegistro(verificacion)
+    if (errorVerificacion) return res.status(400).json({ mensaje: errorVerificacion })
+
     const emailNormalizado = email.trim().toLowerCase()
     const existente = await query('SELECT id FROM usuarios WHERE email = $1', [emailNormalizado])
     if (existente.rows.length > 0) {
@@ -390,24 +394,42 @@ async function registrarConRol(req, res, next, rolFijo) {
     }
 
     const passwordHash = await bcrypt.hash(password, 10)
-    const { rows } = await query(
-      `INSERT INTO usuarios (nombre, apellido, email, dni, password_hash, rol, email_verificado)
-       VALUES ($1, $2, $3, $4, $5, $6, false)
-       RETURNING id`,
-      [nombre.trim(), apellido?.trim() || null, emailNormalizado, dni.trim(), passwordHash, rolFijo],
-    )
+    const client = await pool.connect()
+    let nuevoId
+    let perfil
+    try {
+      await client.query('BEGIN')
+      const { rows } = await client.query(
+        `INSERT INTO usuarios (nombre, apellido, email, dni, password_hash, rol, email_verificado)
+         VALUES ($1, $2, $3, $4, $5, $6, false)
+         RETURNING id`,
+        [nombre.trim(), apellido?.trim() || null, emailNormalizado, dni.trim(), passwordHash, rolFijo],
+      )
 
-    const nuevoId = rows[0].id
+      nuevoId = rows[0].id
 
-    // dni/telefono se guardan en la tabla que corresponde al rol. La presentacion y la
-    // foto del comisionista se cargan despues, desde su perfil.
-    if (esCliente) {
-      await upsertDatosContacto(nuevoId, { dni, telefono })
-    } else {
-      await upsertDatosComisionista(nuevoId, { dni, telefono, presentacion, foto: foto_perfil })
+      // dni/telefono se guardan en la tabla que corresponde al rol.
+      if (esCliente) {
+        await upsertDatosContacto(nuevoId, { dni, telefono }, client)
+      } else {
+        await upsertDatosComisionista(nuevoId, { dni, telefono, presentacion, foto: foto_perfil }, client)
+      }
+
+      await client.query(
+        `INSERT INTO verificaciones_identidad
+          (usuario_id, estado, consentimiento_en, dni_parcial, resultado_ocr, coincidencias, controles_faciales, enviada_en)
+         VALUES ($1, 'PENDIENTE_REVISION', NOW(), $2, $3, $4::jsonb, $5::jsonb, NOW())`,
+        [nuevoId, verificacion.dni_parcial, verificacion.resultado_ocr, JSON.stringify(verificacion.coincidencias), JSON.stringify(verificacion.controles_faciales)],
+      )
+      perfil = await buscarPerfilPorId(nuevoId, client)
+      await client.query('COMMIT')
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {})
+      throw error
+    } finally {
+      client.release()
     }
 
-    const perfil = await buscarPerfilPorId(nuevoId)
     let verificacionEnviada = true
     try {
       await enviarVerificacion(perfil)
@@ -417,9 +439,10 @@ async function registrarConRol(req, res, next, rolFijo) {
     }
 
     res.status(201).json({
-      mensaje: 'Cuenta creada. Verificá tu correo antes de iniciar sesión.',
+      mensaje: 'Cuenta creada. La identidad quedó pendiente de revisión. Verificá tu correo antes de iniciar sesión.',
       email: perfil.email,
       verificacionEnviada,
+      estadoVerificacionIdentidad: 'PENDIENTE_REVISION',
     })
   } catch (e) {
     // La consulta previa evita colisiones habituales; la restricción UNIQUE resuelve
@@ -429,6 +452,9 @@ async function registrarConRol(req, res, next, rolFijo) {
     }
     if (e.code === '23505' && e.constraint === 'usuarios_dni_uq') {
       return res.status(409).json({ mensaje: 'Ya existe una cuenta registrada con ese DNI' })
+    }
+    if (e.code === '23505' && e.constraint === 'verificaciones_identidad_activas_uq') {
+      return res.status(409).json({ mensaje: 'Ya existe una solicitud de identidad activa para esta cuenta' })
     }
     next(e)
   }

@@ -78,6 +78,10 @@ describe('API de verificaciones preliminares', () => {
     assert.equal(adminLista.status, 200)
     assert.equal(adminLista.body.some((item) => item.id === inicio.body.id), true)
     assert.equal(adminLista.body.find((item) => item.id === inicio.body.id).dni_cuenta_parcial, '••••0001')
+    const detalle = await api.get(`/api/verificaciones/admin/${inicio.body.id}`).set(auth(admin))
+    assert.equal(detalle.status, 200)
+    assert.equal(detalle.body.id, inicio.body.id)
+    assert.equal((await api.get(`/api/verificaciones/admin/${inicio.body.id}`).set(auth(cliente))).status, 403)
 
     const decision = await api.patch(`/api/verificaciones/admin/${inicio.body.id}/resolver`).set(auth(admin)).send({ decision: 'APROBADA_MANUALMENTE' })
     assert.equal(decision.status, 200, JSON.stringify(decision.body))

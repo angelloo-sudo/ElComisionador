@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { validarEnvioVerificacion, validarIdVerificacion, validarResolucion } from '../src/validators/verificacion.validador.js'
+import { validarEnvioVerificacion, validarIdVerificacion, validarResolucion, validarVerificacionRegistro } from '../src/validators/verificacion.validador.js'
 
 const envio = {
   dni_parcial: '••••6789',
@@ -17,9 +17,18 @@ describe('validador de verificaciones de identidad', () => {
     assert.match(validarEnvioVerificacion({ ...envio, coincidencias: { ...envio.coincidencias, datos_ocr: 'texto' } }), /coincidencias/)
   })
 
-  it('requiere resultados de cámara booleanos, pero permite OCR no legible', () => {
-    assert.equal(validarEnvioVerificacion({ ...envio, resultado_ocr: 'no_legible' }), null)
-    assert.match(validarEnvioVerificacion({ ...envio, controles_faciales: { ...envio.controles_faciales, giro: 'sí' } }), /booleanos/)
+  it('exige OCR legible y todos los pasos faciales completados', () => {
+    assert.match(validarEnvioVerificacion({ ...envio, resultado_ocr: 'no_legible' }), /OCR/)
+    assert.match(validarEnvioVerificacion({ ...envio, resultado_ocr: 'requiere_revision' }), /OCR/)
+    assert.match(validarEnvioVerificacion({ ...envio, controles_faciales: { ...envio.controles_faciales, giro: false } }), /completarse/)
+  })
+
+  it('valida la solicitud enviada junto con el registro sin admitir aprobación del usuario', () => {
+    assert.equal(validarVerificacionRegistro({ consentimiento: true, ...envio }), null)
+    assert.equal(validarVerificacionRegistro({ consentimiento: true, ...envio, coincidencias: { nombre: false, apellido: false, dni: false } }), null)
+    assert.match(validarVerificacionRegistro({ consentimiento: true, ...envio, resultado_ocr: 'no_legible' }), /OCR/)
+    assert.match(validarVerificacionRegistro({ consentimiento: true, ...envio, estado: 'APROBADA_MANUALMENTE' }), /no es válida/)
+    assert.match(validarVerificacionRegistro({ consentimiento: false, ...envio }), /no es válida/)
   })
 
   it('valida decisiones y motivos administrativos', () => {
