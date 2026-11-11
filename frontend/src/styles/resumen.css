@@ -49,6 +49,26 @@ a.kpi:hover { border-color: var(--borde-fuerte); transform: translateY(-1px); }
 .comisionista-kpis-principales { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .comisionista-kpis-secundarios { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .comisionista-paneles { grid-template-columns: minmax(0, 1.25fr) minmax(300px, .9fr); align-items: stretch; }
+.calendario-viajes { min-width: 0; }
+.calendario-viajes .calendario-cabecera { align-items: center; }
+.calendario-cabecera > div:first-child { min-width: 0; }
+.calendario-controles { display: flex; align-items: center; gap: 10px; }
+.calendario-controles strong { min-width: 145px; text-align: center; text-transform: capitalize; }
+.calendario-controles .btn { display: grid; width: 34px; height: 34px; padding: 0; place-items: center; font-size: 22px; line-height: 1; }
+.calendario-leyenda { display: flex; flex-wrap: wrap; gap: 14px; padding: 12px 20px 0; color: var(--texto-2); font-size: 12px; }
+.calendario-leyenda span { display: inline-flex; align-items: center; gap: 6px; }
+.calendario-leyenda i { width: 8px; height: 8px; border-radius: 50%; }
+.calendario-leyenda i.pendiente { background: var(--info); }
+.calendario-leyenda i.realizado { background: var(--verde); }
+.calendario-grilla { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; margin: 14px; overflow: hidden; border: 1px solid var(--divisor); border-radius: 10px; background: var(--divisor); }
+.calendario-dia-semana { padding: 9px 5px; background: var(--hover); color: var(--texto-2); font-size: 11px; font-weight: 600; text-align: center; }
+.calendario-celda { min-width: 0; min-height: 92px; padding: 7px; background: var(--card); }
+.calendario-celda.fuera-mes { background: var(--hover); }
+.calendario-numero { display: block; margin-bottom: 5px; color: var(--texto-2); font-size: 11px; }
+.calendario-salidas { display: grid; gap: 3px; }
+.calendario-salida { display: block; min-width: 0; padding: 2px 4px; overflow: hidden; border: 1px solid transparent; border-radius: 5px; font-size: 10px; font-weight: 650; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.calendario-salida.pendiente { border-color: var(--info-borde); background: var(--info-fondo); color: var(--info); }
+.calendario-salida.realizado { border-color: var(--verde-borde); background: var(--verde-fondo); color: var(--verde); }
 .resumen-comisionista .kpi { min-width: 0; min-height: 112px; padding: 19px 20px; border-radius: var(--radio); }
 .resumen-comisionista .kpi small, .resumen-comisionista .kpi span { color: var(--texto-2); letter-spacing: 0; text-transform: none; }
 .resumen-comisionista .kpi strong { overflow-wrap: anywhere; }
@@ -65,6 +85,12 @@ a.kpi:hover { border-color: var(--borde-fuerte); transform: translateY(-1px); }
   .resumen-comisionista { gap: 14px; }
   .resumen-comisionista .resumen-saludo { align-items: flex-start; flex-direction: column; }
   .resumen-comisionista .resumen-saludo > .btn { align-self: stretch; justify-content: center; }
+  .calendario-viajes .calendario-cabecera { align-items: flex-start; flex-direction: column; }
+  .calendario-controles { align-self: stretch; justify-content: space-between; }
+  .calendario-grilla { margin: 10px; }
+  .calendario-celda { min-height: 72px; padding: 5px 3px; }
+  .calendario-dia-semana { padding: 7px 2px; font-size: 10px; }
+  .calendario-salida { padding: 2px; font-size: 9px; text-align: center; }
   .comisionista-kpis-principales, .comisionista-kpis-secundarios,
   .comisionista-paneles { grid-template-columns: minmax(0, 1fr); }
   .resumen-comisionista .kpi { min-height: auto; padding: 15px 16px; }

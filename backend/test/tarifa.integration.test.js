@@ -466,7 +466,7 @@ describe('tarifa por km y duracion automatica', () => {
     assert.ok(!JSON.stringify(r.body).includes('null'))
   })
 
-  it('resumen: cada rol ve lo suyo (comisionista: proximo viaje, pendientes y cupos; cliente: proximo traslado y total)', async () => {
+  it('resumen: cada rol ve lo suyo y el calendario incluye viajes programados y finalizados', async () => {
     // Usuarios nuevos para que los numeros no dependan de los otros tests.
     const comi = await crearUsuario('comisionista')
     const cli = await crearUsuario('cliente')
@@ -482,6 +482,11 @@ describe('tarifa por km y duracion automatica', () => {
     const a = await api.post('/api/solicitudes').set(cli.auth).send(solicitudPasajero(v1.id, { cantidad_pasajeros: 1, origen_localidad: 'Alta Gracia', destino_localidad: 'La Falda' }))
     assert.equal(a.status, 201, JSON.stringify(a.body))
     assert.equal((await api.post('/api/solicitudes').set(cli.auth).send(solicitudPasajero(v2.id))).status, 201)
+    const { rows: [realizado] } = await query(
+      `INSERT INTO viajes (usuario_id, origen, destino, fecha, hora_salida, cupo_total, estado)
+       VALUES ($1, 'Córdoba', 'Villa Carlos Paz', $2, '08:00', 4, 'finalizado') RETURNING id`,
+      [comi.id, fechaFutura(-10)],
+    )
 
     const r = await api.get('/api/resumen').set(comi.auth)
     assert.equal(r.body.rol, 'comisionista')
@@ -493,6 +498,11 @@ describe('tarifa por km y duracion automatica', () => {
     assert.equal(r.body.alertas.sin_tarifa, false)
     assert.equal(r.body.alertas.pendientes_urgentes.length, 1) // el viaje de manana tiene una solicitud sin responder
     assert.equal(r.body.pendientes.length, 2)
+    assert.deepEqual(r.body.viajes_calendario.map((v) => [v.id, v.estado]), [
+      [realizado.id, 'finalizado'],
+      [v1.id, 'programado'],
+      [v2.id, 'programado'],
+    ])
 
     assert.equal((await api.patch(`/api/solicitudes/${a.body.id}/aceptar`).set(comi.auth)).status, 200)
     const r2 = await api.get('/api/resumen').set(comi.auth)
@@ -506,6 +516,7 @@ describe('tarifa por km y duracion automatica', () => {
     assert.equal(c.body.proximo_traslado.sube, 'Alta Gracia')
     assert.equal(c.body.totales.aceptadas, 1)
     assert.equal(c.body.totales.pendientes, 1)
+    assert.equal(c.body.viajes_calendario, undefined)
     assert.ok(c.body.totales.a_pagar_aceptadas > 0)
     assert.ok(c.body.totales.viajes_disponibles >= 2)
     assert.equal(c.body.ultimas.length, 2)
