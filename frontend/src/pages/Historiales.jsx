@@ -17,7 +17,7 @@ const claseEstado = (valor) => {
   const estado = String(valor ?? '').toLowerCase()
   if (['finalizado', 'entregado', 'en_destino', 'aceptada'].some((x) => estado.includes(x))) return 'verde'
   if (['cancelado', 'cancelada', 'rechazada', 'ausente'].some((x) => estado.includes(x))) return 'rojo'
-  if (['en_curso', 'retirado', 'a_bordo'].some((x) => estado.includes(x))) return 'ambar'
+  if (['en_curso', 'retirado', 'a_bordo', 'vencido'].some((x) => estado.includes(x))) return 'ambar'
   if (['programado', 'pendiente'].some((x) => estado.includes(x))) return 'azul'
   return 'gris'
 }

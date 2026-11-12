@@ -41,10 +41,16 @@ async function resumenComisionista(usuarioId, incluirCalendario = false) {
   let viajesCalendario
   if (incluirCalendario) {
     const { rows } = await query(
-      `SELECT id, origen, destino, fecha::text AS fecha, hora_salida, estado
-       FROM viajes
-       WHERE usuario_id = $1 AND estado IN ('programado', 'finalizado')
-       ORDER BY fecha, hora_salida, id`,
+      `SELECT v.id, v.origen, v.destino, v.fecha::text AS fecha, v.hora_salida, v.estado,
+              ${SQL_OCUPADOS} AS pasajeros_ocupados, v.cupo_total,
+              (SELECT COUNT(*)::int FROM solicitudes_viaje s
+               WHERE s.viaje_id = v.id AND s.tipo = 'encomienda' AND s.estado = 'aceptada') AS encomiendas
+       FROM viajes v
+       WHERE v.usuario_id = $1 AND (
+         v.estado = 'finalizado'
+         OR (v.estado = 'programado' AND v.fecha >= (${TZ})::date)
+       )
+       ORDER BY v.fecha, v.hora_salida, v.id`,
       [usuarioId],
     )
     viajesCalendario = rows

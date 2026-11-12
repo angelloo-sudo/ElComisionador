@@ -487,6 +487,11 @@ describe('tarifa por km y duracion automatica', () => {
        VALUES ($1, 'Córdoba', 'Villa Carlos Paz', $2, '08:00', 4, 'finalizado') RETURNING id`,
       [comi.id, fechaFutura(-10)],
     )
+    await query(
+      `INSERT INTO viajes (usuario_id, origen, destino, fecha, hora_salida, cupo_total, estado)
+       VALUES ($1, 'Córdoba', 'Alta Gracia', $2, '09:00', 3, 'programado')`,
+      [comi.id, fechaFutura(-5)],
+    )
 
     const r = await api.get('/api/resumen').set(comi.auth)
     assert.equal(r.body.rol, 'comisionista')
@@ -509,6 +514,10 @@ describe('tarifa por km y duracion automatica', () => {
     assert.equal(r2.body.totales.cupos_libres, 6)
     assert.equal(r2.body.proximo_viaje.con_paradas, 1)
     assert.equal(r2.body.totales.solicitudes_pendientes, 1)
+    const viajeCalendario = r2.body.viajes_calendario.find((v) => v.id === v1.id)
+    assert.equal(viajeCalendario.pasajeros_ocupados, 1)
+    assert.equal(viajeCalendario.cupo_total, 4)
+    assert.equal(viajeCalendario.encomiendas, 0)
 
     const c = await api.get('/api/resumen').set(cli.auth)
     assert.equal(c.body.rol, 'cliente')

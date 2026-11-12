@@ -1,5 +1,6 @@
 import { query } from '../config/db.js'
 import { agregarFiltroFechas } from '../utils/historial-filtros.js'
+import { obtenerEstadoViaje } from '../services/estado-viaje.js'
 
 function textoFiltro(valor, nombre, max = 120) {
   if (valor == null || valor === '') return { valor: null }
@@ -31,7 +32,12 @@ export async function listarViajes(req, res, next) {
                 FROM paradas_viaje p WHERE p.viaje_id = v.id), '[]'::json) AS paradas
        FROM viajes v WHERE v.usuario_id = $1 ${condiciones.length ? `AND ${condiciones.join(' AND ')}` : ''}
        ORDER BY v.fecha DESC, v.hora_salida DESC NULLS LAST, v.id DESC`, params)
-    res.json({ viajes: rows })
+    res.json({
+      viajes: rows.map((viaje) => ({
+        ...viaje,
+        estado: obtenerEstadoViaje(viaje.estado, viaje.fecha),
+      })),
+    })
   } catch (e) { next(e) }
 }
 
@@ -48,7 +54,12 @@ export async function obtenerViaje(req, res, next) {
                 FROM paradas_viaje p WHERE p.viaje_id = v.id), '[]'::json) AS paradas
        FROM viajes v WHERE v.id = $1 AND v.usuario_id = $2`, [id, req.usuario.id])
     if (!rows[0]) return res.status(404).json({ mensaje: 'No se encontró el viaje' })
-    res.json({ viaje: rows[0] })
+       res.json({
+         viaje: {
+           ...rows[0],
+           estado: obtenerEstadoViaje(rows[0].estado, rows[0].fecha),
+         },
+       })
   } catch (e) { next(e) }
 }
 
