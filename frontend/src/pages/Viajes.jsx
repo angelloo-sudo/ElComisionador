@@ -197,6 +197,7 @@ export default function Viajes() {
                 <th>Salida</th>
                 <th>Duración</th>
                 <th>Cupo</th>
+                <th>Encomiendas</th>
                 <th>Estado</th>
                 <th></th>
               </tr>
@@ -217,6 +218,7 @@ export default function Viajes() {
                   <td>{viaje.hora_salida ? viaje.hora_salida.slice(0, 5) : '-'}</td>
                   <td>{formatoDuracion(viaje.duracion_min)}</td>
                   <td>{viaje.ocupados ?? 0} / {viaje.cupo_total ?? '-'}</td>
+                  <td>{viaje.encomiendas ?? 0}</td>
                   <td><BadgeEstado estado={viaje.estado} fecha={viaje.fecha} ahora={ahora} /></td>
                   <td>
                     <div className="acciones-fila">

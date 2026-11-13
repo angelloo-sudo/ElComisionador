@@ -16,7 +16,7 @@ const FORM_INICIAL = {
   nombre: '', apellido: '', dni: '', telefono: '', cantidad_pasajeros: '1', forma_pago: '',
   valijas_grandes: '0', mochilas_bolsos_mano: '0', equipaje_descripcion: '',
   // encomienda
-  peso_kg: '', ancho_cm: '', largo_cm: '', tipo_contenido: '', contenido_descripcion: '',
+  peso_kg: '', ancho_cm: '', largo_cm: '', profundidad_cm: '', tipo_contenido: '', contenido_descripcion: '',
   emisor_nombre: '', emisor_apellido: '', emisor_telefono: '',
   receptor_nombre: '', receptor_apellido: '', receptor_telefono: '',
   // ubicaciones (comunes)
@@ -242,7 +242,7 @@ export default function SolicitarViaje() {
       if (!form.tipo_contenido) e.tipo_contenido = 'Elegí el tipo de contenido'
       else if (form.tipo_contenido === 'otro' && form.contenido_descripcion.trim().length < 3) e.contenido_descripcion = 'Aclará qué contiene el paquete'
       if (fragil === null) e.fragil = 'Indicá si el paquete es frágil'
-      for (const c of ['peso_kg', 'ancho_cm', 'largo_cm']) {
+      for (const c of ['peso_kg', 'ancho_cm', 'largo_cm', 'profundidad_cm']) {
         if (!(Number(String(form[c]).replace(',', '.')) > 0)) e[c] = 'Ingresá un valor mayor a 0'
       }
       for (const c of ['emisor_nombre', 'emisor_apellido', 'emisor_telefono', 'receptor_nombre', 'receptor_apellido', 'receptor_telefono']) req(c, 'Campo obligatorio')
@@ -290,7 +290,7 @@ export default function SolicitarViaje() {
               cantidad_pasajeros: cantidad,
             }
           : { tipo_contenido: form.tipo_contenido, contenido_descripcion: form.tipo_contenido === 'otro' ? form.contenido_descripcion : '', fragil,
-              peso_kg: decimal(form.peso_kg), ancho_cm: decimal(form.ancho_cm), largo_cm: decimal(form.largo_cm),
+              peso_kg: decimal(form.peso_kg), ancho_cm: decimal(form.ancho_cm), largo_cm: decimal(form.largo_cm), profundidad_cm: decimal(form.profundidad_cm),
               emisor_nombre: form.emisor_nombre, emisor_apellido: form.emisor_apellido, emisor_telefono: form.emisor_telefono,
               receptor_nombre: form.receptor_nombre, receptor_apellido: form.receptor_apellido, receptor_telefono: form.receptor_telefono }),
       }
@@ -563,6 +563,7 @@ export default function SolicitarViaje() {
                     <Campo label="Peso (kg)" requerido error={errores.peso_kg}><input inputMode="decimal" value={form.peso_kg} onChange={txt('peso_kg')} placeholder="Ej: 4,5" /></Campo>
                     <Campo label="Ancho (cm)" requerido error={errores.ancho_cm}><input inputMode="decimal" value={form.ancho_cm} onChange={txt('ancho_cm')} placeholder="Ej: 30" /></Campo>
                     <Campo label="Largo (cm)" requerido error={errores.largo_cm}><input inputMode="decimal" value={form.largo_cm} onChange={txt('largo_cm')} placeholder="Ej: 40" /></Campo>
+                    <Campo label="Profundidad (cm)" requerido error={errores.profundidad_cm}><input inputMode="decimal" value={form.profundidad_cm} onChange={txt('profundidad_cm')} placeholder="Ej: 20" /></Campo>
                   </div>
                   <div className="grilla-2" style={{ marginTop: 16 }}>
                     <Campo label="Tipo de contenido" requerido icono="package" error={errores.tipo_contenido}>

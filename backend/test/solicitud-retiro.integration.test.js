@@ -16,7 +16,18 @@ let contacto = (Date.now() + 7) % 10000000
 
 function datosContacto() {
   contacto += 1
-  return { dni: String(10000000 + (contacto % 89999999)), telefono: `351${String(1000000 + (contacto % 8999999))}` }
+  const dni = String(10000000 + (contacto % 89999999))
+  return {
+    dni,
+    telefono: `351${String(1000000 + (contacto % 8999999))}`,
+    verificacion: {
+      consentimiento: true,
+      dni_parcial: `****${dni.slice(-4)}`,
+      resultado_ocr: 'legible',
+      coincidencias: { nombre: true, apellido: true, dni: true },
+      controles_faciales: { rostro_unico: true, parpadeo: true, giro: true, frente: true },
+    },
+  }
 }
 
 async function registrar(rol) {
@@ -39,7 +50,7 @@ function fechaOffset(dias) {
   return d.toISOString().slice(0, 10)
 }
 
-async function crearViaje(usuarioId, { fecha = hoyEnCordoba(), estado = 'programado', hora = '08:00' } = {}) {
+async function crearViaje(usuarioId, { fecha = hoyEnCordoba(), estado = 'en_curso', hora = '08:00' } = {}) {
   const { rows } = await query(
     `INSERT INTO viajes (usuario_id, origen, destino, fecha, hora_salida, hora_llegada, cupo_total, estado)
      VALUES ($1, 'Córdoba', 'Villa María', $2, $3, '10:00', 3, $4) RETURNING id`,

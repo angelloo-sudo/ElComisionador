@@ -24,6 +24,8 @@ const CENTROS = {
   'Alta Gracia': [-31.43, -64.35], // sobre la ruta, a la mitad
   'La Falda': [-31.42, -64.45], // sobre la ruta, cerca del final
   Cosquín: [-30.9, -64.4], // lejos de la ruta
+  'Las Varillas': [-31.87, -62.72],
+  'Villa del Rosario': [-31.55, -63.54],
 }
 const RUTA_COORDS = [[-64.18, -31.42], [-64.26, -31.42], [-64.35, -31.42], [-64.44, -31.42], [-64.52, -31.42]]
 
@@ -50,8 +52,10 @@ function simularMapas() {
     if (u.includes('/route/v1')) {
       if (osrmCaido) return { ok: false, status: 503, json: async () => ({}) }
       // Distancia de la ruta simulada: proporcional a la distancia en linea recta (el viaje completo da 36,5 km).
-      const recta = kmRecta(new URL(u).pathname.split('/').pop())
-      return json({ code: 'Ok', routes: [{ distance: Math.round(recta * (36.5 / 32.3) * 1000), duration: 2700, geometry: { coordinates: [[-64.18, -31.42], [-64.5, -31.4]] } }] })
+      const coordenadas = new URL(u).pathname.split('/').pop().split(';').map((p) => p.split(',').map(Number))
+      const recta = kmRecta(coordenadas.map((p) => p.join(',')).join(';'))
+      const geometry = coordenadas.length > 2 ? coordenadas : [[-64.18, -31.42], [-64.5, -31.4]]
+      return json({ code: 'Ok', routes: [{ distance: Math.round(recta * (36.5 / 32.3) * 1000), duration: 2700, geometry: { coordinates: geometry } }] })
     }
     if (u.includes('/table/v1')) {
       // Matriz de distancias (m) entre todos los puntos, con el mismo factor que las rutas simuladas.
@@ -212,11 +216,12 @@ describe('tarifa por km y duracion automatica', () => {
       viaje_id: viaje.id, tipo: 'encomienda',
       origen_calle: 'Colon', origen_altura: '100', origen_codigo_postal: '5000',
       destino_calle: 'San Martin', destino_altura: '200', destino_codigo_postal: '5000',
-      peso_kg: 2, ancho_cm: 20, largo_cm: 30, fragil: false, tipo_contenido: 'ropa',
+      peso_kg: 2, ancho_cm: 20, largo_cm: 30, profundidad_cm: 10, fragil: false, tipo_contenido: 'ropa',
       emisor_nombre: 'Ana', emisor_apellido: 'Perez', emisor_telefono: '3512345678',
       receptor_nombre: 'Luis', receptor_apellido: 'Gomez', receptor_telefono: '3519876543',
       forma_pago: 'transferencia',
     })
+
     assert.equal(enc.status, 201, JSON.stringify(enc.body))
     assert.equal(Number(enc.body.monto), 400 * 36.5)
 
@@ -231,6 +236,45 @@ describe('tarifa por km y duracion automatica', () => {
     assert.equal(Number(recibidas.body.find((s) => s.id === pas.body.id).monto), 29200)
     assert.equal(recibidas.body.find((s) => s.id === pas.body.id).equipaje_detalle, '1 valija grande y 2 mochilas o bolsos de mano — Valija azul y mochila negra')
     await api.put('/api/tarifa').set(comisionista.auth).send({ precio_km: 400 })
+  })
+
+  it('muestra un viaje con paradas como un solo recorrido disponible', async () => {
+    const r = await api.post('/api/viajes').set(comisionista.auth).send(viajeBase({
+      fecha: fechaFutura(23),
+      paradas: [{ localidad: 'Alta Gracia', hora_estimada: '08:25' }],
+    }))
+    assert.equal(r.status, 201, JSON.stringify(r.body))
+    const lista = await api.get('/api/solicitudes/viajes-disponibles').set(cliente.auth)
+    const disponibles = lista.body.filter((viaje) => viaje.viaje_id === r.body.id)
+    assert.equal(disponibles.length, 1)
+    assert.equal(disponibles[0].origen, r.body.origen)
+    assert.equal(disponibles[0].destino, r.body.destino)
+    assert.equal(disponibles[0].paradas[0].localidad, 'Alta Gracia')
+  })
+
+  it('incluye una parada declarada al validar si una localidad esta sobre el recorrido', async () => {
+    await api.put('/api/tarifa').set(comisionista.auth).send({ precio_km: 400 })
+    const { rows: [viaje] } = await query(
+      `INSERT INTO viajes (usuario_id, origen, destino, fecha, hora_salida, hora_llegada, distancia_km, duracion_min, cupo_total, estado)
+       VALUES ($1, 'Las Varillas', 'Villa Carlos Paz', $2, '08:00', '13:00', 257, 300, 4, 'programado') RETURNING id`,
+      [comisionista.id, fechaFutura(24)],
+    )
+    await query(
+      `INSERT INTO paradas_viaje (viaje_id, orden, localidad, hora_estimada) VALUES ($1, 1, 'Villa del Rosario', '10:00')`,
+      [viaje.id],
+    )
+
+    const tramo = await api.get(`/api/solicitudes/viajes-disponibles/${viaje.id}/tramo?desde=Las%20Varillas&hasta=Villa%20del%20Rosario`).set(cliente.auth)
+    assert.equal(tramo.status, 200, JSON.stringify(tramo.body))
+    assert.equal(tramo.body.estado, 'ok', JSON.stringify(tramo.body))
+    assert.ok(tramo.body.geometria.length >= 2)
+
+    const solicitud = await api.post('/api/solicitudes').set(cliente.auth).send(solicitudPasajero(viaje.id, {
+      origen_localidad: 'Las Varillas',
+      destino_localidad: 'Villa del Rosario',
+      cantidad_pasajeros: 1,
+    }))
+    assert.equal(solicitud.status, 201, JSON.stringify(solicitud.body))
   })
 
   it('un viaje creado sin ruta se completa al postularse un cliente cuando el mapa vuelve', async () => {
@@ -359,7 +403,8 @@ describe('tarifa por km y duracion automatica', () => {
   })
 
   it('paradas: con calle y altura verificadas el tramo se mide desde la direccion exacta, no desde el centro de la localidad', async () => {
-    const { body: viaje } = await api.post('/api/viajes').set(comisionista.auth).send(viajeBase({ fecha: fechaFutura(18) }))
+    await api.put('/api/tarifa').set(comisionista.auth).send({ precio_km: 400 })
+    const { body: viaje } = await api.post('/api/viajes').set(comisionista.auth).send(viajeBase({ fecha: fechaFutura(30) }))
     const base = { desde: 'Córdoba (Capital)', hasta: 'Alta Gracia' }
     const consulta = async (extra = {}) => (await api.get(`/api/solicitudes/viajes-disponibles/${viaje.id}/tramo?${new URLSearchParams({ ...base, ...extra })}`).set(cliente.auth)).body
     const centro = await consulta()
@@ -456,7 +501,7 @@ describe('tarifa por km y duracion automatica', () => {
       viaje_id: viaje.id, tipo: 'encomienda', origen_localidad: 'Alta Gracia', destino_localidad: 'La Falda',
       origen_calle: 'Colon', origen_altura: '100', origen_codigo_postal: '5000',
       destino_calle: 'San Martin', destino_altura: '200', destino_codigo_postal: '5000',
-      peso_kg: 2, ancho_cm: 20, largo_cm: 30, fragil: false, tipo_contenido: 'ropa',
+      peso_kg: 2, ancho_cm: 20, largo_cm: 30, profundidad_cm: 10, fragil: false, tipo_contenido: 'ropa',
       emisor_nombre: 'Ana', emisor_apellido: 'Perez', emisor_telefono: '3512345678',
       receptor_nombre: 'Luis', receptor_apellido: 'Gomez', receptor_telefono: '3519876543', forma_pago: 'transferencia',
     })
@@ -466,7 +511,7 @@ describe('tarifa por km y duracion automatica', () => {
     assert.ok(!JSON.stringify(r.body).includes('null'))
   })
 
-  it('resumen: cada rol ve lo suyo (comisionista: proximo viaje, pendientes y cupos; cliente: proximo traslado y total)', async () => {
+  it('resumen: cada rol ve lo suyo y el calendario incluye viajes programados y finalizados', async () => {
     // Usuarios nuevos para que los numeros no dependan de los otros tests.
     const comi = await crearUsuario('comisionista')
     const cli = await crearUsuario('cliente')
@@ -482,6 +527,16 @@ describe('tarifa por km y duracion automatica', () => {
     const a = await api.post('/api/solicitudes').set(cli.auth).send(solicitudPasajero(v1.id, { cantidad_pasajeros: 1, origen_localidad: 'Alta Gracia', destino_localidad: 'La Falda' }))
     assert.equal(a.status, 201, JSON.stringify(a.body))
     assert.equal((await api.post('/api/solicitudes').set(cli.auth).send(solicitudPasajero(v2.id))).status, 201)
+    const { rows: [realizado] } = await query(
+      `INSERT INTO viajes (usuario_id, origen, destino, fecha, hora_salida, cupo_total, estado)
+       VALUES ($1, 'Córdoba', 'Villa Carlos Paz', $2, '08:00', 4, 'finalizado') RETURNING id`,
+      [comi.id, fechaFutura(-10)],
+    )
+    await query(
+      `INSERT INTO viajes (usuario_id, origen, destino, fecha, hora_salida, cupo_total, estado)
+       VALUES ($1, 'Córdoba', 'Alta Gracia', $2, '09:00', 3, 'programado')`,
+      [comi.id, fechaFutura(-5)],
+    )
 
     const r = await api.get('/api/resumen').set(comi.auth)
     assert.equal(r.body.rol, 'comisionista')
@@ -493,12 +548,21 @@ describe('tarifa por km y duracion automatica', () => {
     assert.equal(r.body.alertas.sin_tarifa, false)
     assert.equal(r.body.alertas.pendientes_urgentes.length, 1) // el viaje de manana tiene una solicitud sin responder
     assert.equal(r.body.pendientes.length, 2)
+    assert.deepEqual(r.body.viajes_calendario.map((v) => [v.id, v.estado]), [
+      [realizado.id, 'finalizado'],
+      [v1.id, 'programado'],
+      [v2.id, 'programado'],
+    ])
 
     assert.equal((await api.patch(`/api/solicitudes/${a.body.id}/aceptar`).set(comi.auth)).status, 200)
     const r2 = await api.get('/api/resumen').set(comi.auth)
     assert.equal(r2.body.totales.cupos_libres, 6)
     assert.equal(r2.body.proximo_viaje.con_paradas, 1)
     assert.equal(r2.body.totales.solicitudes_pendientes, 1)
+    const viajeCalendario = r2.body.viajes_calendario.find((v) => v.id === v1.id)
+    assert.equal(viajeCalendario.pasajeros_ocupados, 1)
+    assert.equal(viajeCalendario.cupo_total, 4)
+    assert.equal(viajeCalendario.encomiendas, 0)
 
     const c = await api.get('/api/resumen').set(cli.auth)
     assert.equal(c.body.rol, 'cliente')
@@ -506,6 +570,7 @@ describe('tarifa por km y duracion automatica', () => {
     assert.equal(c.body.proximo_traslado.sube, 'Alta Gracia')
     assert.equal(c.body.totales.aceptadas, 1)
     assert.equal(c.body.totales.pendientes, 1)
+    assert.equal(c.body.viajes_calendario, undefined)
     assert.ok(c.body.totales.a_pagar_aceptadas > 0)
     assert.ok(c.body.totales.viajes_disponibles >= 2)
     assert.equal(c.body.ultimas.length, 2)

@@ -1,14 +1,132 @@
 // Resumen del comisionista: lo que tiene que atender hoy y lo que viene.
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { createPortal } from 'react-dom'
 import { Alerta } from '../ui.jsx'
 import { codigoViaje } from '../../pages/ViajeNuevo.jsx'
 import { formatoPesos } from '../../utils/tarifa.js'
 import { cuando, plural } from './util.js'
+import { hoyEnCordoba } from '../../utils/estadoViaje.js'
 import '../../styles/resumen.css'
+
+const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
 function fechaActual() {
   const texto = new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())
   return texto.charAt(0).toUpperCase() + texto.slice(1)
+}
+
+function inicioMesActual() {
+  const [anio, mes] = hoyEnCordoba().split('-').map(Number)
+  return new Date(Date.UTC(anio, mes - 1, 1))
+}
+
+function claveFecha(fecha) {
+  return String(fecha).slice(0, 10)
+}
+
+function CalendarioViajes({ viajes }) {
+  const [mes, setMes] = useState(inicioMesActual)
+  const [tooltip, setTooltip] = useState(null)
+  const hoy = hoyEnCordoba()
+  const anio = mes.getUTCFullYear()
+  const numeroMes = mes.getUTCMonth()
+  const primerDia = new Date(Date.UTC(anio, numeroMes, 1))
+  const desplazamiento = (primerDia.getUTCDay() + 6) % 7
+  const diasDelMes = new Date(Date.UTC(anio, numeroMes + 1, 0)).getUTCDate()
+  const cantidadCeldas = 42
+  const tituloMes = new Intl.DateTimeFormat('es-AR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(mes)
+  const viajesPorFecha = viajes.reduce((grupos, viaje) => {
+    const fecha = claveFecha(viaje.fecha)
+    grupos[fecha] ??= []
+    grupos[fecha].push(viaje)
+    return grupos
+  }, {})
+
+  function mostrarDetalle(evento, viaje) {
+    const rect = evento.currentTarget.getBoundingClientRect()
+    const anchoTooltip = Math.min(280, window.innerWidth - 16)
+    const altoTooltip = 96
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - anchoTooltip - 8))
+    const top = rect.bottom + altoTooltip + 8 <= window.innerHeight
+      ? rect.bottom + 8
+      : Math.max(8, rect.top - altoTooltip - 8)
+    setTooltip({ viaje, left, top })
+  }
+
+  return (
+    <>
+    <section className="card calendario-viajes" aria-label="Calendario de viajes">
+      <div className="card-cabecera calendario-cabecera">
+        <div>
+          <h2>Calendario de viajes</h2>
+          <p>Salidas pendientes y viajes realizados.</p>
+        </div>
+        <div className="calendario-controles">
+          <button type="button" className="btn" aria-label="Mes anterior" onClick={() => setMes(new Date(Date.UTC(anio, numeroMes - 1, 1)))}>‹</button>
+          <strong aria-live="polite">{tituloMes.charAt(0).toUpperCase() + tituloMes.slice(1)}</strong>
+          <button type="button" className="btn calendario-hoy" onClick={() => setMes(inicioMesActual())}>Hoy</button>
+          <button type="button" className="btn" aria-label="Mes siguiente" onClick={() => setMes(new Date(Date.UTC(anio, numeroMes + 1, 1)))}>›</button>
+        </div>
+      </div>
+      <div className="calendario-leyenda" aria-label="Estados de los viajes">
+        <span><i className="pendiente" />Pendiente</span>
+        <span><i className="realizado" />Realizado</span>
+      </div>
+      <div className="calendario-grilla">
+        {DIAS_SEMANA.map((dia) => <div key={dia} className="calendario-dia-semana">{dia}</div>)}
+        {Array.from({ length: cantidadCeldas }, (_, indice) => {
+          const numeroDia = indice - desplazamiento + 1
+          const dentroDelMes = numeroDia >= 1 && numeroDia <= diasDelMes
+          if (!dentroDelMes) return <div key={`vacio-${indice}`} className="calendario-celda fuera-mes" aria-hidden="true" />
+
+          const fecha = `${anio}-${String(numeroMes + 1).padStart(2, '0')}-${String(numeroDia).padStart(2, '0')}`
+          const delDia = viajesPorFecha[fecha] ?? []
+          const esHoy = fecha === hoy
+          return (
+            <div key={fecha} className={`calendario-celda${esHoy ? ' hoy' : ''}`} role="group" aria-label={`${numeroDia} de ${tituloMes}${esHoy ? ', hoy' : ''}`} aria-current={esHoy ? 'date' : undefined}>
+              <span className="calendario-numero">{numeroDia}</span>
+              <div className="calendario-salidas">
+                {delDia.map((viaje) => {
+                  const detalles = `${viaje.hora_salida ? String(viaje.hora_salida).slice(0, 5) : 'Sin hora'} · ${viaje.origen} → ${viaje.destino} · ${viaje.pasajeros_ocupados}/${viaje.cupo_total ?? '—'} Pasajeros · ${viaje.encomiendas} Encomiendas · ${viaje.estado === 'finalizado' ? 'Realizado' : 'Pendiente'}`
+                  return (
+                    <span
+                      key={viaje.id}
+                      className={`calendario-salida ${viaje.estado === 'finalizado' ? 'realizado' : 'pendiente'}`}
+                      tabIndex={0}
+                      aria-label={detalles}
+                      aria-describedby={tooltip?.viaje.id === viaje.id ? `calendario-tooltip-${viaje.id}` : undefined}
+                      onMouseEnter={(evento) => mostrarDetalle(evento, viaje)}
+                      onMouseLeave={() => setTooltip(null)}
+                      onFocus={(evento) => mostrarDetalle(evento, viaje)}
+                      onBlur={() => setTooltip(null)}
+                    >
+                      <span className="calendario-hora">{viaje.hora_salida ? String(viaje.hora_salida).slice(0, 5) : 'Sin hora'}</span>
+                      <span className="calendario-recorrido">{viaje.origen} → {viaje.destino}</span>
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+    {tooltip && createPortal(
+      <div
+        id={`calendario-tooltip-${tooltip.viaje.id}`}
+        className="calendario-tooltip"
+        role="tooltip"
+        style={{ left: `${tooltip.left}px`, top: `${tooltip.top}px` }}
+      >
+        <strong>{tooltip.viaje.origen} → {tooltip.viaje.destino}</strong>
+        <span>{tooltip.viaje.pasajeros_ocupados}/{tooltip.viaje.cupo_total ?? '—'} Pasajeros · {tooltip.viaje.encomiendas} Encomiendas</span>
+        <span>{tooltip.viaje.estado === 'finalizado' ? 'Realizado' : 'Pendiente'}</span>
+      </div>,
+      document.body,
+    )}
+    </>
+  )
 }
 
 function Kpi({ titulo, valor, detalle, a, destacado, chico }) {
@@ -29,7 +147,7 @@ function Cupo({ ocupados, total }) {
 }
 
 export default function ResumenComisionista({ datos, nombre }) {
-  const { proximo_viaje: proximo, totales: t, alertas, pendientes, agenda } = datos
+  const { proximo_viaje: proximo, totales: t, alertas, pendientes, agenda, viajes_calendario: viajesCalendario } = datos
   const fecha = fechaActual()
   return (
     <div className="resumen resumen-comisionista">
@@ -39,7 +157,6 @@ export default function ResumenComisionista({ datos, nombre }) {
           <h2>Buen día, {nombre || 'comisionista'}</h2>
           <p>{proximo ? 'Esto es lo que tenés por delante.' : 'Todavía no tenés viajes programados.'}</p>
         </div>
-        <Link to="/viajes/nuevo" className="btn btn-primario">+ Registrar un viaje</Link>
       </header>
 
       {(alertas.sin_tarifa || alertas.pendientes_urgentes.length > 0 || alertas.viajes_sin_ruta > 0) && (
@@ -119,29 +236,33 @@ export default function ResumenComisionista({ datos, nombre }) {
         <Kpi titulo="Tu precio por km" valor={datos.precio_km != null ? formatoPesos(datos.precio_km) : 'Sin configurar'} a="/tarifa" chico />
       </div>
 
-      <section className="card">
-        <div className="card-cabecera"><h2>Agenda</h2><p>Tus próximos viajes programados.</p></div>
-        {agenda.length === 0 ? (
-          <div className="resumen-vacio">No hay viajes programados.</div>
-        ) : (
-          <div className="tabla-wrap">
-            <table className="tabla">
-              <thead><tr><th>N°</th><th>Recorrido</th><th>Salida</th><th>Cupos</th><th>Solicitudes</th></tr></thead>
-              <tbody>
-                {agenda.map((v) => (
-                  <tr key={v.id}>
-                    <td className="codigo">{codigoViaje(v.id)}</td>
-                    <td>{v.origen} → {v.destino}</td>
-                    <td>{cuando(v.fecha, v.hora_salida)}</td>
-                    <td>{v.cupo_total == null ? '—' : `${v.ocupados} / ${v.cupo_total}`}</td>
-                    <td>{v.pendientes ? <span className="badge punto ambar">{v.pendientes} sin responder</span> : <span className="campo-ayuda">Al día</span>}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      {!Array.isArray(viajesCalendario) && (
+        <section className="card">
+          <div className="card-cabecera"><h2>Agenda</h2><p>Tus próximos viajes programados.</p></div>
+          {agenda.length === 0 ? (
+            <div className="resumen-vacio">No hay viajes programados.</div>
+          ) : (
+            <div className="tabla-wrap">
+              <table className="tabla">
+                <thead><tr><th>N°</th><th>Recorrido</th><th>Salida</th><th>Cupos</th><th>Solicitudes</th></tr></thead>
+                <tbody>
+                  {agenda.map((v) => (
+                    <tr key={v.id}>
+                      <td className="codigo">{codigoViaje(v.id)}</td>
+                      <td>{v.origen} → {v.destino}</td>
+                      <td>{cuando(v.fecha, v.hora_salida)}</td>
+                      <td>{v.cupo_total == null ? '—' : `${v.ocupados} / ${v.cupo_total}`}</td>
+                      <td>{v.pendientes ? <span className="badge punto ambar">{v.pendientes} sin responder</span> : <span className="campo-ayuda">Al día</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {Array.isArray(viajesCalendario) && <CalendarioViajes viajes={viajesCalendario} />}
     </div>
   )
 }

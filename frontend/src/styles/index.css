@@ -81,6 +81,7 @@ a { color: inherit; text-decoration: none; }
 .nav-item.activo { background: var(--activo); color: var(--texto); }
 .nav-item.peligro { color: var(--rojo); }
 .nav-item.peligro:hover { background: var(--rojo-fondo); }
+.notificacion-contador { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; margin-left: auto; background: var(--rojo); color: #fff; font-size: 11px; font-weight: 700; line-height: 1; }
 .barra-cuenta .nav-item { width: 40px; height: 40px; justify-content: center; padding: 8px; }
 .barra-navegacion { overflow-x: auto; scrollbar-width: none; }
 .barra-navegacion::-webkit-scrollbar { display: none; }
@@ -711,6 +712,21 @@ textarea.area:focus { border-color: var(--foco); }
 .filtros.filtros-1 { grid-template-columns: minmax(200px, 320px); }
 @media (max-width: 900px) { .filtros.filtros-3 { grid-template-columns: 1fr 1fr; } }
 .filtros.filtros-2 { grid-template-columns: repeat(2, minmax(200px, 320px)) auto; }
+.chat-busqueda-viajes { display: grid; gap: 12px; margin-bottom: 16px; padding: 20px 24px; }
+.chat-busqueda-viajes > label { color: var(--texto); font-size: 18px; font-weight: 700; text-align: center; }
+.chat-busqueda-viajes-fila { display: flex; align-items: stretch; gap: 12px; width: 100%; }
+.chat-busqueda-viajes-fila > input { flex: 1 1 auto; width: 0; min-width: 0; height: 48px; border: 1px solid var(--borde); border-radius: 10px; padding: 0 14px; background: var(--input); color: var(--texto); font: inherit; }
+.chat-busqueda-viajes-fila > input:focus { outline: 2px solid var(--foco); outline-offset: 1px; }
+.chat-busqueda-viajes-fila > .btn { flex: 0 0 auto; min-width: 112px; height: 48px; white-space: nowrap; }
+.chat-busqueda-viajes-fila > input::placeholder { color: var(--texto-2); opacity: 0.8; }
+.chat-busqueda-viajes-ayuda { margin: 0; color: var(--texto-2); font-size: 0.75rem; text-align: center; }
+.chat-busqueda-viajes-error { margin: 0; color: var(--rojo-texto); font-size: 0.9rem; }
+@media (max-width: 560px) {
+  .chat-busqueda-viajes { padding: 18px 16px; }
+  .chat-busqueda-viajes-fila { flex-direction: column; }
+  .chat-busqueda-viajes-fila > input { width: 100%; }
+  .chat-busqueda-viajes-fila > .btn { width: 100%; }
+}
 .cupo-barra { height: 6px; border-radius: 999px; background: var(--activo); overflow: hidden; margin-top: 8px; }
 .cupo-barra > span { display: block; height: 100%; border-radius: 999px; background: var(--primario); transition: width .6s cubic-bezier(.2,.8,.2,1); }
 .input-wrap:has(> textarea.area) { height: auto; padding: 0; border: 0; background: none; display: block; }
@@ -1150,6 +1166,17 @@ textarea.area:focus { border-color: var(--foco); }
 .rentabilidad-kpis strong { display: block; margin-top: 6px; font-size: clamp(17px, 2vw, 22px); font-weight: 650; overflow-wrap: anywhere; }
 .rentabilidad-resultado { border-color: var(--borde-fuerte) !important; }
 .rentabilidad-acciones { display: flex; justify-content: flex-end; margin-top: 16px; }
+.rentabilidad-grafico { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin: 18px 0; padding: 20px; }
+.rentabilidad-grafico h3 { font-size: 16px; }
+.rentabilidad-grafico p { margin-top: 4px; color: var(--texto-2); font-size: 13px; }
+.rentabilidad-grafico-leyenda { display: grid; gap: 9px; margin-top: 16px; }
+.rentabilidad-grafico-leyenda span { display: flex; align-items: center; gap: 8px; color: var(--texto-2); font-size: 13px; }
+.rentabilidad-grafico-leyenda strong { margin-left: auto; color: var(--texto); }
+.rentabilidad-grafico-leyenda i { width: 10px; height: 10px; border-radius: 50%; }
+.rentabilidad-grafico-leyenda i.ingresos { background: #3182ce; }
+.rentabilidad-grafico-leyenda i.gastos { background: #d69e2e; }
+.rentabilidad-pastel { display: grid; flex: 0 0 170px; width: 170px; height: 170px; place-items: center; border-radius: 50%; }
+.rentabilidad-pastel > div { display: grid; width: 112px; height: 112px; place-items: center; border-radius: 50%; background: var(--card); color: var(--texto); font-weight: 650; font-size: 13px; }
 .rentabilidad-detalles { display: grid; gap: 18px; }
 .rentabilidad-tabla-card { overflow: hidden; }
 .rentabilidad-tabla-card .num { text-align: right; }
@@ -1165,6 +1192,8 @@ textarea.area:focus { border-color: var(--foco); }
   .rentabilidad-resumen { padding: 17px; }
   .rentabilidad-resumen-cabecera { flex-direction: column; }
   .rentabilidad-filtros { grid-template-columns: 1fr; }
+  .rentabilidad-grafico { align-items: flex-start; flex-direction: column-reverse; }
+  .rentabilidad-pastel { align-self: center; }
 }
 .reportes-sin-datos { display: grid; justify-items: center; gap: 12px; padding: 42px 20px; text-align: center; }
 .reportes-filtros { margin: 0 0 18px; grid-template-columns: repeat(2, minmax(170px, 1fr)) auto; }

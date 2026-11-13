@@ -50,10 +50,12 @@ describe('validador de fechas de viaje', () => {
     assert.equal(res.statusCode, null)
   })
 
-  it('acepta una hora estimada de llegada posterior a la salida', () => {
+  it('acepta la llegada el mismo día y después de medianoche', () => {
     const { continuo, res } = validar({ ...viajeBase, hora_llegada: '11:30' })
     assert.equal(continuo, true)
     assert.equal(res.statusCode, null)
+    const cruzaMedianoche = validar({ ...viajeBase, hora_salida: '21:00', hora_llegada: '01:00' })
+    assert.equal(cruzaMedianoche.continuo, true)
   })
 
   it('acepta paradas intermedias en orden horario y con localidades distintas', () => {
@@ -75,17 +77,18 @@ describe('validador de fechas de viaje', () => {
     assert.ok(res.body.errores.some((error) => error.includes('ordenados')))
   })
 
-  it('acepta una duración estimada que termina el mismo día', () => {
+  it('acepta duraciones estimadas que terminan el mismo día o al día siguiente', () => {
     const { continuo, res } = validar({ ...viajeBase, duracion_min: 90 })
     assert.equal(continuo, true)
     assert.equal(res.statusCode, null)
+    assert.equal(validar({ ...viajeBase, hora_salida: '21:00', duracion_min: 240 }).continuo, true)
   })
 
-  it('rechaza estimaciones contradictorias, llegada anterior y duración que cruza medianoche', () => {
+  it('rechaza estimaciones contradictorias, llegada igual y duración fuera de rango', () => {
     const casosInvalidos = [
       { hora_llegada: '09:00', duracion_min: 60 },
-      { hora_llegada: '09:55' },
-      { duracion_min: 840 },
+      { hora_llegada: '10:00' },
+      { duracion_min: 1440 },
     ]
     for (const extra of casosInvalidos) {
       const { continuo, res } = validar({ ...viajeBase, ...extra })
@@ -93,4 +96,5 @@ describe('validador de fechas de viaje', () => {
       assert.equal(res.statusCode, 400, JSON.stringify(extra))
     }
   })
+
 })

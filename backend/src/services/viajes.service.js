@@ -20,14 +20,23 @@ function aMinutos(hora) {
   return h * 60 + m
 }
 
-export function rangoViaje(horaSalida, horaLlegada) {
-  const inicio = aMinutos(horaSalida)
-  const fin = horaLlegada ? aMinutos(horaLlegada) : inicio + DURACION_POR_DEFECTO_MINUTOS
+export function rangoViaje(fecha, horaSalida, horaLlegada) {
+  const [anio, mes, dia] = fecha.slice(0, 10).split('-').map(Number)
+  const inicioDia = Date.UTC(anio, mes - 1, dia) / 60000
+  const inicio = inicioDia + aMinutos(horaSalida)
+  let fin = horaLlegada ? inicioDia + aMinutos(horaLlegada) : inicio + DURACION_POR_DEFECTO_MINUTOS
+  if (fin <= inicio) fin += 1440
   return { inicio, fin }
 }
 
 export function seSuperponen(rangoA, rangoB) {
   return rangoA.inicio < rangoB.fin && rangoB.inicio < rangoA.fin
+}
+
+function desplazarFecha(fecha, dias) {
+  const fechaUTC = new Date(`${fecha.slice(0, 10)}T00:00:00Z`)
+  fechaUTC.setUTCDate(fechaUTC.getUTCDate() + dias)
+  return fechaUTC.toISOString().slice(0, 10)
 }
 
 // US16: un viaje cancelado (o ya iniciado/finalizado) no admite nuevas asociaciones.
@@ -99,16 +108,16 @@ async function extenderSerie(serieId, hasta) {
     // Si justo ese dia el comisionista tiene otro viaje que se superpone, se saltea esa fecha.
     const { rows: existentes } = await cliente.query(
       `SELECT fecha::text AS fecha, hora_salida, hora_llegada FROM viajes
-       WHERE usuario_id = $1 AND fecha = ANY($2::date[]) AND estado <> 'cancelado'`,
-      [ultimo.usuario_id, fechas]
+       WHERE usuario_id = $1 AND fecha BETWEEN $2::date AND $3::date AND estado <> 'cancelado'`,
+      [ultimo.usuario_id, desplazarFecha(fechas[0], -1), desplazarFecha(fechas.at(-1), 1)]
     )
-    const rangoNuevo = rangoViaje(ultimo.hora_salida, ultimo.hora_llegada)
-    const ocupadas = new Set(
-      existentes
-        .filter((v) => seSuperponen(rangoNuevo, rangoViaje(v.hora_salida, v.hora_llegada)))
-        .map((v) => v.fecha.slice(0, 10))
-    )
-    const libres = fechas.filter((f) => !ocupadas.has(f))
+    const libres = fechas.filter((fecha) => {
+      const rangoNuevo = rangoViaje(fecha, ultimo.hora_salida, ultimo.hora_llegada)
+      return !existentes.some((viaje) => seSuperponen(
+        rangoNuevo,
+        rangoViaje(viaje.fecha, viaje.hora_salida, viaje.hora_llegada),
+      ))
+    })
 
     if (libres.length > 0) {
       const { rows: nuevos } = await cliente.query(

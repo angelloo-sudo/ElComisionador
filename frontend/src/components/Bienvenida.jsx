@@ -83,7 +83,7 @@ export default function Bienvenida({ nombre, onCerrar }) {
           <canvas ref={canvasRef} className="bienvenida-canguro" role="img" aria-label="Canguro de ComiTrack saludando" />
         </div>
         <span className="bienvenida-etiqueta">COMITRACK</span>
-        <h2>¡Bienvenido{nombre ? `, ${nombre}` : ''}!</h2>
+        <h2>¡Te damos la bienvenida{nombre ? `, ${nombre}` : ''}!</h2>
         <p>Nos alegra tenerte acá</p>
       </div>
     </div>

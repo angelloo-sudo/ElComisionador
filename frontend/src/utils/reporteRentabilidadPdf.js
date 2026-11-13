@@ -77,7 +77,7 @@ export function crearDocumentoReporte(reporte) {
     doc.setTextColor(255, 255, 255)
     doc.text('Fecha', margen + 2, y + 5.5)
     doc.text('Concepto', margen + 28, y + 5.5)
-    doc.text('Trayecto', margen + 93, y + 5.5)
+    doc.text('Viaje asociado', margen + 93, y + 5.5)
     doc.text('Monto', ancho - margen - 2, y + 5.5, { align: 'right' })
     y += 8
     doc.setFont('helvetica', 'normal')
@@ -102,7 +102,7 @@ export function crearDocumentoReporte(reporte) {
       const lineasConcepto = doc.splitTextToSize(String(concepto || 'Sin concepto'), 61)
       const textoTrayecto = fila.trayecto
         ? `${fila.trayecto.origen} → ${fila.trayecto.destino} · ${formatoFechaISO(fila.trayecto.fecha)}`
-        : 'Movimiento general'
+        : 'Sin viaje asociado'
       const lineasTrayecto = doc.splitTextToSize(textoTrayecto, 54)
       const altoFila = Math.max(8, Math.max(lineasConcepto.length, lineasTrayecto.length) * 4.2 + 3)
       asegurarEspacio(altoFila + 1, () => dibujarCabeceraTabla(`${titulo} (continuación)`))
@@ -119,59 +119,6 @@ export function crearDocumentoReporte(reporte) {
 
   tabla('Detalle de ingresos', reporte.ingresos)
   tabla('Detalle de gastos', reporte.gastos, { conDescripcion: true })
-
-  if (reporte.trayectos?.length) {
-    const cabeceraTrayectos = () => {
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(13)
-      doc.setTextColor(28, 28, 32)
-      doc.text('Resultado por trayecto', margen, y)
-      y += 6
-      doc.setFillColor(75, 13, 28)
-      doc.rect(margen, y, anchoUtil, 8, 'F')
-      doc.setFontSize(7.5)
-      doc.setTextColor(255, 255, 255)
-      doc.text('Trayecto', margen + 2, y + 5.5)
-      doc.text('Fecha', margen + 76, y + 5.5)
-      doc.text('Ingresos', margen + 110, y + 5.5, { align: 'right' })
-      doc.text('Gastos', margen + 142, y + 5.5, { align: 'right' })
-      doc.text('Resultado', ancho - margen - 2, y + 5.5, { align: 'right' })
-      y += 8
-      doc.setFont('helvetica', 'normal')
-      doc.setTextColor(42, 42, 46)
-    }
-    asegurarEspacio(17)
-    cabeceraTrayectos()
-    for (const viaje of reporte.trayectos) {
-      asegurarEspacio(11, cabeceraTrayectos)
-      doc.setDrawColor(225, 225, 228)
-      doc.line(margen, y + 8, ancho - margen, y + 8)
-      doc.setFontSize(7.5)
-      doc.text(doc.splitTextToSize(`${viaje.origen} → ${viaje.destino}`, 70), margen + 2, y + 5.5)
-      doc.text(formatoFechaISO(viaje.fecha), margen + 76, y + 5.5)
-      doc.text(dinero(viaje.total_ingresos), margen + 110, y + 5.5, { align: 'right' })
-      doc.text(dinero(viaje.total_gastos), margen + 142, y + 5.5, { align: 'right' })
-      doc.text(dinero(viaje.resultado_economico), ancho - margen - 2, y + 5.5, { align: 'right' })
-      y += 9
-    }
-    y += 6
-  }
-
-  if (reporte.movimientos_generales) {
-    asegurarEspacio(20)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(12)
-    doc.setTextColor(28, 28, 32)
-    doc.text('Movimientos generales', margen, y)
-    y += 7
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.5)
-    doc.setTextColor(80, 80, 85)
-    doc.text(`Ingresos: ${dinero(reporte.movimientos_generales.total_ingresos)}`, margen, y)
-    doc.text(`Gastos: ${dinero(reporte.movimientos_generales.total_gastos)}`, margen + 62, y)
-    doc.text(`Resultado: ${dinero(reporte.movimientos_generales.resultado_economico)}`, margen + 125, y)
-    y += 9
-  }
 
   asegurarEspacio(22)
   doc.setFillColor(75, 13, 28)

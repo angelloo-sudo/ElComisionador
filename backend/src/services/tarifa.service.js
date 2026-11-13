@@ -20,11 +20,10 @@ export function calcularMonto({ precioKm, distanciaKm, tipo = 'pasajero', cantid
   return redondear2(precio * km * personas)
 }
 
-// Suma minutos a una hora "HH:MM" y devuelve "HH:MM". No pasa de la medianoche (tope 23:55) para
-// que el viaje siga siendo del mismo dia.
+// Suma minutos a una hora "HH:MM" y devuelve la hora local de llegada, incluso si cruza medianoche.
 export function sumarMinutos(horaSalida, minutos) {
   const [h, m] = String(horaSalida).slice(0, 5).split(':').map(Number)
-  const total = Math.min(h * 60 + m + Math.max(0, Math.round(minutos)), 23 * 60 + 55)
+  const total = (h * 60 + m + Math.max(0, Math.round(minutos))) % 1440
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
 }
 

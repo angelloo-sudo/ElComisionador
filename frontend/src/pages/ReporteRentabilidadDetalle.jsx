@@ -4,6 +4,7 @@ import { api } from '../api/client.js'
 import { Alerta } from '../components/ui.jsx'
 import Icon from '../components/Icon.jsx'
 import { formatoFechaISO, formatoMoneda } from '../utils/gastos.js'
+import GraficoIngresosGastos from '../components/GraficoIngresosGastos.jsx'
 
 function tablaMovimientos(titulo, filas, tipo, total) {
   return <article className="card rentabilidad-tabla-card">
@@ -12,15 +13,13 @@ function tablaMovimientos(titulo, filas, tipo, total) {
       <thead><tr><th>Fecha</th><th>Concepto</th>{tipo === 'gastos' && <th>Descripción</th>}<th>Trayecto asociado</th><th className="num">Monto</th></tr></thead>
       <tbody>{filas.map((m) => <tr key={`${tipo}-${m.id}`}>
         <td>{formatoFechaISO(m.fecha)}</td><td>{m.concepto || 'Sin concepto'}</td>{tipo === 'gastos' && <td>{m.descripcion || '—'}</td>}
-        <td>{m.trayecto ? `${m.trayecto.origen} → ${m.trayecto.destino} · ${formatoFechaISO(m.trayecto.fecha)}` : 'Movimiento general'}</td>
+        <td>{m.trayecto ? `${m.trayecto.origen} → ${m.trayecto.destino} · ${formatoFechaISO(m.trayecto.fecha)}` : 'Sin viaje asociado'}</td>
         <td className="num">{formatoMoneda(m.monto)}</td>
       </tr>)}</tbody>
       <tfoot><tr><th colSpan={tipo === 'gastos' ? 4 : 3}>Total de {tipo}</th><th className="num">{formatoMoneda(total)}</th></tr></tfoot>
     </table></div>}
   </article>
 }
-
-const TEXTO_CLASIFICACION = { rentable: 'Rentable', perdida: 'Pérdida', equilibrado: 'Equilibrado' }
 
 export default function ReporteRentabilidadDetalle() {
   const { id } = useParams()
@@ -63,25 +62,10 @@ export default function ReporteRentabilidadDetalle() {
       <div className="rentabilidad-acciones"><button type="button" className="btn btn-primario" onClick={descargarPdf} disabled={cargandoPdf}><Icon nombre="download" />{cargandoPdf ? 'Preparando PDF…' : 'Descargar PDF'}</button></div>
     </section>
     {reporte.demo && <Alerta tipo="aviso" titulo="Reporte de demostración">Los importes y trayectos de este reporte son ficticios; no corresponden a movimientos económicos registrados.</Alerta>}
+    <GraficoIngresosGastos ingresos={reporte.total_ingresos} gastos={reporte.total_gastos} />
     <div className="rentabilidad-detalles">
       {tablaMovimientos('Ingresos incluidos', reporte.ingresos, 'ingresos', reporte.total_ingresos)}
       {tablaMovimientos('Gastos incluidos', reporte.gastos, 'gastos', reporte.total_gastos)}
     </div>
-    <section className="card rentabilidad-generales">
-      <div className="card-cabecera"><div><h3>Movimientos generales</h3><p>No asociados a un viaje; se mantienen fuera del cálculo por trayecto.</p></div></div>
-      <div className="rentabilidad-viaje-valores">
-        <span>Ingresos generales<strong>{formatoMoneda(reporte.movimientos_generales.total_ingresos)}</strong></span>
-        <span>Gastos generales<strong>{formatoMoneda(reporte.movimientos_generales.total_gastos)}</strong></span>
-        <span>Resultado general<strong>{formatoMoneda(reporte.movimientos_generales.resultado_economico)}</strong></span>
-      </div>
-      <p className="rentabilidad-general-cantidad">{reporte.movimientos_generales.ingresos.length} ingreso{reporte.movimientos_generales.ingresos.length === 1 ? '' : 's'} y {reporte.movimientos_generales.gastos.length} gasto{reporte.movimientos_generales.gastos.length === 1 ? '' : 's'} general{reporte.movimientos_generales.gastos.length === 1 ? '' : 'es'}</p>
-    </section>
-    <section className="rentabilidad-viajes">
-      <div className="barra-pagina"><div><h3>Resultado por trayecto</h3><p>Los movimientos generales no se distribuyen entre viajes.</p></div></div>
-      {!reporte.trayectos.length ? <p className="vacio">Este reporte no contiene movimientos asociados a trayectos.</p> : <div className="rentabilidad-viajes-grilla">{reporte.trayectos.map((v) => <article className="card rentabilidad-viaje" key={v.id}>
-        <div className="rentabilidad-viaje-titulo"><div><strong>{v.origen} → {v.destino}</strong><span>Viaje #{v.id} · {formatoFechaISO(v.fecha)}</span></div><span className={`rentabilidad-estado ${v.clasificacion === 'rentable' ? 'positivo' : v.clasificacion === 'perdida' ? 'negativo' : 'neutro'}`}>{TEXTO_CLASIFICACION[v.clasificacion]}</span></div>
-        <div className="rentabilidad-viaje-valores"><span>Ingresos<strong>{formatoMoneda(v.total_ingresos)}</strong></span><span>Gastos<strong>{formatoMoneda(v.total_gastos)}</strong></span><span>Resultado<strong>{formatoMoneda(v.resultado_economico)}</strong></span></div>
-      </article>)}</div>}
-    </section>
   </section>
 }

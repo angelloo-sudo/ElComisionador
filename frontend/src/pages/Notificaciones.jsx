@@ -18,6 +18,7 @@ export default function Notificaciones() {
     try {
       await api.patch(`/notificaciones/${id}/leida`, {})
       setElementos((actuales) => actuales.map((n) => n.id === id ? { ...n, leida_en: new Date().toISOString() } : n))
+      window.dispatchEvent(new Event('notificaciones:actualizadas'))
     } catch (e) { setError(e.message) }
   }
 

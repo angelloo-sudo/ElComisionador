@@ -25,6 +25,17 @@ export async function guardar(req, res, next) {
       }
       precio = Math.round(precio * 100) / 100
     }
+    const asociadas = await query(
+      `SELECT 1 FROM solicitudes_viaje s
+       JOIN viajes v ON v.id = s.viaje_id
+       WHERE v.usuario_id = $1 AND s.estado = 'aceptada'
+         AND COALESCE(s.estado_pasajero, '') NOT IN ('ausente', 'cancelado_comisionista')
+       LIMIT 1`,
+      [req.usuario.id],
+    )
+    if (asociadas.rowCount > 0) {
+      return res.status(409).json({ mensaje: 'No podés cambiar la tarifa mientras haya pasajeros o encomiendas aceptadas en tus viajes' })
+    }
     const { rows } = await query(
       `INSERT INTO comisionistas (usuario_id, precio_km) VALUES ($1, $2)
        ON CONFLICT (usuario_id) DO UPDATE SET precio_km = EXCLUDED.precio_km

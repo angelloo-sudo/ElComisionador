@@ -59,6 +59,11 @@ describe('US53-US56: historiales de comisionistas', () => {
     const propioFinalizado = await viaje(comisionista.id, {
       origen: 'Alta Gracia', destino: 'Río Cuarto', fecha: '2026-11-05', estado: 'finalizado',
     })
+    const propioVencido = await viaje(comisionista.id, {
+      origen: 'Villa María', destino: 'Río Cuarto',
+      fecha: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      estado: 'programado',
+    })
     const ajeno = await viaje(otroComisionista.id, {
       origen: 'Alta Gracia', destino: 'Mendoza', fecha: '2026-11-05', estado: 'finalizado',
     })
@@ -107,6 +112,11 @@ describe('US53-US56: historiales de comisionistas', () => {
     assert.equal(viajes.status, 200, JSON.stringify(viajes.body))
     assert.deepEqual(viajes.body.viajes.map((v) => v.id), [propioFinalizado])
     assert.equal(viajes.body.viajes[0].estado, 'finalizado')
+    const historialCompleto = await api.get('/api/historial/viajes').set(auth(comisionista))
+    assert.equal(historialCompleto.status, 200, JSON.stringify(historialCompleto.body))
+    assert.equal(historialCompleto.body.viajes.find((v) => v.id === propioVencido).estado, 'vencido')
+    const detalleVencido = await api.get(`/api/historial/viajes/${propioVencido}`).set(auth(comisionista))
+    assert.equal(detalleVencido.body.viaje.estado, 'vencido')
     const detalleViaje = await api.get(`/api/historial/viajes/${propioFinalizado}`).set(auth(comisionista))
     assert.deepEqual(detalleViaje.body.viaje.paradas.map((p) => p.localidad), ['Cosquín', 'La Falda'])
     assert.equal((await api.get(`/api/historial/viajes/${ajeno}`).set(auth(comisionista)).expect(404)).status, 404)

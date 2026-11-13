@@ -97,7 +97,7 @@ export default function GastosTab({ tipos, avisar }) {
       <div className="barra-pagina">
         <div>
           <h2>Mis gastos</h2>
-          <p>Registrá y consultá los gastos generales de tu actividad.</p>
+          <p>Registrá gastos generales, compartidos o asociados a un viaje.</p>
         </div>
         <button type="button" className="btn btn-primario" onClick={() => setFormulario({ gasto: null })}>
           <Icon nombre="plus" tamano={16} /> Registrar gasto
@@ -143,7 +143,7 @@ export default function GastosTab({ tipos, avisar }) {
         ) : (
           <table className="tabla">
             <thead>
-              <tr><th>Fecha</th><th>Concepto (tipo de gasto)</th><th className="num">Monto</th><th></th></tr>
+              <tr><th>Fecha</th><th>Concepto (tipo de gasto)</th><th>Viaje</th><th className="num">Monto</th><th></th></tr>
             </thead>
             <tbody>
               {datos.gastos.map((gasto) => (
@@ -152,6 +152,7 @@ export default function GastosTab({ tipos, avisar }) {
                   <td title={gasto.descripcion || undefined}>
                     {tipos.find((t) => t.id === gasto.tipo_gasto_id)?.nombre ?? '—'}
                   </td>
+                  <td>{gasto.viaje_id ? `${gasto.viaje_origen} → ${gasto.viaje_destino}` : 'General / compartido'}</td>
                   <td className="num">{formatoMoneda(gasto.monto)}</td>
                   <td>
                     <div className="acciones-fila">

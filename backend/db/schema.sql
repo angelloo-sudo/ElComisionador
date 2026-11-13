@@ -35,9 +35,12 @@ CREATE TABLE IF NOT EXISTS clientes (
   usuario_id                              INTEGER NOT NULL UNIQUE REFERENCES usuarios(id) ON DELETE CASCADE,
   dni                                     VARCHAR(20),
   telefono                                VARCHAR(40),
+  foto_perfil                             TEXT,
   primera_solicitud_encomienda_realizada  BOOLEAN NOT NULL DEFAULT false,
   creado_en                               TIMESTAMP DEFAULT NOW()
 );
+
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS foto_perfil TEXT;
 
 CREATE TABLE IF NOT EXISTS comisionistas (
   id            SERIAL PRIMARY KEY,
@@ -216,6 +219,7 @@ CREATE TABLE IF NOT EXISTS solicitudes_viaje (
   peso_kg               NUMERIC(8,2) CHECK (peso_kg > 0),
   ancho_cm              NUMERIC(8,2) CHECK (ancho_cm > 0),
   largo_cm              NUMERIC(8,2) CHECK (largo_cm > 0),
+  profundidad_cm        NUMERIC(8,2) CHECK (profundidad_cm > 0),
   emisor_nombre         VARCHAR(120),
   emisor_apellido       VARCHAR(120),
   emisor_telefono       VARCHAR(40),
@@ -235,6 +239,8 @@ CREATE TABLE IF NOT EXISTS solicitudes_viaje (
   creado_en             TIMESTAMP DEFAULT NOW(),
   resuelto_en           TIMESTAMP
 );
+
+ALTER TABLE solicitudes_viaje ADD COLUMN IF NOT EXISTS profundidad_cm NUMERIC(8,2) CHECK (profundidad_cm > 0);
 
 CREATE INDEX IF NOT EXISTS solicitudes_viaje_viaje_idx ON solicitudes_viaje (viaje_id, estado);
 CREATE INDEX IF NOT EXISTS solicitudes_viaje_cliente_idx ON solicitudes_viaje (cliente_id);

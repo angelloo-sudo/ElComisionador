@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api/client.js'
 import { Alerta, Campo } from '../components/ui.jsx'
 import Icon from '../components/Icon.jsx'
+import GraficoIngresosGastos from '../components/GraficoIngresosGastos.jsx'
 import { formatoFechaISO, formatoMoneda } from '../utils/gastos.js'
 
 function movimientoTabla(titulo, movimientos, tipo, total) {
@@ -94,6 +95,7 @@ export default function ReporteRentabilidad() {
           </div>
         </section>
         {reporte.cantidad_movimientos === 0 && <Alerta tipo="aviso" titulo="No se encontraron movimientos">Se muestra el balance en cero para las fechas seleccionadas.</Alerta>}
+        <GraficoIngresosGastos ingresos={reporte.total_ingresos} gastos={reporte.total_gastos} />
         <div className="rentabilidad-detalles">
           {movimientoTabla('Detalle de ingresos', reporte.ingresos, 'ingresos', reporte.total_ingresos)}
           {movimientoTabla('Detalle de gastos', reporte.gastos, 'gastos', reporte.total_gastos)}

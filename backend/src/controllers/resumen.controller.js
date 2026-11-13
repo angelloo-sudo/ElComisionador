@@ -13,17 +13,19 @@ const suma = (lista, f) => lista.reduce((t, x) => t + (Number(f(x)) || 0), 0)
 // GET /api/resumen
 export async function resumen(req, res, next) {
   try {
-    res.json(req.usuario.rol === 'cliente' ? await resumenCliente(req.usuario.id) : await resumenComisionista(req.usuario.id))
+    res.json(req.usuario.rol === 'cliente'
+      ? await resumenCliente(req.usuario.id)
+      : await resumenComisionista(req.usuario.id, req.usuario.rol === 'comisionista'))
   } catch (e) { next(e) }
 }
 
-async function resumenComisionista(usuarioId) {
+async function resumenComisionista(usuarioId, incluirCalendario = false) {
   // Viajes programados que todavia no salieron, del mas cercano al mas lejano.
   const { rows: viajes } = await query(
     `SELECT v.id, v.origen, v.destino, v.fecha::text AS fecha, v.hora_salida, v.duracion_min, v.distancia_km, v.cupo_total,
             ${SQL_OCUPADOS} AS ocupados,
             (v.fecha = (${TZ})::date) AS es_hoy,
-            (v.fecha <= (${TZ})::date + 6) AS esta_semana,
+            (v.fecha <= (${TZ})::date + ((7 - EXTRACT(DOW FROM (${TZ})::date)::int) % 7)) AS esta_semana,
             ROUND(EXTRACT(EPOCH FROM (${INICIO} - (${TZ}))) / 3600)::int AS horas_para_salir,
             (SELECT COUNT(*)::int FROM solicitudes_viaje s WHERE s.viaje_id = v.id AND s.estado = 'pendiente') AS pendientes,
             (SELECT COUNT(*)::int FROM solicitudes_viaje s WHERE s.viaje_id = v.id AND s.estado = 'aceptada'
@@ -35,6 +37,24 @@ async function resumenComisionista(usuarioId) {
      ORDER BY ${INICIO}, v.id`,
     [usuarioId],
   )
+
+  let viajesCalendario
+  if (incluirCalendario) {
+    const { rows } = await query(
+      `SELECT v.id, v.origen, v.destino, v.fecha::text AS fecha, v.hora_salida, v.estado,
+              ${SQL_OCUPADOS} AS pasajeros_ocupados, v.cupo_total,
+              (SELECT COUNT(*)::int FROM solicitudes_viaje s
+               WHERE s.viaje_id = v.id AND s.tipo = 'encomienda' AND s.estado = 'aceptada') AS encomiendas
+       FROM viajes v
+       WHERE v.usuario_id = $1 AND (
+         v.estado = 'finalizado'
+         OR (v.estado = 'programado' AND v.fecha >= (${TZ})::date)
+       )
+       ORDER BY v.fecha, v.hora_salida, v.id`,
+      [usuarioId],
+    )
+    viajesCalendario = rows
+  }
 
   const { rows: pendientes } = await query(
     `SELECT s.id, s.tipo, s.cantidad_pasajeros, s.creado_en, s.nombre, s.apellido, s.emisor_nombre, s.emisor_apellido,
@@ -63,6 +83,7 @@ async function resumenComisionista(usuarioId) {
     precio_km: tarifa[0]?.precio_km != null ? Number(tarifa[0].precio_km) : null,
     proximo_viaje: viajes[0] ? completo(viajes[0]) : null,
     agenda: viajes.slice(0, 5).map(completo),
+    ...(incluirCalendario ? { viajes_calendario: viajesCalendario } : {}),
     totales: {
       viajes_programados: viajes.length,
       viajes_hoy: viajes.filter((v) => v.es_hoy).length,

@@ -333,7 +333,7 @@ export async function cambiarEstado(req, res, next) {
 // US28 - Registrar retiro de una encomienda.
 // Confirma la recepcion inicial: la encomienda pasa de "aceptado" a "retirado" y queda registrada
 // la fecha y hora del retiro (tambien en el historial de estados, via trigger). Solo se puede retirar
-// una encomienda aceptada; si esta asociada a un viaje, ese viaje no puede estar cancelado ni finalizado.
+// una encomienda aceptada; si está asociada a un viaje, debe estar en curso.
 export async function retirar(req, res, next) {
   try {
     const id = Number(req.params.id)
@@ -358,8 +358,8 @@ export async function retirar(req, res, next) {
     if (previa.estado !== 'aceptado') {
       return res.status(409).json({ mensaje: 'Solo se puede registrar el retiro de una encomienda en estado Aceptado' })
     }
-    if (previa.viaje_estado && ['cancelado', 'finalizado'].includes(previa.viaje_estado)) {
-      return res.status(409).json({ mensaje: 'El viaje asociado a la encomienda ya no admite retiros' })
+    if (previa.viaje_estado !== 'en_curso') {
+      return res.status(409).json({ mensaje: 'Solo se puede registrar el retiro cuando el viaje asociado está en curso' })
     }
 
     const { rows } = await query(

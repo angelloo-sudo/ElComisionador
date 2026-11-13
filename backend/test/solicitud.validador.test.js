@@ -92,3 +92,32 @@ describe('validación del equipaje de pasajeros', () => {
     assert.equal(datos.equipaje_detalle, 'Una valija mediana')
   })
 })
+
+describe('solicitud de encomienda con dimensiones completas', () => {
+  it('exige largo, ancho y profundidad positivos', () => {
+    const { errores, datos } = validarSolicitud({
+      tipo: 'encomienda',
+      origen_calle: 'San Martin',
+      origen_altura: '100',
+      origen_codigo_postal: '5000',
+      destino_calle: 'Colon',
+      destino_altura: '200',
+      destino_codigo_postal: '5000',
+      peso_kg: 2,
+      ancho_cm: 20,
+      largo_cm: 30,
+      profundidad_cm: 10,
+      fragil: false,
+      tipo_contenido: 'ropa',
+      emisor_nombre: 'Ana',
+      emisor_apellido: 'Perez',
+      emisor_telefono: '3512345678',
+      receptor_nombre: 'Juan',
+      receptor_apellido: 'Lopez',
+      receptor_telefono: '3512345679',
+      forma_pago: 'efectivo',
+    })
+    assert.deepEqual(errores, [])
+    assert.equal(datos.profundidad_cm, 10)
+  })
+})
