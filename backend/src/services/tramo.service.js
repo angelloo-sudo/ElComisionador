@@ -5,7 +5,7 @@
 // La ruta original del viaje se usa para validar que las paradas esten sobre el recorrido y en orden.
 // Si sube en el origen y baja en el destino, son exactamente los km del viaje completo.
 // Si OSRM no puede calcular la ruta entre las paradas, se usa la proporcion del recorrido original.
-import { calcularRuta, calcularRutaEntrePuntos, centroLocalidad, distanciaKm } from './geo.service.js'
+import { calcularRuta, calcularRutaEntrePuntos, calcularRutaPorPuntos, centroLocalidad, distanciaKm } from './geo.service.js'
 import { esLocalidadValida } from './localidades.service.js'
 
 // Hasta cuantos km de la ruta se acepta una localidad como "parada del recorrido".
@@ -72,6 +72,15 @@ export function cortarRuta(geometria, desde, hasta) {
   return salida
 }
 
+async function rutaDelRecorrido(viaje) {
+  const paradas = Array.isArray(viaje.paradas) ? viaje.paradas.map((parada) => parada.localidad) : []
+  if (paradas.length === 0) return calcularRuta(viaje.origen, viaje.destino)
+
+  const localidades = [viaje.origen, ...paradas, viaje.destino]
+  const puntos = await Promise.all(localidades.map(centroLocalidad))
+  return calcularRutaPorPuntos(puntos)
+}
+
 const redondear1 = (n) => Math.round(n * 10) / 10
 
 // Calcula el tramo entre dos localidades dentro del viaje.
@@ -92,7 +101,7 @@ export async function calcularTramo(viaje, desdeNombre, hastaNombre, puntos = {}
   }
   let ruta
   try {
-    ruta = await calcularRuta(viaje.origen, viaje.destino)
+    ruta = await rutaDelRecorrido(viaje)
   } catch {
     return { estado: 'no_disponible' }
   }
@@ -152,4 +161,3 @@ export async function calcularTramo(viaje, desdeNombre, hastaNombre, puntos = {}
     geometria: trazado ? trazado.geometria : cortarRuta(geometria, desde.s, hasta.s),
   }
 }
-

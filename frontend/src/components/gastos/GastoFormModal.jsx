@@ -1,5 +1,5 @@
 // US40 - Registrar gasto / US41 - Modificar gasto / US44 - elegir su tipo de gasto.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../../api/client.js'
 import Icon from '../Icon.jsx'
 import { Alerta, Campo, Modal } from '../ui.jsx'
@@ -15,10 +15,19 @@ export default function GastoFormModal({ gasto, tipos, onClose, onGuardado }) {
     fecha: gasto?.fecha ?? hoyEnCordoba(),
     descripcion: gasto?.descripcion ?? '',
     tipo_gasto_id: gasto?.tipo_gasto_id ? String(gasto.tipo_gasto_id) : '',
+    viaje_id: gasto?.viaje_id ? String(gasto.viaje_id) : '',
   })
+  const [viajes, setViajes] = useState([])
+  const [errorViajes, setErrorViajes] = useState('')
   const [errores, setErrores] = useState({})
   const [errorGeneral, setErrorGeneral] = useState(null)
   const [guardando, setGuardando] = useState(false)
+
+  useEffect(() => {
+    api.get('/viajes?estado=todas')
+      .then(setViajes)
+      .catch((error) => setErrorViajes(error.message || 'No se pudieron cargar tus viajes.'))
+  }, [])
 
   function cambiar(campo, valor) {
     setForm((f) => ({ ...f, [campo]: valor }))
@@ -38,6 +47,7 @@ export default function GastoFormModal({ gasto, tipos, onClose, onGuardado }) {
       fecha: form.fecha,
       descripcion: form.descripcion.trim() || null,
       tipo_gasto_id: Number(form.tipo_gasto_id),
+      viaje_id: form.viaje_id ? Number(form.viaje_id) : null,
     }
     try {
       const guardado = editando
@@ -93,6 +103,17 @@ export default function GastoFormModal({ gasto, tipos, onClose, onGuardado }) {
             <input type="date" name="fecha" value={form.fecha} max={hoyEnCordoba()} onChange={(e) => cambiar('fecha', e.target.value)} />
           </Campo>
         </div>
+        <Campo label="Asociar a un viaje" opcional="(opcional)" ayuda={errorViajes || 'Dejalo vacío si el gasto corresponde a más de un viaje o es general.'}>
+          <select name="viaje_id" value={form.viaje_id} onChange={(e) => cambiar('viaje_id', e.target.value)}>
+            <option value="">Gasto general / compartido</option>
+            {viajes.map((viaje) => (
+              <option key={viaje.id} value={viaje.id}>
+                {viaje.fecha?.slice(0, 10)} · {viaje.origen} → {viaje.destino}
+              </option>
+            ))}
+          </select>
+          <Icon nombre="down" />
+        </Campo>
         <Campo label="Descripción" opcional="(opcional)" error={errores.descripcion} ayuda="Hasta 500 caracteres.">
           <textarea
             className="area"

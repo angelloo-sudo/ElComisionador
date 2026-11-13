@@ -13,6 +13,11 @@ import { lugaresEnTramo } from '../services/capacidad-tramo.service.js'
 
 const TZ = "NOW() AT TIME ZONE 'America/Argentina/Cordoba'"
 const INICIO = "(v.fecha + COALESCE(v.hora_salida, TIME '00:00'))"
+const LOCALIDAD_NORMALIZADA_SQL = (expresion) => `translate(lower(${expresion}), 'áéíóúüñ', 'aeiouun')`
+const normalizarLocalidad = (localidad) => String(localidad ?? '')
+  .normalize('NFD')
+  .replace(/\p{Diacritic}/gu, '')
+  .toLocaleLowerCase()
 
 // Ejecuta "trabajo" dentro de una transaccion. El trabajo devuelve { status, body } para responder
 // (se confirma ANTES de contestar) o abortar(status, mensaje) para revertir y avisar.
@@ -83,10 +88,11 @@ export async function listarViajesDisponibles(req, res, next) {
       SELECT 2147483647::int, v.destino)`
     if (origen && destino) {
       filtros += ` AND EXISTS (SELECT 1 FROM ${puntos} o JOIN ${puntos} d ON o.orden < d.orden
-        WHERE o.localidad ILIKE $${params.length - 1} AND d.localidad ILIKE $${params.length})`
+        WHERE ${LOCALIDAD_NORMALIZADA_SQL('o.localidad')} LIKE ${LOCALIDAD_NORMALIZADA_SQL(`$${params.length - 1}`)}
+          AND ${LOCALIDAD_NORMALIZADA_SQL('d.localidad')} LIKE ${LOCALIDAD_NORMALIZADA_SQL(`$${params.length}`)})`
     } else if (origen || destino) {
       const n = params.length
-      filtros += ` AND EXISTS (SELECT 1 FROM ${puntos} p WHERE p.localidad ILIKE $${n})`
+      filtros += ` AND EXISTS (SELECT 1 FROM ${puntos} p WHERE ${LOCALIDAD_NORMALIZADA_SQL('p.localidad')} LIKE ${LOCALIDAD_NORMALIZADA_SQL(`$${n}`)})`
     }
     if (fecha) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha))) return res.status(400).json({ mensaje: 'La fecha de búsqueda no es válida' })
@@ -94,10 +100,6 @@ export async function listarViajesDisponibles(req, res, next) {
     }
     const { rows } = await query(
       `SELECT ${CAMPOS_VIAJE_DISPONIBLE},
-              COALESCE((SELECT json_agg(json_build_object('cantidad_pasajeros', s.cantidad_pasajeros,
-                'origen_localidad', s.origen_localidad, 'destino_localidad', s.destino_localidad))
-                FROM solicitudes_viaje s WHERE s.viaje_id = v.id AND s.tipo = 'pasajero' AND s.estado = 'aceptada'
-                  AND COALESCE(s.estado_pasajero, '') NOT IN ('ausente', 'cancelado_comisionista')), '[]'::json) AS reservas_capacidad,
               ${SQL_MIS_SOLICITUDES(1)}
        FROM viajes v JOIN usuarios u ON u.id = v.usuario_id
        LEFT JOIN comisionistas cm ON cm.usuario_id = v.usuario_id
@@ -106,30 +108,13 @@ export async function listarViajesDisponibles(req, res, next) {
        LIMIT 200`,
       params,
     )
-    const opciones = rows.flatMap(({ reservas_capacidad: reservas, ...viaje }) => {
-      const puntos = [
-        { localidad: viaje.origen, hora: viaje.hora_salida },
-        ...(viaje.paradas ?? []).map((p) => ({ localidad: p.localidad, hora: p.hora_estimada })),
-        { localidad: viaje.destino, hora: viaje.hora_llegada },
-      ]
-      const opcionesViaje = []
-      for (let i = 0; i < puntos.length - 1; i++) for (let j = i + 1; j < puntos.length; j++) {
-        if (origen && !puntos[i].localidad.toLocaleLowerCase().includes(String(origen).trim().toLocaleLowerCase())) continue
-        if (destino && !puntos[j].localidad.toLocaleLowerCase().includes(String(destino).trim().toLocaleLowerCase())) continue
-        const ocupados = lugaresEnTramo({ paradas: viaje.paradas ?? [], reservas: reservas ?? [], origen: viaje.origen, destino: viaje.destino,
-          desde: puntos[i].localidad, hasta: puntos[j].localidad })
-        const a = puntos[i].hora?.slice(0, 5) ?? viaje.hora_salida?.slice(0, 5)
-        const b = puntos[j].hora?.slice(0, 5) ?? viaje.hora_llegada?.slice(0, 5)
-        const minutos = a && b ? (Number(b.slice(0, 2)) * 60 + Number(b.slice(3)) - Number(a.slice(0, 2)) * 60 - Number(a.slice(3))) : viaje.duracion_min
-        opcionesViaje.push({ ...viaje, opcion_id: `${viaje.viaje_id}:${i}-${j}`, origen_viaje: viaje.origen, destino_viaje: viaje.destino,
-          origen: puntos[i].localidad, destino: puntos[j].localidad, hora_salida: a, hora_llegada: b,
-          duracion_min: minutos > 0 ? minutos : viaje.duracion_min, precio_pasajero: i === 0 && j === puntos.length - 1 ? viaje.precio_pasajero : null,
-          requiere_calculo_tramo: !(i === 0 && j === puntos.length - 1),
-          ocupados, cupos_disponibles: Math.max(Number(viaje.cupo_total ?? 0) - ocupados, 0) })
-      }
-      return opcionesViaje
-    })
-    res.json(opciones.slice(0, 200))
+    res.json(rows.slice(0, 200).map((viaje) => ({
+      ...viaje,
+      opcion_id: String(viaje.viaje_id),
+      origen_viaje: viaje.origen,
+      destino_viaje: viaje.destino,
+      requiere_calculo_tramo: false,
+    })))
   } catch (e) { next(e) }
 }
 
@@ -153,7 +138,7 @@ const COLUMNAS_SOLICITUD = [
   'tipo', 'origen_localidad', 'destino_localidad', 'origen_calle', 'origen_altura', 'origen_codigo_postal', 'origen_descripcion',
   'destino_calle', 'destino_altura', 'destino_codigo_postal',
   'nombre', 'apellido', 'dni', 'telefono', 'lleva_equipaje', 'equipaje_detalle', 'cantidad_pasajeros', 'forma_pago',
-  'peso_kg', 'ancho_cm', 'largo_cm', 'fragil', 'tipo_contenido', 'contenido_descripcion',
+  'peso_kg', 'ancho_cm', 'largo_cm', 'profundidad_cm', 'fragil', 'tipo_contenido', 'contenido_descripcion',
   'emisor_nombre', 'emisor_apellido', 'emisor_telefono', 'receptor_nombre', 'receptor_apellido', 'receptor_telefono',
 ]
 
@@ -190,7 +175,9 @@ const precioDePersona = (precioKm, km) => calcularMonto({ precioKm, distanciaKm:
 // Datos del viaje + tarifa del comisionista.
 async function datosDeViaje(viajeId) {
   const { rows } = await query(
-    `SELECT v.id, v.origen, v.destino, v.hora_salida, v.distancia_km, v.duracion_min, v.cupo_total, cm.precio_km
+    `SELECT v.id, v.origen, v.destino, v.hora_salida, v.distancia_km, v.duracion_min, v.cupo_total, cm.precio_km,
+            COALESCE((SELECT json_agg(json_build_object('localidad', p.localidad) ORDER BY p.orden)
+                      FROM paradas_viaje p WHERE p.viaje_id = v.id), '[]'::json) AS paradas
      FROM viajes v LEFT JOIN comisionistas cm ON cm.usuario_id = v.usuario_id WHERE v.id = $1`,
     [viajeId],
   )
@@ -259,7 +246,10 @@ export async function tramoDeSolicitudRecibida(req, res, next) {
     const id = Number(req.params.id)
     if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ mensaje: 'La solicitud indicada no es válida' })
     const { rows } = await query(
-      `SELECT s.origen_localidad, s.destino_localidad, s.origen_calle, s.origen_altura, s.origen_codigo_postal, s.destino_calle, s.destino_altura, s.destino_codigo_postal, v.origen, v.destino
+      `SELECT s.origen_localidad, s.destino_localidad, s.origen_calle, s.origen_altura, s.origen_codigo_postal,
+              s.destino_calle, s.destino_altura, s.destino_codigo_postal, v.origen, v.destino,
+              COALESCE((SELECT json_agg(json_build_object('localidad', p.localidad) ORDER BY p.orden)
+                        FROM paradas_viaje p WHERE p.viaje_id = v.id), '[]'::json) AS paradas
        FROM solicitudes_viaje s JOIN viajes v ON v.id = s.viaje_id WHERE s.id = $1 AND v.usuario_id = $2`,
       [id, req.usuario.id],
     )
@@ -415,6 +405,13 @@ export async function cancelar(req, res, next) {
     if (!viajes[0].antes_del_inicio) return abortar(409, 'No se puede cancelar después del inicio del viaje')
 
     await db.query(`UPDATE solicitudes_viaje SET estado = 'cancelada', resuelto_en = NOW() WHERE id = $1`, [id])
+    await db.query(
+      `INSERT INTO notificaciones (usuario_id, viaje_id, titulo, mensaje)
+       SELECT c.usuario_id, v.id, 'Solicitud cancelada', 'Cancelaste tu solicitud para el viaje ' || v.origen || ' → ' || v.destino || '.'
+       FROM solicitudes_viaje s JOIN clientes c ON c.id = s.cliente_id JOIN viajes v ON v.id = s.viaje_id
+       WHERE s.id = $1`,
+      [id],
+    )
     return { status: 200, body: { id, estado: 'cancelada' } }
   })
 }
@@ -428,12 +425,13 @@ export async function listarRecibidas(req, res, next) {
   try {
     const estado = String(req.query.estado ?? 'pendiente')
     const tipo = req.query.tipo ? String(req.query.tipo) : null
-    if (!['pendiente', 'aceptada', 'rechazada', 'cancelada', 'todas'].includes(estado)) return res.status(400).json({ mensaje: 'El estado indicado no es válido' })
+    if (!['pendiente', 'aceptada', 'rechazada', 'cancelada', 'entregada', 'todas'].includes(estado)) return res.status(400).json({ mensaje: 'El estado indicado no es válido' })
     if (tipo && !['pasajero', 'encomienda'].includes(tipo)) return res.status(400).json({ mensaje: 'El tipo indicado no es válido' })
 
     const params = [req.usuario.id]
     let filtros = ''
-    if (estado !== 'todas') { params.push(estado); filtros += ` AND s.estado = $${params.length}` }
+    if (estado === 'entregada') filtros += ` AND s.tipo = 'encomienda' AND s.estado = 'aceptada' AND s.entregada_en IS NOT NULL`
+    else if (estado !== 'todas') { params.push(estado); filtros += ` AND s.estado = $${params.length}` }
     if (tipo) { params.push(tipo); filtros += ` AND s.tipo = $${params.length}` }
     // Las pendientes de viajes ya cancelados o iniciados no se pueden resolver: no se listan.
     if (estado === 'pendiente') filtros += ` AND v.estado = 'programado' AND ${INICIO} > (${TZ})`
@@ -461,12 +459,14 @@ function resolver(nuevoEstado) {
     const id = Number(req.params.id)
     if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ mensaje: 'La solicitud indicada no es válida' })
 
-    // Motivo del rechazo: opcional, hasta 300 caracteres. Solo se guarda al rechazar.
+    // Motivo del rechazo obligatorio y limitado a 300 caracteres.
     let motivo = null
-    if (nuevoEstado === 'rechazada' && req.body?.motivo != null) {
-      if (typeof req.body.motivo !== 'string') return res.status(400).json({ mensaje: 'El motivo del rechazo no es válido' })
-      motivo = req.body.motivo.trim() || null
-      if (motivo && motivo.length > 300) return res.status(400).json({ mensaje: 'El motivo del rechazo admite hasta 300 caracteres' })
+    if (nuevoEstado === 'rechazada') {
+      if (typeof req.body?.motivo !== 'string' || !req.body.motivo.trim()) {
+        return res.status(400).json({ mensaje: 'El motivo del rechazo es obligatorio' })
+      }
+      motivo = req.body.motivo.trim()
+      if (motivo.length > 300) return res.status(400).json({ mensaje: 'El motivo del rechazo admite hasta 300 caracteres' })
     }
 
     await conTransaccion(res, next, async (db) => {
@@ -502,6 +502,17 @@ function resolver(nuevoEstado) {
       }
 
       await db.query(`UPDATE solicitudes_viaje SET estado = $2, resuelto_en = NOW(), motivo_rechazo = $3 WHERE id = $1`, [id, nuevoEstado, motivo])
+      if (nuevoEstado === 'aceptada') {
+        await db.query(
+          `INSERT INTO notificaciones (usuario_id, viaje_id, titulo, mensaje)
+           SELECT c.usuario_id, v.id, 'Solicitud aceptada',
+             CASE WHEN s.tipo = 'encomienda' THEN 'El comisionista aceptó tu solicitud de encomienda para el viaje '
+                  ELSE 'El comisionista aceptó tu solicitud de viaje para ' END || v.origen || ' → ' || v.destino || '.'
+           FROM solicitudes_viaje s JOIN clientes c ON c.id = s.cliente_id JOIN viajes v ON v.id = s.viaje_id
+           WHERE s.id = $1`,
+          [id],
+        )
+      }
       const { rows: despues } = await db.query(`SELECT ${SQL_OCUPADOS} AS ocupados FROM viajes v WHERE v.id = $1`, [previas[0].viaje_id])
       return { status: 200, body: { id, estado: nuevoEstado, ocupados: despues[0].ocupados, cupo_total: viaje.cupo_total } }
     })
@@ -527,7 +538,7 @@ export async function retirar(req, res, next) {
     if (s.tipo !== 'encomienda') return abortar(409, 'Solo se puede registrar el retiro de una encomienda')
     if (s.estado !== 'aceptada') return abortar(409, 'Solo se puede registrar el retiro de una encomienda aceptada')
     if (s.retirada_en) return abortar(409, 'La encomienda ya fue retirada')
-    if (['cancelado', 'finalizado'].includes(s.estado_viaje)) return abortar(409, 'El viaje ya no admite retiros')
+    if (s.estado_viaje !== 'en_curso') return abortar(409, 'Solo se puede registrar el retiro cuando el viaje asociado está en curso')
     const { rows: r } = await db.query(
       `UPDATE solicitudes_viaje SET retirada_en = NOW() WHERE id = $1 RETURNING retirada_en`, [id])
     // US35: al retirar la encomienda se registra el cobro del servicio.

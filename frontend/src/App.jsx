@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import Auth from './pages/Auth.jsx'
 import VerificarEmail from './pages/VerificarEmail.jsx'
-import { cerrarSesion } from './api/client.js'
+import { api, cerrarSesion } from './api/client.js'
 import Dashboard from './pages/Dashboard.jsx'
 import Viajes from './pages/Viajes.jsx'
 import ViajeNuevo from './pages/ViajeNuevo.jsx'
@@ -16,7 +16,6 @@ import Ingresos from './pages/Ingresos.jsx'
 import ReporteRentabilidad from './pages/ReporteRentabilidad.jsx'
 import ReportesRentabilidad from './pages/ReportesRentabilidad.jsx'
 import ReporteRentabilidadDetalle from './pages/ReporteRentabilidadDetalle.jsx'
-import GraficosRentabilidad from './pages/GraficosRentabilidad.jsx'
 import Tarifa from './pages/Tarifa.jsx'
 import SolicitarViaje from './pages/SolicitarViaje.jsx'
 import Landing from './pages/Landing.jsx'
@@ -95,6 +94,7 @@ export default function App() {
   const [pantallaFinal, setPantallaFinal] = useState(null) // null | 'cerrada' | 'baja'
   const [confirmandoSalida, setConfirmandoSalida] = useState(false)
   const [mostrarBienvenida, setMostrarBienvenida] = useState(false)
+  const [notificacionesNoLeidas, setNotificacionesNoLeidas] = useState(0)
   const ubicacion = useLocation()
   const navegar = useNavigate()
   const cerrarBienvenida = useCallback(() => setMostrarBienvenida(false), [])
@@ -138,6 +138,25 @@ export default function App() {
   const nombreCompleto = `${usuario?.nombre ?? ''} ${usuario?.apellido ?? ''}`.trim()
   const claseNav = ({ isActive }) => `nav-item${isActive ? ' activo' : ''}`
 
+  useEffect(() => {
+    if (!esCliente) {
+      setNotificacionesNoLeidas(0)
+      return undefined
+    }
+    let vigente = true
+    const actualizar = () => api.get('/notificaciones/no-leidas')
+      .then(({ cantidad }) => { if (vigente) setNotificacionesNoLeidas(cantidad) })
+      .catch((error) => console.error('No se pudo actualizar el contador de notificaciones:', error))
+    actualizar()
+    const intervalo = window.setInterval(actualizar, 30_000)
+    window.addEventListener('notificaciones:actualizadas', actualizar)
+    return () => {
+      vigente = false
+      window.clearInterval(intervalo)
+      window.removeEventListener('notificaciones:actualizadas', actualizar)
+    }
+  }, [esCliente])
+
   return (
     <div className="app">
       <header className="sidebar barra-aplicacion">
@@ -168,18 +187,14 @@ export default function App() {
           {esComisionista && <NavLink to="/viajes" className={claseNav}><Icon nombre="logo" /> Viajes</NavLink>}
           {esComisionista && <NavLink to="/solicitudes" className={claseNav}><Icon nombre="checkcircle" /> Solicitudes</NavLink>}
           {esComisionista && <NavLink to="/clientes" className={claseNav}><Icon nombre="users" /> Clientes</NavLink>}
-          {usuario?.rol === 'comisionista' && <NavLink to="/historial/viajes" className={claseNav}>Historial viajes</NavLink>}
+          {usuario?.rol === 'comisionista' && <NavLink to="/historial/viajes" className={claseNav}>Historial</NavLink>}
           {usuario?.rol === 'comisionista' && <NavLink to="/historial/clientes" className={claseNav}>Operaciones clientes</NavLink>}
-          {usuario?.rol === 'comisionista' && <NavLink to="/historial/encomiendas" className={claseNav}>Historial encomiendas</NavLink>}
-          {usuario?.rol === 'comisionista' && <NavLink to="/historial/pasajeros" className={claseNav}>Historial pasajeros</NavLink>}
           {usuario?.rol === 'comisionista' && <NavLink to="/tarifa" className={claseNav}><Icon nombre="tag" /> Tarifa</NavLink>}
           {usuario?.rol === 'comisionista' && <NavLink to="/ingresos" className={claseNav}><Icon nombre="wallet" /> Ingresos</NavLink>}
           {usuario?.rol === 'comisionista' && <NavLink to="/gastos" className={claseNav}><Icon nombre="wallet" /> Gastos</NavLink>}
           {usuario?.rol === 'comisionista' && <NavLink to="/rentabilidad" className={claseNav}><Icon nombre="wallet" /> Rentabilidad</NavLink>}
-          {usuario?.rol === 'comisionista' && <NavLink to="/graficos-rentabilidad" className={claseNav}><Icon nombre="wallet" /> Gráficos</NavLink>}
-          {usuario?.rol === 'comisionista' && <NavLink to="/reportes-rentabilidad" className={claseNav}><Icon nombre="wallet" /> Reportes</NavLink>}
           {usuario?.rol === 'cliente' && <NavLink to="/mis-traslados" className={claseNav}><Icon nombre="logo" /> Viajes</NavLink>}
-          {usuario?.rol === 'cliente' && <NavLink to="/notificaciones" className={claseNav}><Icon nombre="bell" /> Notificaciones</NavLink>}
+          {usuario?.rol === 'cliente' && <NavLink to="/notificaciones" className={claseNav} aria-label={`Notificaciones${notificacionesNoLeidas ? `, ${notificacionesNoLeidas} sin leer` : ''}`}><Icon nombre="bell" /> Notificaciones{notificacionesNoLeidas > 0 && <span className="notificacion-contador">{notificacionesNoLeidas}</span>}</NavLink>}
           {(esCliente || usuario?.rol === 'comisionista') && <NavLink to="/verificacion" className={claseNav}><Icon nombre="idcard" /> Verificación</NavLink>}
           {usuario?.rol === 'administrador' && <NavLink to="/admin/verificaciones" className={claseNav}><Icon nombre="idcard" /> Verificaciones</NavLink>}
         </nav>
@@ -199,7 +214,6 @@ export default function App() {
             {usuario?.rol === 'comisionista' && <Route path="/ingresos" element={<Ingresos />} />}
             {usuario?.rol === 'comisionista' && <Route path="/gastos" element={<Gastos />} />}
             {usuario?.rol === 'comisionista' && <Route path="/rentabilidad" element={<ReporteRentabilidad />} />}
-            {usuario?.rol === 'comisionista' && <Route path="/graficos-rentabilidad" element={<GraficosRentabilidad />} />}
             {usuario?.rol === 'comisionista' && <Route path="/reportes-rentabilidad" element={<ReportesRentabilidad />} />}
             {usuario?.rol === 'comisionista' && <Route path="/reportes-rentabilidad/:id" element={<ReporteRentabilidadDetalle />} />}
             {usuario?.rol === 'cliente' && <Route path="/mis-traslados" element={<MisTraslados />} />}

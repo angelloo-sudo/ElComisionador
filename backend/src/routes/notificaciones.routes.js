@@ -4,6 +4,7 @@ import { autenticar, permitirRoles } from '../middlewares/auth.middleware.js'
 
 const router = Router()
 router.use(autenticar, permitirRoles('cliente'))
+router.get('/no-leidas', notificaciones.contarNoLeidas)
 router.get('/', notificaciones.listar)
 router.patch('/:id/leida', notificaciones.marcarLeida)
 export default router

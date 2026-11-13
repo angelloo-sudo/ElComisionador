@@ -21,7 +21,7 @@ const SELECT_PERFIL = `
   SELECT u.id, u.nombre, u.apellido, u.email, u.rol, u.activo, u.creado_en,
          u.dni,
          COALESCE(c.telefono, m.telefono) AS telefono,
-         m.presentacion, m.foto_perfil
+         m.presentacion, COALESCE(c.foto_perfil, m.foto_perfil) AS foto_perfil
   FROM usuarios u
   LEFT JOIN clientes c ON c.usuario_id = u.id
   LEFT JOIN comisionistas m ON m.usuario_id = u.id
@@ -125,13 +125,15 @@ async function buscarConflictoContacto(usuarioId, dni, telefono) {
 // Inserta/actualiza la fila de "clientes" con los datos de contacto. Solo se usa
 // cuando el usuario en cuestion tiene rol = 'cliente' (dni/telefono ya validados
 // como obligatorios antes de llegar aca).
-async function upsertDatosContacto(usuarioId, { dni, telefono }, executor = { query }) {
+async function upsertDatosContacto(usuarioId, { dni, telefono, foto }, executor = { query }) {
+  const cambiaFoto = foto !== undefined
   await executor.query(
-    `INSERT INTO clientes (usuario_id, dni, telefono)
-     VALUES ($1, $2, $3)
+    `INSERT INTO clientes (usuario_id, dni, telefono, foto_perfil)
+     VALUES ($1, $2, $3, $4)
      ON CONFLICT (usuario_id) DO UPDATE SET
-       dni = EXCLUDED.dni, telefono = EXCLUDED.telefono`,
-    [usuarioId, dni.trim(), telefono.trim()],
+       dni = EXCLUDED.dni, telefono = EXCLUDED.telefono,
+       foto_perfil = CASE WHEN $5::boolean THEN EXCLUDED.foto_perfil ELSE clientes.foto_perfil END`,
+    [usuarioId, dni.trim(), telefono.trim(), foto || null, cambiaFoto],
   )
   await executor.query('UPDATE usuarios SET dni = $1 WHERE id = $2', [dni.trim(), usuarioId])
 }
@@ -187,14 +189,15 @@ export async function actualizarMiPerfil(req, res, next) {
     if (esCliente) {
       // US14 habilita exclusivamente nombre, apellido y teléfono para el cliente.
       // No confiar en que la interfaz oculte los campos inmutables.
-      if (['email', 'dni', 'password', 'confirmarPassword'].some((campo) => campo in req.body)) {
-        return res.status(400).json({ mensaje: 'Solo se pueden modificar nombre, apellido y teléfono' })
+      if (['email', 'dni', 'password', 'confirmarPassword', 'presentacion'].some((campo) => campo in req.body)) {
+        return res.status(400).json({ mensaje: 'Solo se pueden modificar nombre, apellido, teléfono y foto de perfil' })
       }
 
       const errorNombre = validarNombrePropio(nombre, { etiqueta: 'El nombre' })
       const errorApellido = validarNombrePropio(apellido, { etiqueta: 'El apellido' })
       const errorTelefono = validarTelefono(telefono)
-      const errorCliente = errorNombre || errorApellido || errorTelefono
+      const errorFoto = validarFotoPerfil(foto_perfil)
+      const errorCliente = errorNombre || errorApellido || errorTelefono || errorFoto
       if (errorCliente) return res.status(400).json({ mensaje: errorCliente })
 
       const cliente = await query('SELECT dni FROM clientes WHERE usuario_id = $1', [req.usuario.id])
@@ -207,7 +210,7 @@ export async function actualizarMiPerfil(req, res, next) {
         'UPDATE usuarios SET nombre = $1, apellido = $2 WHERE id = $3',
         [nombre.trim(), apellido.trim(), req.usuario.id],
       )
-      await query('UPDATE clientes SET telefono = $1 WHERE usuario_id = $2', [telefono.trim(), req.usuario.id])
+      await upsertDatosContacto(req.usuario.id, { dni: cliente.rows[0].dni, telefono, foto: foto_perfil })
 
       const perfilActualizado = await buscarPerfilPorId(req.usuario.id)
       return res.json({

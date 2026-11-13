@@ -25,7 +25,7 @@ async function resumenComisionista(usuarioId, incluirCalendario = false) {
     `SELECT v.id, v.origen, v.destino, v.fecha::text AS fecha, v.hora_salida, v.duracion_min, v.distancia_km, v.cupo_total,
             ${SQL_OCUPADOS} AS ocupados,
             (v.fecha = (${TZ})::date) AS es_hoy,
-            (v.fecha <= (${TZ})::date + 6) AS esta_semana,
+            (v.fecha <= (${TZ})::date + ((7 - EXTRACT(DOW FROM (${TZ})::date)::int) % 7)) AS esta_semana,
             ROUND(EXTRACT(EPOCH FROM (${INICIO} - (${TZ}))) / 3600)::int AS horas_para_salir,
             (SELECT COUNT(*)::int FROM solicitudes_viaje s WHERE s.viaje_id = v.id AND s.estado = 'pendiente') AS pendientes,
             (SELECT COUNT(*)::int FROM solicitudes_viaje s WHERE s.viaje_id = v.id AND s.estado = 'aceptada'

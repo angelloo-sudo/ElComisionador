@@ -52,6 +52,13 @@ function EstadoPill({ estado }) {
   return <span className={`verif-pill ${clase}`}>{formatearEstadoVerificacion(estado)}</span>
 }
 
+function formatearFechaDocumento(valor) {
+  const digitos = valor.replace(/\D/g, '').slice(0, 8)
+  if (digitos.length <= 2) return digitos
+  if (digitos.length <= 4) return `${digitos.slice(0, 2)}/${digitos.slice(2)}`
+  return `${digitos.slice(0, 2)}/${digitos.slice(2, 4)}/${digitos.slice(4)}`
+}
+
 function ResultadoOcr({ resultado }) {
   const texto = resultado === 'legible' ? 'OCR legible' : resultado === 'no_legible' ? 'OCR no legible' : 'OCR requiere revisión'
   return <span className={`verif-pill ${resultado === 'legible' ? 'exito' : 'pendiente'}`}>{texto}</span>
@@ -174,7 +181,8 @@ export default function VerificacionIdentidad({ perfilRegistro, onRegistroComple
 
   function actualizarDato(event) {
     const { name, value } = event.target
-    setDatos((actual) => ({ ...actual, [name]: value }))
+    const actualizado = ['fecha_nacimiento', 'fecha_vencimiento'].includes(name) ? formatearFechaDocumento(value) : value
+    setDatos((actual) => ({ ...actual, [name]: actualizado }))
   }
 
   function continuarSelfie() {
@@ -324,8 +332,8 @@ export default function VerificacionIdentidad({ perfilRegistro, onRegistroComple
             <label>DNI leído o corregido<input name="dni" inputMode="numeric" autoComplete="off" value={datos.dni} onChange={actualizarDato} placeholder="7 u 8 dígitos" maxLength={12} /></label>
             <label>Nombre<input name="nombre" autoComplete="off" value={datos.nombre} onChange={actualizarDato} maxLength={120} /></label>
             <label>Apellido<input name="apellido" autoComplete="off" value={datos.apellido} onChange={actualizarDato} maxLength={120} /></label>
-            <label>Fecha de nacimiento<input name="fecha_nacimiento" value={datos.fecha_nacimiento} onChange={actualizarDato} placeholder="DD/MM/AAAA" /></label>
-            <label>Vencimiento (si se leyó)<input name="fecha_vencimiento" value={datos.fecha_vencimiento} onChange={actualizarDato} placeholder="DD/MM/AAAA" /></label>
+            <label>Fecha de nacimiento<input name="fecha_nacimiento" inputMode="numeric" maxLength={10} value={datos.fecha_nacimiento} onChange={actualizarDato} placeholder="DD/MM/AAAA" /></label>
+            <label>Vencimiento (si se leyó)<input name="fecha_vencimiento" inputMode="numeric" maxLength={10} value={datos.fecha_vencimiento} onChange={actualizarDato} placeholder="DD/MM/AAAA" /></label>
             <label>Número de trámite (si se leyó)<input name="numero_tramite" inputMode="numeric" autoComplete="off" value={datos.numero_tramite} onChange={actualizarDato} /></label>
           </div>
           <h4>Comparación con el perfil</h4>

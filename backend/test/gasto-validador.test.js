@@ -47,7 +47,7 @@ test('normalizarGasto exige el tipo de gasto (su concepto) y limpia los datos', 
     { hoy: HOY },
   )
   assert.deepEqual(errores, [])
-  assert.deepEqual(datos, { tipo_gasto_id: 4, monto: '2500.50', fecha: '2026-10-17', descripcion: 'Taller' })
+  assert.deepEqual(datos, { viaje_id: null, tipo_gasto_id: 4, monto: '2500.50', fecha: '2026-10-17', descripcion: 'Taller' })
   for (const malo of [undefined, null, '', 'x', 0, -1]) {
     assert.equal(normalizarGasto({ ...gastoValido, tipo_gasto_id: malo }, { hoy: HOY }).errores.length, 1, JSON.stringify(malo))
   }
@@ -59,6 +59,13 @@ test('normalizarGasto informa todos los errores a la vez', () => {
   assert.match(errores.join('|'), /tipo de gasto/i)
   assert.match(errores.join('|'), /monto/i)
   assert.match(errores.join('|'), /fecha/i)
+})
+
+test('normalizarGasto valida la asociación opcional con un viaje', () => {
+  const normalizado = normalizarGasto({ ...gastoValido, viaje_id: '12' }, { hoy: HOY })
+  assert.equal(normalizado.errores.length, 0)
+  assert.equal(normalizado.datos.viaje_id, 12)
+  assert.match(normalizarGasto({ ...gastoValido, viaje_id: 'no-valido' }, { hoy: HOY }).errores.join('|'), /viaje asociado/i)
 })
 
 test('normalizarGasto valida fecha futura/antigua/inexistente y descripción larga', () => {

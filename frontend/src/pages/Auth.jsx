@@ -458,7 +458,7 @@ function cambiarModo(nuevo) {
                 <input name="telefono" type="tel" value={form.telefono} onChange={handleChange} placeholder="+54 351 456-7890" autoComplete="tel" />
               </Campo>
               <Campo label="DNI" requerido icono="idcard" error={errores.dni}>
-                <input name="dni" value={form.dni} onChange={handleChange} inputMode="numeric" placeholder="30.456.789" />
+                <input name="dni" value={form.dni} onChange={handleChange} inputMode="numeric" placeholder="30456789" />
               </Campo>
             </div>
           )}

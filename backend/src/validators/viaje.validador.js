@@ -32,6 +32,15 @@ function validarHora(valor, etiqueta, errores) {
   return true
 }
 
+function horaActualEnCordoba(ahora = new Date()) {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'America/Argentina/Cordoba',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(ahora)
+}
+
 // Devuelve las fechas (YYYY-MM-DD) en las que se va a repetir el viaje, incluyendo
 // la fecha inicial si cae en un dia elegido. Trabaja en UTC para evitar corrimientos
 // por zona horaria.
@@ -108,6 +117,8 @@ export function validarViaje(req, res, next) {
     // Se compara como texto YYYY-MM-DD contra el "hoy" de Cordoba: hoy y los dias siguientes son validos.
     if (fecha < hoyEnCordoba()) {
       errores.push('La fecha del viaje no puede ser anterior a hoy')
+    } else if (fecha === hoyEnCordoba() && REGEX_HORA.test(hora_salida ?? '') && hora_salida <= horaActualEnCordoba()) {
+      errores.push('La hora de salida debe ser posterior a la hora actual')
     }
   }
 
@@ -118,18 +129,13 @@ export function validarViaje(req, res, next) {
     errores.push('Indica la hora de llegada o la duración, no ambas')
   } else if (tieneLlegada) {
     const llegadaValida = validarHora(hora_llegada, 'hora de llegada', errores)
-    if (salidaValida && llegadaValida && hora_llegada <= hora_salida) {
-      errores.push('La hora de llegada debe ser posterior a la salida y corresponder al mismo día')
+    if (salidaValida && llegadaValida && hora_llegada === hora_salida) {
+      errores.push('La hora de llegada debe ser distinta de la hora de salida')
     }
   } else if (tieneDuracion) {
     const minutos = Number(duracion_min)
-    if (!Number.isInteger(minutos) || minutos < 1 || !salidaValida) {
-      errores.push('La duración debe ser un número entero de minutos mayor a cero')
-    } else {
-      const [h, m] = hora_salida.split(':').map(Number)
-      if (h * 60 + m + minutos > 23 * 60 + 59) {
-        errores.push('La duración debe terminar antes de la medianoche del mismo día')
-      }
+    if (!Number.isInteger(minutos) || minutos < 1 || minutos > 1439 || !salidaValida) {
+      errores.push('La duración debe ser un número entero de minutos entre 1 y 1439')
     }
   }
 

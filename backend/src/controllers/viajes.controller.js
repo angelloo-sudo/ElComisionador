@@ -13,6 +13,12 @@ import { calcularHorarioRecorrido } from '../services/horario-recorrido.service.
 const SQL_PARADAS = `COALESCE((SELECT json_agg(json_build_object('id', p.id, 'orden', p.orden, 'localidad', p.localidad, 'hora_estimada', to_char(p.hora_estimada, 'HH24:MI')) ORDER BY p.orden)
   FROM paradas_viaje p WHERE p.viaje_id = v.id), '[]'::json) AS paradas`
 
+function desplazarFecha(fecha, dias) {
+  const fechaUTC = new Date(`${String(fecha).slice(0, 10)}T00:00:00Z`)
+  fechaUTC.setUTCDate(fechaUTC.getUTCDate() + dias)
+  return fechaUTC.toISOString().slice(0, 10)
+}
+
 export async function obtenerRecordatorio(req, res, next) {
   try {
     const viajeId = Number(req.params.id)
@@ -132,6 +138,8 @@ export async function listar(req, res, next) {
                 v.fecha::text AS fecha_iso,
                 ${SQL_OCUPADOS} AS ocupados,
                 ${SQL_PARADAS},
+                (SELECT COUNT(*)::int FROM solicitudes_viaje s
+                 WHERE s.viaje_id = v.id AND s.tipo = 'encomienda' AND s.estado = 'aceptada') AS encomiendas,
                 (v.fecha < $${valores.length + 1}::date) AS ya_paso
          FROM viajes v
          WHERE ${condiciones.join(' AND ')}
@@ -211,6 +219,7 @@ export async function crear(req, res, next) {
       const [salidaH, salidaM] = hora_salida.split(':').map(Number)
       const [llegadaH, llegadaM] = llegadaIngresada.split(':').map(Number)
       duracion_min = llegadaH * 60 + llegadaM - (salidaH * 60 + salidaM)
+      if (duracion_min < 0) duracion_min += 1440
     } else if (duracionIngresada !== undefined && duracionIngresada !== null && duracionIngresada !== '') {
       duracion_min = Number(duracionIngresada)
       hora_llegada = sumarMinutos(hora_salida, duracion_min)
@@ -255,16 +264,17 @@ export async function crear(req, res, next) {
     // de insertar nada, para no dejar una serie a medias.
     const { rows: existentes } = await query(
       `SELECT fecha::text AS fecha, hora_salida, hora_llegada FROM viajes
-       WHERE usuario_id = $1 AND fecha = ANY($2::date[]) AND estado <> 'cancelado'`,
-      [usuarioId, fechas]
+       WHERE usuario_id = $1 AND fecha BETWEEN $2::date AND $3::date AND estado <> 'cancelado'`,
+      [usuarioId, desplazarFecha(fechas[0], -1), desplazarFecha(fechas.at(-1), 1)]
     )
 
-    const rangoNuevo = rangoViaje(hora_salida, hora_llegada)
-    const fechasConflicto = [...new Set(
-      existentes
-        .filter((v) => seSuperponen(rangoNuevo, rangoViaje(v.hora_salida, v.hora_llegada)))
-        .map((v) => v.fecha.slice(0, 10))
-    )].sort()
+    const fechasConflicto = fechas.filter((fechaViaje) => {
+      const rangoNuevo = rangoViaje(fechaViaje, hora_salida, hora_llegada)
+      return existentes.some((viaje) => seSuperponen(
+        rangoNuevo,
+        rangoViaje(viaje.fecha, viaje.hora_salida, viaje.hora_llegada),
+      ))
+    }).sort()
 
     if (fechasConflicto.length > 0) {
       const lista = fechasConflicto
@@ -392,6 +402,16 @@ export async function cancelar(req, res, next) {
            WHERE viaje_id = ANY($1::int[]) AND estado IN ('pendiente', 'procesando')`,
           [cancelados.map((v) => v.id)],
         )
+        await cliente.query(
+          `INSERT INTO notificaciones (usuario_id, viaje_id, titulo, mensaje)
+           SELECT DISTINCT c.usuario_id, v.id, 'Viaje cancelado',
+             'El comisionista canceló el viaje ' || v.origen || ' → ' || v.destino || ' del ' || to_char(v.fecha, 'DD/MM/YYYY') || '.'
+           FROM solicitudes_viaje s
+           JOIN clientes c ON c.id = s.cliente_id
+           JOIN viajes v ON v.id = s.viaje_id
+           WHERE v.id = ANY($1::int[]) AND s.estado IN ('pendiente', 'aceptada')`,
+          [cancelados.map((v) => v.id)],
+        )
       }
       if (viaje.serie_id && alcance !== 'este') {
         await cliente.query(
@@ -483,10 +503,14 @@ export async function actualizar(req, res, next) {
       return res.status(409).json({ mensaje: `El cupo no puede ser menor que los ${ocupados} pasajeros que ya tiene asociados el viaje` })
     }
     const { rows: existentes } = await cliente.query(
-      `SELECT hora_salida, hora_llegada FROM viajes WHERE usuario_id = $1 AND fecha = $2 AND estado <> 'cancelado' AND id <> $3`,
-      [usuarioId, viaje.fecha, id],
+      `SELECT fecha::text AS fecha, hora_salida, hora_llegada FROM viajes
+       WHERE usuario_id = $1 AND fecha BETWEEN $2::date AND $3::date AND estado <> 'cancelado' AND id <> $4`,
+      [usuarioId, desplazarFecha(viaje.fecha, -1), desplazarFecha(viaje.fecha, 1), id],
     )
-    if (existentes.some((v) => seSuperponen(rangoViaje(hora_salida, hora_llegada), rangoViaje(v.hora_salida, v.hora_llegada)))) {
+    if (existentes.some((v) => seSuperponen(
+      rangoViaje(viaje.fecha, hora_salida, hora_llegada),
+      rangoViaje(v.fecha, v.hora_salida, v.hora_llegada),
+    ))) {
       await cliente.query('ROLLBACK')
       return res.status(409).json({ mensaje: 'Ya tenés un viaje programado que se superpone con ese horario ese mismo día' })
     }

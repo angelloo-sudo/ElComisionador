@@ -124,6 +124,18 @@ ecto:
    - API: http://localhost:4000/api/health
    - Web: http://localhost:5173
 
+### Búsqueda conversacional de viajes
+
+La búsqueda opcional con Gemini extrae origen, destino y fecha de la consulta. La API
+key se configura únicamente en `backend/.env` como `GEMINI_API_KEY=...`; nunca debe
+ponerse en variables `VITE_*` ni enviarse desde el navegador. El backend usa esos
+filtros con el buscador existente y no permite que el modelo consulte o modifique la
+base de datos directamente. Solo se envía a Gemini la consulta escrita, por lo que no
+se deben incluir datos personales. La disponibilidad del nivel gratuito, sus límites
+y el uso de datos dependen de las condiciones vigentes de Google AI Studio. Si no se
+configura la clave, el chat muestra un error de configuración y los filtros manuales
+siguen disponibles.
+
 ## Convenciones
 
 - Ramas: `main` (estable) + una rama por historia de usuario, ej: `feature/US10-registrar-encomienda`.

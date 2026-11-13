@@ -9,6 +9,7 @@ import MapaRuta from '../components/MapaRuta.jsx'
 import { formatoDuracion, formatoKm, formatoPesos, horaDeLlegada, calcularMonto } from '../utils/tarifa.js'
 import { Campo, Alerta, Toast, BadgeEstado, formatoFecha } from '../components/ui.jsx'
 import { calcularLlegadasAcumuladas } from '../utils/horarios.js'
+import { hoyEnCordoba } from '../utils/estadoViaje.js'
 
 const HORAS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
 const MINUTOS = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'))
@@ -33,8 +34,16 @@ export function codigoViaje(id) {
 }
 
 export function hoyISO() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return hoyEnCordoba()
+}
+
+function horaActualEnCordoba() {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'America/Argentina/Cordoba',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(new Date())
 }
 
 export function SelectorHora({ hora, minuto, onHora, onMinuto, etiqueta }) {
@@ -117,10 +126,10 @@ export default function ViajeNuevo() {
   const duracionMin = modoEstimacion === 'duracion'
     ? (duracionManual ? Number(duracionManual) : null)
     : modoEstimacion === 'llegada' && horaLlegadaManual && horaSalida
-      ? (Number(horaLlegadaManual.slice(0, 2)) * 60 + Number(horaLlegadaManual.slice(3)) - Number(horaSalida.slice(0, 2)) * 60 - Number(horaSalida.slice(3)))
+      ? (Number(horaLlegadaManual.slice(0, 2)) * 60 + Number(horaLlegadaManual.slice(3)) - Number(horaSalida.slice(0, 2)) * 60 - Number(horaSalida.slice(3)) + 1440) % 1440
       : duracionRuta
   const horaLlegada = paradas.length ? horaLlegadaAuto : modoEstimacion === 'llegada'
-    ? horaLlegadaManual
+    ? horaLlegadaManual && horaLlegadaManual < horaSalida ? `${horaLlegadaManual} (+1 día)` : horaLlegadaManual
     : horaDeLlegada(horaSalida, duracionMin) ?? ''
   const montoPorPasajero = calcularMonto({ precioKm, distanciaKm: ruta && !ruta.aproximada ? ruta.distancia_km : null })
 
@@ -131,15 +140,16 @@ export default function ViajeNuevo() {
     if (form.origen && form.origen === form.destino) e.destino = 'El origen y el destino deben ser distintos'
     if (!form.fecha) e.fecha = 'Indica la fecha del viaje'
     else if (form.fecha < hoyISO()) e.fecha = 'La fecha del viaje no puede ser anterior a hoy'
+    else if (form.fecha === hoyISO() && horaSalida && horaSalida <= horaActualEnCordoba()) e.salida = 'La hora de salida debe ser posterior a la hora actual'
     if (!horaSalida) e.salida = 'Ingresa un horario válido (hh:mm)'
     if (modoEstimacion === 'llegada') {
       if (!horaLlegadaManual) e.llegada = 'Ingresa la hora estimada de llegada'
-      else if (horaLlegadaManual <= horaSalida) e.llegada = 'La llegada debe ser posterior a la salida y el mismo día'
+      else if (horaLlegadaManual === horaSalida) e.llegada = 'La llegada debe ser distinta de la hora de salida'
     }
     if (modoEstimacion === 'duracion') {
       const minutos = Number(duracionManual)
       if (!duracionManual || !Number.isInteger(minutos) || minutos < 1) e.duracion = 'Ingresa una duración en minutos mayor a cero'
-      else if (horaSalida && (Number(horaSalida.slice(0, 2)) * 60 + Number(horaSalida.slice(3)) + minutos > 1439)) e.duracion = 'El viaje debe terminar antes de la medianoche del mismo día'
+      else if (minutos > 1439) e.duracion = 'La duración no puede superar las 23 horas y 59 minutos'
     }
     const puntos = [form.origen, ...paradas.map((p) => p.localidad), form.destino].filter(Boolean)
     if (new Set(puntos.map((p) => p.toLocaleLowerCase())).size !== puntos.length) e.paradas = 'No repitas localidades en el recorrido'

@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import * as solicitudes from '../controllers/solicitudes.controller.js'
+import * as busquedaViajes from '../controllers/busqueda-viajes.controller.js'
 import { actualizarEstadoPasajero } from '../controllers/pasajeros-viaje.controller.js'
 import { paradasParaCliente } from '../controllers/paradas.controller.js'
 import { autenticar, permitirRoles } from '../middlewares/auth.middleware.js'
@@ -8,6 +9,7 @@ const router = Router()
 router.use(autenticar)
 
 // US19 - Cliente: ve los viajes, envia su solicitud (pasajero o encomienda) y la sigue.
+router.post('/interpretar-busqueda', permitirRoles('cliente'), busquedaViajes.interpretar)
 router.get('/viajes-disponibles', permitirRoles('cliente'), solicitudes.listarViajesDisponibles)
 router.get('/viajes-disponibles/:viajeId/tramo', permitirRoles('cliente'), solicitudes.tramoDeViaje)
 router.get('/viajes-disponibles/:viajeId/paradas', permitirRoles('cliente'), paradasParaCliente)

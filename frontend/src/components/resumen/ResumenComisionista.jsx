@@ -157,7 +157,6 @@ export default function ResumenComisionista({ datos, nombre }) {
           <h2>Buen día, {nombre || 'comisionista'}</h2>
           <p>{proximo ? 'Esto es lo que tenés por delante.' : 'Todavía no tenés viajes programados.'}</p>
         </div>
-        <Link to="/viajes/nuevo" className="btn btn-primario">+ Registrar un viaje</Link>
       </header>
 
       {(alertas.sin_tarifa || alertas.pendientes_urgentes.length > 0 || alertas.viajes_sin_ruta > 0) && (

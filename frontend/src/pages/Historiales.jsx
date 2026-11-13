@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Navigate, useParams } from 'react-router-dom'
+import { NavLink, Navigate, useParams } from 'react-router-dom'
 import { api } from '../api/client.js'
 import { Alerta, Modal, formatoFecha } from '../components/ui.jsx'
 
@@ -127,6 +127,11 @@ export default function Historiales() {
   const aplicar = () => setAplicados({ ...filtros })
   if (!SECCIONES[seccion]) return <Navigate to="/historial/viajes" replace />
   return <div className="pagina-historial"><header className="barra-pagina"><div><h2>{config.titulo}</h2><p>{config.descripcion}</p></div></header>
+    <nav className="pestanas" aria-label="Tipo de historial">
+      {['viajes', 'encomiendas', 'pasajeros'].map((tipo) => <NavLink key={tipo} to={`/historial/${tipo}`} role="tab" aria-selected={seccion === tipo} className={({ isActive }) => isActive ? 'activo' : ''}>
+        {tipo.charAt(0).toUpperCase() + tipo.slice(1)}
+      </NavLink>)}
+    </nav>
     {error && <Alerta>{error}</Alerta>}{errorFiltro && <Alerta>{errorFiltro}</Alerta>}
     <Filtros seccion={seccion} filtros={filtros} setFiltros={setFiltros} aplicar={aplicar} limpiar={limpiar} clientes={clientes} />
     {seccion === 'clientes' && !aplicados.clienteId && <div className="card historial-vacio">Elegí un cliente para consultar sus operaciones.</div>}

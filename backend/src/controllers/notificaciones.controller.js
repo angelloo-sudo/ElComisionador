@@ -1,5 +1,15 @@
 import { query } from '../config/db.js'
 
+export async function contarNoLeidas(req, res, next) {
+  try {
+    const { rows } = await query(
+      'SELECT COUNT(*)::int AS cantidad FROM notificaciones WHERE usuario_id = $1 AND leida_en IS NULL',
+      [req.usuario.id],
+    )
+    res.json({ cantidad: rows[0].cantidad })
+  } catch (error) { next(error) }
+}
+
 export async function listar(req, res, next) {
   try {
     const { rows } = await query(

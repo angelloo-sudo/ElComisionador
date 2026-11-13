@@ -7,22 +7,8 @@ function nombreCompleto(cliente) {
   return `${cliente.nombre ?? ''} ${cliente.apellido ?? ''}`.trim()
 }
 
-function direccionSolicitud(solicitud, extremo) {
-  const partes = [
-    solicitud[`${extremo}_calle`],
-    solicitud[`${extremo}_altura`],
-    solicitud[`${extremo}_codigo_postal`] ? `(CP ${solicitud[`${extremo}_codigo_postal`]})` : solicitud[`${extremo}_barrio`],
-  ].filter(Boolean)
-  return partes.join(' ') || 'No informada'
-}
-
 function FilaDetalle({ etiqueta, children }) {
   return <div className="resumen-fila"><span>{etiqueta}</span><strong>{children || 'No informado'}</strong></div>
-}
-
-function fechaViaje(fecha, hora) {
-  const dia = fecha ? new Date(`${fecha}T12:00:00`).toLocaleDateString('es-AR') : 'Fecha no informada'
-  return hora ? `${dia} · ${hora.slice(0, 5)}` : dia
 }
 
 export default function Clientes() {
@@ -149,67 +135,6 @@ export default function Clientes() {
                 <FilaDetalle etiqueta="Email">{detalleCliente.cliente.email}</FilaDetalle>
                 <FilaDetalle etiqueta="Teléfono">{detalleCliente.cliente.telefono}</FilaDetalle>
               </div>
-
-              <h3 style={{ marginTop: 20 }}>Solicitudes de pasajeros y encomiendas</h3>
-              {detalleCliente.solicitudes.length === 0 ? (
-                <p className="nota-resumen">No hay solicitudes asociadas a tus viajes.</p>
-              ) : detalleCliente.solicitudes.map((solicitud) => (
-                <div className="viaje-detalle" key={`solicitud-${solicitud.id}`}>
-                  <FilaDetalle etiqueta="Solicitud">{solicitud.tipo === 'pasajero' ? 'Pasajero' : 'Encomienda'} #{solicitud.id} · {solicitud.estado}</FilaDetalle>
-                  <FilaDetalle etiqueta="Viaje">{solicitud.viaje_origen} → {solicitud.viaje_destino} · {fechaViaje(solicitud.viaje_fecha, solicitud.hora_salida)}</FilaDetalle>
-                  {solicitud.tipo === 'pasajero' ? (
-                    <FilaDetalle etiqueta="Pasajero(s)">
-                      {`${nombreCompleto(solicitud)}${solicitud.cantidad_pasajeros > 1 ? ` · ${solicitud.cantidad_pasajeros} pasajeros` : ''}`}
-                    </FilaDetalle>
-                  ) : (
-                    <>
-                      <FilaDetalle etiqueta="Emisor">{`${solicitud.emisor_nombre ?? ''} ${solicitud.emisor_apellido ?? ''}`}</FilaDetalle>
-                      <FilaDetalle etiqueta="Teléfono del emisor">{solicitud.emisor_telefono}</FilaDetalle>
-                    </>
-                  )}
-                  {solicitud.tipo === 'pasajero' && (
-                    <>
-                      <FilaDetalle etiqueta="DNI del pasajero">{solicitud.dni}</FilaDetalle>
-                      <FilaDetalle etiqueta="Teléfono del pasajero">{solicitud.telefono}</FilaDetalle>
-                    </>
-                  )}
-                  <FilaDetalle etiqueta={solicitud.tipo === 'pasajero' ? 'Lo buscan en' : 'Retiro'}>
-                    {direccionSolicitud(solicitud, 'origen')}
-                  </FilaDetalle>
-                  {solicitud.origen_descripcion && <FilaDetalle etiqueta="Referencias de retiro">{solicitud.origen_descripcion}</FilaDetalle>}
-                  <FilaDetalle etiqueta={solicitud.tipo === 'pasajero' ? 'Lo dejan en' : 'Entrega'}>
-                    {direccionSolicitud(solicitud, 'destino')}
-                  </FilaDetalle>
-                  {solicitud.tipo === 'encomienda' && (
-                    <>
-                      <FilaDetalle etiqueta="Receptor">
-                        {`${solicitud.receptor_nombre ?? ''} ${solicitud.receptor_apellido ?? ''}`}
-                      </FilaDetalle>
-                      <FilaDetalle etiqueta="Teléfono del receptor">{solicitud.receptor_telefono}</FilaDetalle>
-                    </>
-                  )}
-                </div>
-              ))}
-
-              {detalleCliente.encomiendas.length > 0 && (
-                <>
-                  <h3 style={{ marginTop: 20 }}>Encomiendas registradas</h3>
-                  {detalleCliente.encomiendas.map((encomienda) => (
-                    <div className="viaje-detalle" key={`encomienda-${encomienda.id}`}>
-                      <FilaDetalle etiqueta="Encomienda">{`#${encomienda.id} · ${encomienda.estado}`}</FilaDetalle>
-                      <FilaDetalle etiqueta="Viaje">{encomienda.viaje_origen} → {encomienda.viaje_destino} · {fechaViaje(encomienda.viaje_fecha, encomienda.hora_salida)}</FilaDetalle>
-                      <FilaDetalle etiqueta="Remitente">
-                        {encomienda.remitente_nombre}
-                      </FilaDetalle>
-                      <FilaDetalle etiqueta="Teléfono del emisor">{encomienda.remitente_telefono}</FilaDetalle>
-                      <FilaDetalle etiqueta="Retiro">{encomienda.direccion_retiro}</FilaDetalle>
-                      <FilaDetalle etiqueta="Entrega">{encomienda.destinatario_direccion}</FilaDetalle>
-                      <FilaDetalle etiqueta="Receptor">{encomienda.destinatario_nombre}</FilaDetalle>
-                      <FilaDetalle etiqueta="Teléfono del receptor">{encomienda.destinatario_telefono}</FilaDetalle>
-                    </div>
-                  ))}
-                </>
-              )}
             </>
           )}
           <div className="modal-acciones">

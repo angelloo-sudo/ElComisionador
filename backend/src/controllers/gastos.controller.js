@@ -7,8 +7,11 @@ import { esFechaISOValida, parsearId } from '../validators/gasto.validador.js'
 // fecha se pide como texto para evitar corrimientos de zona horaria.
 const SQL_GASTO = `
   g.id, g.monto, g.fecha::text AS fecha, g.descripcion, g.creado_en, g.actualizado_en,
-  g.tipo_gasto_id, t.nombre AS tipo_nombre`
-const SQL_DESDE = 'FROM gastos g JOIN tipos_gasto t ON t.id = g.tipo_gasto_id'
+  g.tipo_gasto_id, t.nombre AS tipo_nombre, g.viaje_id,
+  v.origen AS viaje_origen, v.destino AS viaje_destino, v.fecha::text AS viaje_fecha`
+const SQL_DESDE = `FROM gastos g
+  JOIN tipos_gasto t ON t.id = g.tipo_gasto_id
+  LEFT JOIN viajes v ON v.id = g.viaje_id AND v.usuario_id = g.usuario_id`
 
 async function buscarGasto(id, usuarioId) {
   const { rows } = await query(`SELECT ${SQL_GASTO} ${SQL_DESDE} WHERE g.id = $1 AND g.usuario_id = $2`, [id, usuarioId])
@@ -17,6 +20,9 @@ async function buscarGasto(id, usuarioId) {
 
 const tipoPropio = async (tipoId, usuarioId) =>
   (await query('SELECT 1 FROM tipos_gasto WHERE id = $1 AND usuario_id = $2', [tipoId, usuarioId])).rowCount > 0
+
+const viajePropio = async (viajeId, usuarioId) => viajeId === null
+  || (await query('SELECT 1 FROM viajes WHERE id = $1 AND usuario_id = $2', [viajeId, usuarioId])).rowCount > 0
 
 const idInvalido = (res) => res.status(400).json({ mensaje: 'El gasto indicado no es válido' })
 const noEncontrado = (res) => res.status(404).json({ mensaje: 'Gasto no encontrado' })
@@ -75,13 +81,14 @@ export async function obtener(req, res, next) {
 // US40 - Registrar gasto.
 export async function crear(req, res, next) {
   try {
-    const { tipo_gasto_id: tipoId, monto, fecha, descripcion } = req.datos
+    const { tipo_gasto_id: tipoId, monto, fecha, descripcion, viaje_id: viajeId } = req.datos
     const usuarioId = req.usuario.id
     if (!(await tipoPropio(tipoId, usuarioId))) return tipoNoDisponible(res)
+    if (!(await viajePropio(viajeId, usuarioId))) return res.status(400).json({ mensaje: 'El viaje asociado no existe o no te pertenece' })
 
     const { rows } = await query(
-      'INSERT INTO gastos (usuario_id, tipo_gasto_id, monto, fecha, descripcion) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-      [usuarioId, tipoId, monto, fecha, descripcion],
+      'INSERT INTO gastos (usuario_id, tipo_gasto_id, monto, fecha, descripcion, viaje_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+      [usuarioId, tipoId, monto, fecha, descripcion, viajeId],
     )
     res.status(201).json(await buscarGasto(rows[0].id, usuarioId))
   } catch (e) { next(e) }
@@ -93,15 +100,16 @@ export async function actualizar(req, res, next) {
     const id = parsearId(req.params.id)
     if (id === null) return idInvalido(res)
     const usuarioId = req.usuario.id
-    const { tipo_gasto_id: tipoId, monto, fecha, descripcion } = req.datos
+    const { tipo_gasto_id: tipoId, monto, fecha, descripcion, viaje_id: viajeId } = req.datos
 
     if (!(await buscarGasto(id, usuarioId))) return noEncontrado(res)
     if (!(await tipoPropio(tipoId, usuarioId))) return tipoNoDisponible(res)
+    if (!(await viajePropio(viajeId, usuarioId))) return res.status(400).json({ mensaje: 'El viaje asociado no existe o no te pertenece' })
 
     await query(
-      `UPDATE gastos SET tipo_gasto_id = $1, monto = $2, fecha = $3, descripcion = $4, actualizado_en = NOW()
-       WHERE id = $5 AND usuario_id = $6`,
-      [tipoId, monto, fecha, descripcion, id, usuarioId],
+      `UPDATE gastos SET tipo_gasto_id = $1, monto = $2, fecha = $3, descripcion = $4, viaje_id = $5, actualizado_en = NOW()
+       WHERE id = $6 AND usuario_id = $7`,
+      [tipoId, monto, fecha, descripcion, viajeId, id, usuarioId],
     )
     res.json(await buscarGasto(id, usuarioId))
   } catch (e) { next(e) }

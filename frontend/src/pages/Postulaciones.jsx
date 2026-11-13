@@ -77,7 +77,7 @@ function DetalleSolicitud({ s }) {
           <Fila etiqueta="Tipo de contenido">{CONTENIDOS[s.tipo_contenido] ?? s.tipo_contenido ?? '-'}{s.contenido_descripcion ? `: ${s.contenido_descripcion}` : ''}</Fila>
           <Fila etiqueta="¿Es frágil?">{s.fragil ? 'Sí, es frágil' : 'No'}</Fila>
           <Fila etiqueta="Peso">{Number(s.peso_kg)} kg</Fila>
-          <Fila etiqueta="Medidas (ancho × largo)">{Number(s.ancho_cm)} × {Number(s.largo_cm)} cm</Fila>
+          <Fila etiqueta="Medidas (largo × ancho × profundidad)">{Number(s.largo_cm)} × {Number(s.ancho_cm)} × {Number(s.profundidad_cm)} cm</Fila>
           <Fila etiqueta="Emisor">{s.emisor_nombre} {s.emisor_apellido} · {s.emisor_telefono}</Fila>
           <Fila etiqueta="Receptor">{s.receptor_nombre} {s.receptor_apellido} · {s.receptor_telefono}</Fila>
         </>
@@ -94,7 +94,7 @@ function DetalleSolicitud({ s }) {
 
 // US28: una encomienda aceptada, sin retirar y de un viaje que todavia admite retiros.
 function puedeRetirar(s) {
-  return s.tipo === 'encomienda' && s.estado === 'aceptada' && !s.retirada_en && !['cancelado', 'finalizado'].includes(s.estado_viaje)
+  return s.tipo === 'encomienda' && s.estado === 'aceptada' && !s.retirada_en && s.estado_viaje === 'en_curso'
 }
 
 // US33: encomienda retirada, todavia sin entregar y de un viaje no cancelado.
@@ -194,7 +194,10 @@ export default function Postulaciones() {
 
       <div className="card filtros filtros-1">
         <Campo label="Mostrar">
-          <select value={estado} onChange={(e) => setEstado(e.target.value)}>{ESTADOS.map((o) => <option key={o.valor} value={o.valor}>{o.texto}</option>)}</select>
+          <select value={estado} onChange={(e) => setEstado(e.target.value)}>{[
+            ...ESTADOS,
+            ...(tipoFijo === 'encomienda' ? [{ valor: 'entregada', texto: 'Entregadas' }] : []),
+          ].map((o) => <option key={o.valor} value={o.valor}>{o.texto}</option>)}</select>
           <Icon nombre="down" />
         </Campo>
       </div>
@@ -287,14 +290,14 @@ export default function Postulaciones() {
           <h2>¿Rechazar la solicitud?</h2>
           <p>Se va a rechazar la solicitud de {quien(aRechazar)} para el viaje {codigoViaje(aRechazar.viaje_id)} ({aRechazar.origen} → {aRechazar.destino}, {fecha(aRechazar.fecha)}).</p>
           <div style={{ marginTop: 16, textAlign: 'left' }}>
-            <Campo label="Motivo del rechazo" opcional="(opcional)" ayuda="Se lo mostramos al cliente en Mis solicitudes.">
+            <Campo label="Motivo del rechazo" requerido error={errorAccion} ayuda="Se lo mostramos al cliente en Mis solicitudes.">
               <textarea className="area" rows={3} maxLength={300} value={motivo} onChange={(e) => setMotivo(e.target.value)}
                 placeholder="Ej: Ese día salgo con el auto lleno" disabled={Boolean(procesando)} />
             </Campo>
           </div>
           <div className="modal-acciones">
             <button type="button" className="btn" onClick={() => setARechazar(null)} disabled={Boolean(procesando)}>Volver</button>
-            <button type="button" className="btn btn-peligro" onClick={() => resolver(aRechazar, 'rechazar')} disabled={Boolean(procesando)}>{procesando ? 'Rechazando...' : 'Rechazar solicitud'}</button>
+            <button type="button" className="btn btn-peligro" onClick={() => resolver(aRechazar, 'rechazar')} disabled={Boolean(procesando) || !motivo.trim()}>{procesando ? 'Rechazando...' : 'Rechazar solicitud'}</button>
           </div>
         </Modal>
       )}

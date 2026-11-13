@@ -17,6 +17,20 @@ function precioPorPasajero(v) {
   return monto == null ? <span className="campo-ayuda">A convenir</span> : formatoPesos(monto)
 }
 
+function normalizarLocalidad(valor) {
+  return String(valor ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es-AR').trim()
+}
+
+function tramoInicial(viaje, filtros) {
+  const puntos = [viaje.origen, ...(viaje.paradas ?? []).map((p) => p.localidad), viaje.destino]
+  const origenBuscado = normalizarLocalidad(filtros.origen)
+  const destinoBuscado = normalizarLocalidad(filtros.destino)
+  const inicio = origenBuscado ? puntos.findIndex((p) => normalizarLocalidad(p).includes(origenBuscado)) : 0
+  const fin = destinoBuscado ? puntos.findLastIndex((p) => normalizarLocalidad(p).includes(destinoBuscado)) : puntos.length - 1
+  if (inicio >= 0 && fin >= 0 && inicio < fin) return [puntos[inicio], puntos[fin]]
+  return [viaje.origen, viaje.destino]
+}
+
 const ESTADOS_SOLICITUD = {
   pendiente: { texto: 'Pendiente', clase: 'ambar' },
   aceptada: { texto: 'Aceptada', clase: 'verde' },
@@ -58,6 +72,9 @@ export default function MisTraslados() {
   const [error, setError] = useState('')
   const [filtros, setFiltros] = useState(FILTROS_VACIOS)
   const [filtrosAplicados, setFiltrosAplicados] = useState(FILTROS_VACIOS)
+  const [consultaIA, setConsultaIA] = useState('')
+  const [buscandoIA, setBuscandoIA] = useState(false)
+  const [errorIA, setErrorIA] = useState('')
   const [aCancelar, setACancelar] = useState(null)
   const [procesando, setProcesando] = useState(false)
   const [errorCancelacion, setErrorCancelacion] = useState('')
@@ -90,6 +107,22 @@ export default function MisTraslados() {
   const hayFiltrosSol = Object.values(filtrosSol).some(Boolean)
   const solicitudesVisibles = solicitudes.filter((s) => (!filtrosSol.estado || s.estado === filtrosSol.estado) && (!filtrosSol.tipo || s.tipo === filtrosSol.tipo))
   const cambiarFiltro = (e) => setFiltros({ ...filtros, [e.target.name]: e.target.value })
+
+  async function buscarConIA(e) {
+    e.preventDefault()
+    if (buscandoIA) return
+    setBuscandoIA(true)
+    setErrorIA('')
+    try {
+      const resultado = await api.post('/solicitudes/interpretar-busqueda', { mensaje: consultaIA })
+      setFiltros(resultado.filtros)
+      setFiltrosAplicados(resultado.filtros)
+    } catch (err) {
+      setErrorIA(err.message || 'No pudimos interpretar la búsqueda.')
+    } finally {
+      setBuscandoIA(false)
+    }
+  }
 
   async function confirmarCancelacion() {
     if (!aCancelar || procesando) return
@@ -132,6 +165,27 @@ export default function MisTraslados() {
 
       {pestana === 'viajes' ? (
         <>
+      <form className="card chat-busqueda-viajes" onSubmit={buscarConIA}>
+        <label htmlFor="consulta-viaje">¿A dónde desea viajar?</label>
+        <div className="chat-busqueda-viajes-fila">
+          <input
+            id="consulta-viaje"
+            type="text"
+            value={consultaIA}
+            onChange={(e) => setConsultaIA(e.target.value)}
+            placeholder="Ej: Quiero viajar de Córdoba a Villa María mañana"
+            maxLength={500}
+            required
+            aria-describedby={errorIA ? 'error-busqueda-ia' : undefined}
+          />
+          <button type="submit" className="btn btn-primario" disabled={buscandoIA || !consultaIA.trim()}>
+            <Icon nombre="search" tamano={16} /> {buscandoIA ? 'Buscando...' : 'Enviar'}
+          </button>
+        </div>
+        <p className="chat-busqueda-viajes-ayuda">Gemini procesa tu consulta para extraer los filtros. No incluyas datos personales.</p>
+        {errorIA && <p id="error-busqueda-ia" className="chat-busqueda-viajes-error" role="alert">{errorIA}</p>}
+      </form>
+
       <form className="card filtros filtros-3" onSubmit={(e) => { e.preventDefault(); setFiltrosAplicados(filtros) }}>
         <Campo label="Origen" icono="pin"><input name="origen" value={filtros.origen} onChange={cambiarFiltro} placeholder="Ej: Córdoba" /></Campo>
         <Campo label="Destino" icono="pin"><input name="destino" value={filtros.destino} onChange={cambiarFiltro} placeholder="Ej: Villa María" /></Campo>
@@ -163,12 +217,15 @@ export default function MisTraslados() {
                 {viajes.map((v) => (
                   <tr key={v.opcion_id ?? v.viaje_id}>
                     <td className="col-recorrido">{v.origen}<span className="flecha">→</span>{v.destino}
+                      {v.paradas?.length > 0 && <small className="campo-ayuda">Paradas: {v.paradas.map((p) => p.localidad).join(' · ')}</small>}
                     </td>
                     <td>{fechaLocal(v.fecha)}</td>
                     <td>{hora(v.hora_salida)}</td>
                     <td>{formatoDuracion(v.duracion_min)}</td>
                     <td>{`${v.comisionista_nombre} ${v.comisionista_apellido ?? ''}`.trim()}</td>
-                    <td>{precioPorPasajero(v)}</td>
+                    <td>{precioPorPasajero(v)}
+                      {v.paradas?.length > 0 && <small className="campo-ayuda">Precio del tramo al elegir las paradas</small>}
+                    </td>
                     <td>
                       {v.ocupados} / {v.cupo_total}
                       {v.cupos_disponibles === 0 && <span className="badge punto rojo" style={{ marginLeft: 8 }}>Completo</span>}
@@ -187,7 +244,10 @@ export default function MisTraslados() {
                         
                         <button type="button" className="btn btn-chico btn-primario" disabled={(v.mis_solicitudes ?? []).length >= 2}
                           title={(v.mis_solicitudes ?? []).length >= 2 ? 'Ya solicitaste como pasajero y como encomienda' : undefined}
-                          onClick={() => navegar(`/mis-traslados/solicitar/${v.viaje_id}?desde=${encodeURIComponent(v.origen)}&hasta=${encodeURIComponent(v.destino)}`)}>
+                          onClick={() => {
+                            const [desde, hasta] = tramoInicial(v, filtrosAplicados)
+                            navegar(`/mis-traslados/solicitar/${v.viaje_id}?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`)
+                          }}>
                           <Icon nombre="seat" tamano={13} /> Solicitar
                         </button>
                       </div>

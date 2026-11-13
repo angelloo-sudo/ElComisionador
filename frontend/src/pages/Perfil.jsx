@@ -102,15 +102,14 @@ export default function Perfil({ onCuentaDadaDeBaja }) {
           nombre: datosAEnviar.nombre,
           apellido: datosAEnviar.apellido,
           telefono: datosAEnviar.telefono,
+          ...(fotoModificada && { foto_perfil: datosAEnviar.foto_perfil }),
         }
       } else {
         datosAEnviar.dni = datosAEnviar.dni.replace(/\D/g, '')
       }
-      // La presentacion y la foto son solo del comisionista. La foto solo se reenvia si la
-      // cambió (o la quitó), para no subir de nuevo la misma imagen en cada guardado.
+      // La presentación es solo del comisionista. La foto se reenvía solo si cambió.
       if (!esComisionista) {
         delete datosAEnviar.presentacion
-        delete datosAEnviar.foto_perfil
       } else if (!fotoModificada) {
         delete datosAEnviar.foto_perfil
       }
@@ -203,7 +202,7 @@ export default function Perfil({ onCuentaDadaDeBaja }) {
             </div>
           </div>
           <div className="card-cuerpo">
-            {esComisionista && (
+            {(esComisionista || perfil?.rol === 'cliente') && (
               <div className="seccion">
                 <div className="foto-editor">
                   <Avatar foto={form.foto_perfil} nombre={form.nombre} apellido={form.apellido} />
@@ -245,7 +244,7 @@ export default function Perfil({ onCuentaDadaDeBaja }) {
                       value={form.dni}
                       onChange={undefined}
                       inputMode="numeric"
-                      placeholder="30.456.789"
+                      placeholder="30456789"
                       readOnly
                     />
                   </Campo>

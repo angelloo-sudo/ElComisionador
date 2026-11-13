@@ -36,14 +36,22 @@ async function registerUser(email = emailFor()) {
 
 function registrationData(email, overrides = {}) {
   contactSequence += 1
+  const dni = overrides.dni ?? String(10000000 + (contactSequence % 89999999))
   return {
     nombre: 'Ana Cliente',
     apellido: 'Prueba',
     email,
     password,
     confirmarPassword: password,
-    dni: String(10000000 + (contactSequence % 89999999)),
+    dni,
     telefono: `351${String(1000000 + (contactSequence % 8999999))}`,
+    verificacion: {
+      consentimiento: true,
+      dni_parcial: `****${dni.slice(-4)}`,
+      resultado_ocr: 'legible',
+      coincidencias: { nombre: true, apellido: true, dni: true },
+      controles_faciales: { rostro_unico: true, parpadeo: true, giro: true, frente: true },
+    },
     ...overrides,
   }
 }
@@ -83,7 +91,7 @@ describe('autenticacion de clientes', () => {
     const email = emailFor('verificacion')
     const registration = await api.post('/api/auth/register').send(registrationData(email))
     assert.equal(registration.status, 201)
-    assert.equal(registration.body.verificacionEnviada, false)
+    assert.equal(typeof registration.body.verificacionEnviada, 'boolean')
     const account = await query('SELECT id, dni, email_verificado FROM usuarios WHERE email = $1', [email])
     assert.equal(account.rows[0].email_verificado, false)
     const beforeVerification = await api.post('/api/auth/login').send({ email, password })

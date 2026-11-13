@@ -16,6 +16,7 @@ export default function GastoDetalleModal({ gasto, onClose, onModificar, onBaja 
         <Fila etiqueta="Concepto (tipo de gasto)">{gasto.tipo_nombre}</Fila>
         <Fila etiqueta="Monto">{formatoMoneda(gasto.monto)}</Fila>
         <Fila etiqueta="Fecha del gasto">{formatoFechaISO(gasto.fecha)}</Fila>
+        <Fila etiqueta="Viaje asociado">{gasto.viaje_id ? `${gasto.viaje_origen} → ${gasto.viaje_destino} · ${formatoFechaISO(gasto.viaje_fecha)}` : 'General / compartido'}</Fila>
         <Fila etiqueta="Descripción">{gasto.descripcion}</Fila>
         <Fila etiqueta="Registrado el">{formatoFechaHora(gasto.creado_en)}</Fila>
       </div>
