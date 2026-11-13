@@ -1,79 +1,42 @@
-const sinAcentos = (valor = '') => String(valor)
-  .normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '')
-  .toUpperCase()
-  .replace(/[^A-Z0-9 ]/g, ' ')
-  .replace(/\s+/g, ' ')
-  .trim()
+const normalizar = (valor = '') => String(valor).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
 
-function fechaEnLinea(linea) {
-  const m = linea.match(/\b([0-3]?\d)[./\s-]([01]?\d)[./\s-](\d{4})\b/)
-  return m ? `${m[1].padStart(2, '0')}/${m[2].padStart(2, '0')}/${m[3]}` : ''
+function campoNombre(valor) {
+  return String(valor ?? '').trim().replace(/\s+/g, ' ').slice(0, 120)
 }
 
-function campoConEtiqueta(lineas, etiqueta) {
-  for (let i = 0; i < lineas.length; i += 1) {
-    const m = lineas[i].match(new RegExp(`^${etiqueta}\\s*[:.]?\\s*(.*)$`))
-    if (!m) continue
-    if (m[1]) return m[1].replace(/\b(ARGENTINA|REPUBLICA|ARGENTINA|SEXO|DNI)\b/g, '').trim()
-    return lineas[i + 1] || ''
-  }
-  return ''
-}
-
-export function extraerDatosDni(textos) {
-  const texto = Array.isArray(textos) ? textos.join('\n') : String(textos ?? '')
-  const lineas = texto.split(/\r?\n/).map((l) => sinAcentos(l)).filter(Boolean)
+// Formatos observados en DNI tarjeta argentinos: el vigente (PDF417 en el
+// frente) y el anterior (PDF417 en el dorso). No se intenta adivinar otros.
+export function extraerDatosPDF417(texto) {
+  const partes = String(texto ?? '').replace(/[\r\n\0]/g, '').split('@')
+  while (partes.length && partes.at(-1) === '') partes.pop()
+  let apellido = ''
+  let nombre = ''
   let dni = ''
 
-  // Preferir el número junto a la etiqueta DNI. Se excluyen fechas y número de trámite.
-  for (let i = 0; i < lineas.length && !dni; i += 1) {
-    if (!/\bDNI\b/.test(lineas[i])) continue
-    const contexto = `${lineas[i]} ${lineas[i + 1] || ''}`
-    const digitos = contexto.match(/\d[\d. ]{5,14}\d/g) || []
-    dni = digitos.map((v) => v.replace(/\D/g, '')).find((v) => /^\d{7,8}$/.test(v)) || ''
-  }
-  if (!dni) {
-    for (const linea of lineas) {
-      if (/\b(FECHA|NACIMIENTO|VENCIMIENTO|TRAMITE|EJEMPLAR)\b/.test(linea)) continue
-      const candidatos = linea.match(/\d[\d. ]{5,14}\d/g) || []
-      dni = candidatos.map((v) => v.replace(/\D/g, '')).find((v) => /^\d{7,8}$/.test(v)) || ''
-      if (dni) break
-    }
+  if (partes.length === 8 || partes.length === 9) {
+    apellido = partes[1]
+    nombre = partes[2]
+    dni = partes[4]
+  } else if (partes.length === 16 || partes.length === 17) {
+    dni = partes[1]
+    apellido = partes[4]
+    nombre = partes[5]
+  } else {
+    return null
   }
 
-  const apellido = campoConEtiqueta(lineas, 'APELLIDO(?:S)?')
-  const nombre = campoConEtiqueta(lineas, 'NOMBRE(?:S)?')
-  const nacimiento = lineas.find((l) => /\bNACIMIENTO\b/.test(l)) || ''
-  const vencimiento = lineas.find((l) => /\b(VENCIMIENTO|VENCE)\b/.test(l)) || ''
-  const tramiteLinea = lineas.find((l) => /\bTRAMITE\b/.test(l)) || ''
-  const tramite = (tramiteLinea.match(/\d{9,12}/) || [])[0] || ''
-
-  return {
-    dni,
-    nombre: nombre.slice(0, 120),
-    apellido: apellido.slice(0, 120),
-    fecha_nacimiento: fechaEnLinea(nacimiento),
-    fecha_vencimiento: fechaEnLinea(vencimiento),
-    numero_tramite: tramite,
-    resultado_ocr: texto.replace(/\s/g, '').length < 12
-      ? 'no_legible'
-      : (dni && nombre && apellido ? 'legible' : 'requiere_revision'),
-  }
+  dni = String(dni ?? '').replace(/\D/g, '')
+  apellido = campoNombre(apellido)
+  nombre = campoNombre(nombre)
+  if (!/^\d{7,8}$/.test(dni) || !nombre || !apellido) return null
+  return { dni, nombre, apellido }
 }
 
 export function compararPerfil(datos, perfil) {
-  const comparar = (extraido, registrado) => {
-    if (!extraido || !registrado) return null
-    return sinAcentos(extraido) === sinAcentos(registrado)
-  }
+  const comparar = (extraido, registrado) => extraido && registrado ? normalizar(extraido) === normalizar(registrado) : null
   const dniExtraido = String(datos?.dni || '').replace(/\D/g, '')
   const dniPerfil = String(perfil?.dni || '').replace(/\D/g, '')
-  return {
-    nombre: comparar(datos?.nombre, perfil?.nombre),
-    apellido: comparar(datos?.apellido, perfil?.apellido),
-    dni: dniExtraido && dniPerfil ? dniExtraido === dniPerfil : null,
-  }
+  return { nombre: comparar(datos?.nombre, perfil?.nombre), apellido: comparar(datos?.apellido, perfil?.apellido), dni: /^\d{7,8}$/.test(dniExtraido) && dniPerfil ? dniExtraido === dniPerfil : null }
 }
 
 export function enmascararDni(dni) {
@@ -82,12 +45,5 @@ export function enmascararDni(dni) {
 }
 
 export function formatearEstadoVerificacion(estado) {
-  return ({
-    NO_INICIADA: 'Todavía no comenzaste',
-    EN_PROCESO: 'En proceso',
-    PENDIENTE_REVISION: 'Pendiente de revisión',
-    APROBADA_MANUALMENTE: 'Controles preliminares aceptados',
-    RECHAZADA: 'Rechazada',
-    REQUIERE_CORRECCION: 'Requiere corrección',
-  })[estado] || estado || 'Sin estado'
+  return ({ NO_INICIADA: 'Todavía no comenzaste', EN_PROCESO: 'En proceso', PENDIENTE_REVISION: 'Pendiente de revisión', APROBADA_MANUALMENTE: 'Aceptada por administración', RECHAZADA: 'Rechazada', REQUIERE_CORRECCION: 'Requiere corrección' })[estado] || estado || 'Sin estado'
 }

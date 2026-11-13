@@ -135,7 +135,7 @@ a { color: inherit; text-decoration: none; }
 .landing-tarjeta-pie span { display: flex; align-items: center; gap: 5px; }
 .landing-tarjeta-pie .icono { color: var(--land-lime); }
 .landing-etiqueta { position: absolute; z-index: 3; display: flex; align-items: center; gap: 10px; padding: 11px 14px; border: 1px solid rgba(255,255,255,.12); border-radius: 13px; background: rgba(58,35,24,.94); box-shadow: 0 12px 30px rgba(58,35,24,.2); }
-.etiqueta-ruta { right: 0; bottom: 80px; }
+.etiqueta-ruta { left: 0; right: auto; bottom: 18px; }
 .landing-mini-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: rgba(201,162,124,.2); color: #f3dcca; }
 .landing-etiqueta b, .landing-etiqueta small { display: block; }
 .landing-etiqueta b { font-size: 10px; }
@@ -180,7 +180,6 @@ a { color: inherit; text-decoration: none; }
 .mapa-paquete:before, .mapa-paquete:after { content: ''; position: absolute; background: #8c1c34; }
 .mapa-paquete:before { width: 2px; height: 22px; }
 .mapa-paquete:after { top: 5px; width: 25px; height: 2px; }
-.landing-comunidad-tag { position: absolute; left: 20px; bottom: 20px; z-index: 2; padding: 9px 12px; border-radius: 99px; background: #3a2318; color: #fff7f2; font-size: 10px; font-weight: 700; }
 .landing-comunidad-copy .landing-eyebrow { margin-bottom: 22px; }
 .landing-comunidad-copy > p { margin-top: 21px; max-width: 485px; color: var(--land-muted); font-size: 13px; line-height: 1.8; }
 .landing-opinion { display: flex; align-items: center; gap: 13px; max-width: 470px; margin-top: 27px; padding: 14px 16px; border: 1px solid var(--land-line); border-radius: 13px; }
@@ -190,6 +189,30 @@ a { color: inherit; text-decoration: none; }
 .landing-opinion strong { font-size: 11px; }
 .landing-opinion small { margin-top: 5px; color: #94a094; font-size: 10px; line-height: 1.5; }
 .landing-opinion > .icono { color: var(--land-lime); }
+.landing-opiniones { max-width: 1208px; margin: 0 auto; padding: 0 0 120px; }
+.landing-opiniones-cabecera { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 30px; }
+.landing-opiniones-cabecera h2 { margin-top: 16px; font-size: clamp(34px, 4vw, 48px); letter-spacing: -.055em; line-height: 1; }
+.landing-opiniones-cabecera p { max-width: 520px; margin-top: 14px; color: var(--land-muted); font-size: 13px; line-height: 1.7; }
+.landing-opiniones-total { flex: 0 0 auto; padding: 9px 13px; border: 1px solid var(--land-line); border-radius: 99px; color: var(--land-muted); font-size: 11px; }
+.landing-opiniones-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 18px; align-items: start; }
+.landing-opiniones-lista { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.landing-opinion-card, .landing-opinion-form { border: 1px solid var(--land-line); border-radius: 15px; background: rgba(255,255,255,.72); }
+.landing-opinion-card { min-height: 175px; padding: 18px; }
+.landing-opinion-meta { display: flex; align-items: center; gap: 10px; }
+.landing-opinion-avatar { display: grid; place-items: center; flex: 0 0 34px; width: 34px; height: 34px; border-radius: 50%; background: #8c1c34; color: #fff7f2; font-size: 13px; font-weight: 800; }
+.landing-opinion-meta strong, .landing-opinion-meta small { display: block; }
+.landing-opinion-meta strong { font-size: 12px; }
+.landing-opinion-meta small { margin-top: 2px; color: var(--land-muted); font-size: 10px; }
+.landing-opinion-ejemplo { margin-left: auto; padding: 4px 7px; border-radius: 99px; background: #f2e7dc; color: #785b49; font-size: 9px; font-weight: 700; }
+.landing-opinion-card > p { margin-top: 14px; color: #5e4b40; font-size: 12px; line-height: 1.65; }
+.landing-opinion-estrellas { display: block; margin-top: 10px; color: #a25728; font-size: 12px; letter-spacing: .08em; }
+.landing-opinion-form { display: grid; gap: 13px; padding: 22px; }
+.landing-opinion-form h3 { font-size: 19px; letter-spacing: -.03em; }
+.landing-opinion-form > p { margin-top: -8px; color: var(--land-muted); font-size: 11px; line-height: 1.6; }
+.landing-opinion-form label { display: grid; gap: 6px; color: #584437; font-size: 11px; font-weight: 700; }
+.landing-opinion-form input, .landing-opinion-form select, .landing-opinion-form textarea { width: 100%; border: 1px solid rgba(92,58,40,.2); border-radius: 8px; padding: 10px 11px; outline: none; background: #fffdfb; color: var(--land-cream); font-size: 12px; resize: vertical; }
+.landing-opinion-form input:focus, .landing-opinion-form select:focus, .landing-opinion-form textarea:focus { border-color: var(--land-lime); box-shadow: 0 0 0 3px rgba(140,28,52,.1); }
+.landing-opinion-form .landing-cta { justify-self: start; padding: 12px 16px; font-size: 12px; }
 .landing-cierre { max-width: 1208px; min-height: 220px; margin: 0 auto 70px; padding: 48px 55px; display: flex; align-items: center; justify-content: space-between; gap: 30px; position: relative; overflow: hidden; border-radius: 20px; background: #8c1c34; color: #fff7f2; }
 .landing-cierre .landing-eyebrow { color: #e8c6b0; margin-bottom: 17px; }
 .landing-cierre h2 { font-size: 48px; }
@@ -207,6 +230,7 @@ a { color: inherit; text-decoration: none; }
   .landing-scroll { left: 28px; }
   .landing-beneficios { padding: 95px 28px; }
   .landing-comunidad { padding: 25px 28px 95px; gap: 45px; }
+  .landing-opiniones { margin: 0 28px; padding-bottom: 95px; }
   .landing-cierre { margin-left: 28px; margin-right: 28px; }
   .landing-footer { padding-left: 28px; padding-right: 28px; }
 }
@@ -225,7 +249,7 @@ a { color: inherit; text-decoration: none; }
   .landing-escena { min-height: 355px; margin: 11px -40px 0; transform: scale(.84); transform-origin: center; }
   .landing-mascota-fondo { right: 35px; bottom: 5px; transform: scale(.9); }
   .landing-tarjeta-viaje { left: 0; top: 36px; }
-  .etiqueta-ruta { right: 0; bottom: 34px; }
+  .etiqueta-ruta { left: 8px; right: auto; bottom: 13px; }
   .landing-burbuja { top: 34px; right: 76px; }
   .landing-scroll { bottom: 13px; left: 22px; }
   .landing-cinta { height: 52px; justify-content: space-around; font-size: 8px; letter-spacing: .08em; }
@@ -240,6 +264,10 @@ a { color: inherit; text-decoration: none; }
   .landing-comunidad { grid-template-columns: 1fr; gap: 35px; padding: 0 22px 76px; }
   .landing-comunidad-visual { min-height: 270px; }
   .landing-comunidad-sol { width: 215px; height: 215px; }
+  .landing-opiniones { margin: 0 22px; padding-bottom: 76px; }
+  .landing-opiniones-cabecera { align-items: start; flex-direction: column; gap: 14px; }
+  .landing-opiniones-cabecera h2 { font-size: 38px; }
+  .landing-opiniones-grid, .landing-opiniones-lista { grid-template-columns: 1fr; }
   .landing-cierre { margin: 0 16px 45px; padding: 34px 25px; align-items: flex-start; flex-direction: column; }
   .landing-cierre h2 { font-size: 42px; }
   .landing-cierre-mascota { right: 4px; bottom: -32px; }

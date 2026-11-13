@@ -1,10 +1,16 @@
 // Cliente HTTP central. Usa el proxy de Vite (/api -> backend).
 const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
+const CLAVE_CONTINUACION = 'comitrack_verificacion_pendiente'
+
+export function guardarContinuacionVerificacion(datos) { localStorage.setItem(CLAVE_CONTINUACION, JSON.stringify(datos)) }
+export function leerContinuacionVerificacion() { try { return JSON.parse(localStorage.getItem(CLAVE_CONTINUACION) ?? 'null') } catch { return null } }
+export function limpiarContinuacionVerificacion() { localStorage.removeItem(CLAVE_CONTINUACION) }
 
 async function request(path, options = {}) {
-  const token = localStorage.getItem('comitrack_token')
+  const { token: tokenTemporal, ...fetchOptions } = options
+  const token = tokenTemporal ?? localStorage.getItem('comitrack_token')
   const res = await fetch(`${BASE_URL}${path}`, {
-    ...options,
+    ...fetchOptions,
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -19,7 +25,9 @@ async function request(path, options = {}) {
       const cuerpo = JSON.parse(texto)
       const mensaje = cuerpo.mensaje ?? (Array.isArray(cuerpo.errores) ? cuerpo.errores.join(' | ') : null)
       const error = new Error(mensaje || texto || `Error ${res.status}`)
+      error.status = res.status
       error.codigo = cuerpo.codigo
+      error.respuesta = cuerpo
       error.retryAfterSeconds = cuerpo.retryAfterSeconds
       throw error
     } catch (e) {
@@ -33,11 +41,11 @@ async function request(path, options = {}) {
 }
 
 export const api = {
-  get: (path) => request(path),
-  post: (path, body) => request(path, { method: 'POST', body: JSON.stringify(body) }),
-  put: (path, body) => request(path, { method: 'PUT', body: JSON.stringify(body) }),
-  patch: (path, body) => request(path, { method: 'PATCH', body: JSON.stringify(body) }),
-  del: (path) => request(path, { method: 'DELETE' }),
+  get: (path, options) => request(path, options),
+  post: (path, body, options = {}) => request(path, { method: 'POST', body: JSON.stringify(body), ...options }),
+  put: (path, body, options = {}) => request(path, { method: 'PUT', body: JSON.stringify(body), ...options }),
+  patch: (path, body, options = {}) => request(path, { method: 'PATCH', body: JSON.stringify(body), ...options }),
+  del: (path, options) => request(path, { method: 'DELETE', ...options }),
 }
 
 export function guardarSesion({ token, usuario }) {

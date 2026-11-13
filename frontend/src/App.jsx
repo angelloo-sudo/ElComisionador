@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import Auth from './pages/Auth.jsx'
 import VerificarEmail from './pages/VerificarEmail.jsx'
-import { cerrarSesion } from './api/client.js'
+import { cerrarSesion, leerContinuacionVerificacion } from './api/client.js'
 import Dashboard from './pages/Dashboard.jsx'
 import Viajes from './pages/Viajes.jsx'
 import ViajeNuevo from './pages/ViajeNuevo.jsx'
@@ -102,6 +102,7 @@ export default function App() {
   if (ubicacion.pathname === '/verificar-email') return <VerificarEmail />
 
   if (!token) {
+    if (leerContinuacionVerificacion()) return <VerificarEmail />
     if (pantallaFinal) return <PantallaFinal tipo={pantallaFinal} onVolver={() => setPantallaFinal(null)} />
     const abrirAcceso = () => navegar('/ingresar')
     if (ubicacion.pathname !== '/ingresar' && !new URLSearchParams(ubicacion.search).has('token')) {

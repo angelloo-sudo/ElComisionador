@@ -1,41 +1,32 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { validarEnvioVerificacion, validarIdVerificacion, validarResolucion, validarVerificacionRegistro } from '../src/validators/verificacion.validador.js'
+import { compararDatosDocumentoPerfil, validarDatosDocumento, validarEnvioVerificacion, validarIdVerificacion, validarResolucion } from '../src/validators/verificacion.validador.js'
 
-const envio = {
-  dni_parcial: '••••6789',
-  resultado_ocr: 'legible',
-  coincidencias: { nombre: true, apellido: false, dni: true },
-  controles_faciales: { rostro_unico: true, parpadeo: true, giro: true, frente: true },
-}
-
-describe('validador de verificaciones de identidad', () => {
-  it('acepta solo resultados mínimos y el DNI enmascarado', () => {
-    assert.equal(validarEnvioVerificacion(envio), null)
-    assert.match(validarEnvioVerificacion({ ...envio, dni_parcial: '30123456' }), /parcialmente oculto/)
-    assert.match(validarEnvioVerificacion({ ...envio, imagen: 'base64...' }), /campos no permitidos/)
-    assert.match(validarEnvioVerificacion({ ...envio, coincidencias: { ...envio.coincidencias, datos_ocr: 'texto' } }), /coincidencias/)
+describe('validaciones del flujo de identidad', () => {
+  it('compara los campos del PDF417 con el perfil y no acepta valores incompletos como coincidencia', () => {
+    assert.deepEqual(compararDatosDocumentoPerfil({ dni: '30.456.789', nombre: 'MARTINA   SOFIA', apellido: 'PEREZ' }, { dni: '30456789', nombre: 'Martina Sofía', apellido: 'Pérez' }), {
+      completo: true, coincidencias: { dni: true, nombre: true, apellido: true }, dni_parcial: '••••6789',
+    })
+    const parcial = compararDatosDocumentoPerfil({ dni: '', nombre: 'MARTINA', apellido: '' }, { dni: '30456789', nombre: 'Martina', apellido: 'Perez' })
+    assert.equal(parcial.completo, false)
+    assert.equal(parcial.coincidencias.dni, null)
+    assert.equal(parcial.coincidencias.apellido, null)
+    assert.equal(compararDatosDocumentoPerfil({ dni: '30456780', nombre: 'OTRA', apellido: 'PERSONA' }, { dni: '30456789', nombre: 'Martina', apellido: 'Perez' }).coincidencias.dni, false)
   })
 
-  it('exige OCR legible y todos los pasos faciales completados', () => {
-    assert.match(validarEnvioVerificacion({ ...envio, resultado_ocr: 'no_legible' }), /OCR/)
-    assert.match(validarEnvioVerificacion({ ...envio, resultado_ocr: 'requiere_revision' }), /OCR/)
-    assert.match(validarEnvioVerificacion({ ...envio, controles_faciales: { ...envio.controles_faciales, giro: false } }), /completarse/)
+  it('admite solo los campos mínimos del documento y no acepta controles faciales', () => {
+    assert.equal(validarDatosDocumento({ dni: '30456789', nombre: 'Martina', apellido: 'Perez' }), null)
+    assert.notEqual(validarDatosDocumento({ dni: '30456789', nombre: 'Martina', apellido: 'Perez', aprobada: true }), null)
+    assert.equal(validarEnvioVerificacion({}), null)
+    assert.notEqual(validarEnvioVerificacion({ resultado_ocr: 'legible', coincidencias: { nombre: true } }), null)
+    assert.notEqual(validarEnvioVerificacion({ controles_faciales: { rostro_unico: true } }), null)
   })
 
-  it('valida la solicitud enviada junto con el registro sin admitir aprobación del usuario', () => {
-    assert.equal(validarVerificacionRegistro({ consentimiento: true, ...envio }), null)
-    assert.equal(validarVerificacionRegistro({ consentimiento: true, ...envio, coincidencias: { nombre: false, apellido: false, dni: false } }), null)
-    assert.match(validarVerificacionRegistro({ consentimiento: true, ...envio, resultado_ocr: 'no_legible' }), /OCR/)
-    assert.match(validarVerificacionRegistro({ consentimiento: true, ...envio, estado: 'APROBADA_MANUALMENTE' }), /no es válida/)
-    assert.match(validarVerificacionRegistro({ consentimiento: false, ...envio }), /no es válida/)
-  })
-
-  it('valida decisiones y motivos administrativos', () => {
+  it('valida decisiones administrativas y sus motivos', () => {
     assert.equal(validarResolucion({ decision: 'APROBADA_MANUALMENTE' }), null)
     assert.match(validarResolucion({ decision: 'RECHAZADA' }), /motivo/)
-    assert.equal(validarResolucion({ decision: 'REQUIERE_CORRECCION', motivo: 'Revisar el apellido' }), null)
-    assert.match(validarResolucion({ decision: 'APROBADA_MANUALMENTE', aprobado_por_cliente: true }), /decisión/)
+    assert.equal(validarResolucion({ decision: 'REQUIERE_CORRECCION', motivo: 'Revisar apellido' }), null)
+    assert.notEqual(validarResolucion({ decision: 'APROBADA_MANUALMENTE', aprobado_por_cliente: true }), null)
   })
 
   it('acepta solo identificadores positivos seguros', () => {

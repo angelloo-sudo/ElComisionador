@@ -7,7 +7,6 @@ import {
 } from '../validators/comunes.validador.js'
 import crypto from 'crypto'
 import { enviarEmailRecuperacion } from '../services/mail.service.js'
-import { validarVerificacionRegistro } from '../validators/verificacion.validador.js'
 
 const JWT_SECRET = process.env.JWT_SECRET
 
@@ -36,6 +35,14 @@ function crearTokenVerificacion(usuario) {
     { sub: String(usuario.dni), dni: usuario.dni, email: usuario.email, rol: usuario.rol, tipo: 'verificacion_email' },
     JWT_SECRET,
     { expiresIn: '1h' },
+  )
+}
+
+function crearTokenVerificacionIdentidad(usuario) {
+  return jwt.sign(
+    { id: usuario.id, email: usuario.email, rol: usuario.rol, tipo: 'verificacion_identidad' },
+    JWT_SECRET,
+    { expiresIn: '30d' },
   )
 }
 
@@ -354,7 +361,7 @@ export async function darDeBajaMiCuenta(req, res, next) {
 // interno (nunca se toma del body) para que nadie pueda autoasignarse un rol.
 async function registrarConRol(req, res, next, rolFijo) {
   try {
-    const { nombre, apellido, email, password, confirmarPassword, dni, telefono, presentacion, foto_perfil, verificacion } = req.body
+    const { nombre, apellido, email, password, confirmarPassword, dni, telefono, presentacion, foto_perfil } = req.body
     const esCliente = rolFijo === 'cliente'
 
     // Cliente y comisionista deben dejar DNI y telefono al registrarse.
@@ -378,9 +385,6 @@ async function registrarConRol(req, res, next, rolFijo) {
       const errorExtras = validarPresentacion(presentacion) || validarFotoPerfil(foto_perfil)
       if (errorExtras) return res.status(400).json({ mensaje: errorExtras })
     }
-
-    const errorVerificacion = validarVerificacionRegistro(verificacion)
-    if (errorVerificacion) return res.status(400).json({ mensaje: errorVerificacion })
 
     const emailNormalizado = email.trim().toLowerCase()
     const existente = await query('SELECT id FROM usuarios WHERE email = $1', [emailNormalizado])
@@ -415,12 +419,6 @@ async function registrarConRol(req, res, next, rolFijo) {
         await upsertDatosComisionista(nuevoId, { dni, telefono, presentacion, foto: foto_perfil }, client)
       }
 
-      await client.query(
-        `INSERT INTO verificaciones_identidad
-          (usuario_id, estado, consentimiento_en, dni_parcial, resultado_ocr, coincidencias, controles_faciales, enviada_en)
-         VALUES ($1, 'PENDIENTE_REVISION', NOW(), $2, $3, $4::jsonb, $5::jsonb, NOW())`,
-        [nuevoId, verificacion.dni_parcial, verificacion.resultado_ocr, JSON.stringify(verificacion.coincidencias), JSON.stringify(verificacion.controles_faciales)],
-      )
       perfil = await buscarPerfilPorId(nuevoId, client)
       await client.query('COMMIT')
     } catch (error) {
@@ -439,10 +437,9 @@ async function registrarConRol(req, res, next, rolFijo) {
     }
 
     res.status(201).json({
-      mensaje: 'Cuenta creada. La identidad quedó pendiente de revisión. Verificá tu correo antes de iniciar sesión.',
+      mensaje: 'Cuenta creada. Ahora podés continuar con la verificación de identidad y confirmar tu correo.',
       email: perfil.email,
       verificacionEnviada,
-      estadoVerificacionIdentidad: 'PENDIENTE_REVISION',
     })
   } catch (e) {
     // La consulta previa evita colisiones habituales; la restricción UNIQUE resuelve
@@ -502,7 +499,7 @@ export async function verificarEmail(req, res, next) {
 
     if (actualizacion.rowCount === 0) {
       const existente = await query(
-        `SELECT email_verificado FROM usuarios
+        `SELECT id, email_verificado FROM usuarios
          WHERE (dni = $1 OR id::text = $1) AND email = $2 AND rol = $3 AND activo = true`,
         [datosToken.sub, datosToken.email, datosToken.rol],
       )
@@ -510,12 +507,14 @@ export async function verificarEmail(req, res, next) {
         return res.status(400).json({ mensaje: 'El enlace ya no corresponde a una cuenta activa' })
       }
       if (existente.rows[0].email_verificado) {
-        return res.json({ mensaje: 'El correo ya está verificado' })
+        const perfil = await buscarPerfilPorId(existente.rows[0].id)
+        return res.json({ mensaje: 'El correo ya est\u00e1 verificado. Continu\u00e1 con identidad.', tokenVerificacion: crearTokenVerificacionIdentidad(perfil), rol: perfil.rol, email: perfil.email })
       }
       return res.status(400).json({ mensaje: 'El enlace de verificación no es válido' })
     }
 
-    res.json({ mensaje: 'Correo verificado. Ya podés iniciar sesión.' })
+    const perfil = await buscarPerfilPorId(actualizacion.rows[0].id)
+    res.json({ mensaje: 'Correo verificado. Continu\u00e1 con identidad.', tokenVerificacion: crearTokenVerificacionIdentidad(perfil), rol: perfil.rol, email: perfil.email })
   } catch (e) { next(e) }
 }
 
@@ -523,13 +522,13 @@ export async function reenviarVerificacion(req, res, next) {
   try {
     const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : ''
     const resultado = await query(
-      `SELECT id, email, rol, email_verificado, activo
+      `SELECT id, dni, email, rol, email_verificado, activo
        FROM usuarios WHERE email = $1 AND rol IN ('cliente', 'comisionista')`,
       [email],
     )
     const usuario = resultado.rows[0]
 
-    if (!usuario || !usuario.activo || usuario.email_verificado) {
+    if (!usuario || !usuario.activo) {
       return res.json({ mensaje: 'Si la cuenta existe y necesita verificación, enviaremos un enlace.' })
     }
 

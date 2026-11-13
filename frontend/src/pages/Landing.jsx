@@ -1,5 +1,14 @@
+import { useState } from 'react'
 import { Mascota } from '../components/ui.jsx'
 import Icon from '../components/Icon.jsx'
+
+const opinionesIniciales = [
+  { nombre: 'Lucía M.', rol: 'Cliente', texto: 'Pude coordinar el envío de un paquete con más claridad y seguir cada paso desde el mismo lugar.', ejemplo: true },
+  { nombre: 'Marcos R.', rol: 'Comisionista', texto: 'Me resulta práctico organizar los viajes y tener los pedidos de encomiendas ordenados.', ejemplo: true },
+  { nombre: 'Sofía G.', rol: 'Cliente', texto: 'Encontré una forma sencilla de ponerme en contacto y saber cuándo llegaba mi encomienda.', ejemplo: true },
+]
+
+const claveOpiniones = 'comitrack-opiniones-comunidad'
 
 const beneficios = [
   { icono: 'package', titulo: 'Encomiendas en camino', texto: 'Clientes y comisionistas coordinan cada envío y siguen su recorrido en un mismo lugar.' },
@@ -8,6 +17,29 @@ const beneficios = [
 ]
 
 export default function Landing({ onIngresar }) {
+  const [opiniones, setOpiniones] = useState(() => {
+    try {
+      const guardadas = JSON.parse(localStorage.getItem(claveOpiniones))
+      return Array.isArray(guardadas) && guardadas.length ? guardadas : opinionesIniciales
+    } catch {
+      return opinionesIniciales
+    }
+  })
+  const [nombreOpinion, setNombreOpinion] = useState('')
+  const [rolOpinion, setRolOpinion] = useState('Cliente')
+  const [textoOpinion, setTextoOpinion] = useState('')
+
+  function publicarOpinion(evento) {
+    evento.preventDefault()
+    const nuevaOpinion = { nombre: nombreOpinion.trim(), rol: rolOpinion, texto: textoOpinion.trim(), ejemplo: false }
+    if (!nuevaOpinion.nombre || !nuevaOpinion.texto) return
+    const actualizadas = [nuevaOpinion, ...opiniones]
+    setOpiniones(actualizadas)
+    try { localStorage.setItem(claveOpiniones, JSON.stringify(actualizadas)) } catch { /* La opinión sigue visible durante esta visita. */ }
+    setNombreOpinion('')
+    setTextoOpinion('')
+  }
+
   return (
     <div className="landing">
       <header className="landing-nav">
@@ -64,8 +96,27 @@ export default function Landing({ onIngresar }) {
         </section>
 
         <section className="landing-comunidad" id="comunidad">
-          <div className="landing-comunidad-visual"><div className="landing-mapa-ilustrado" role="img" aria-label="Mapa ilustrado con una ruta de entrega, origen, destino y el canguro de ComiTrack llevando un paquete"><div className="mapa-cuadricula" /><svg className="mapa-calles" viewBox="0 0 520 330" aria-hidden="true"><path d="M-20 70 115 120 205 55 345 95 535 30M-15 245 100 200 215 265 345 205 530 275M55-15 100 90 75 180 145 345M270-20 240 75 300 155 265 240 325 350M440-15 385 75 430 165 385 250 455 350" /><path d="M95 225C135 195 156 205 185 166S240 100 285 125s65 80 110 58 50-47 85-41" className="mapa-ruta-linea" /></svg><span className="mapa-etiqueta mapa-origen"><i /> Retiro</span><span className="mapa-etiqueta mapa-destino"><i /> Entrega</span><div className="mapa-mascota"><Mascota ancho={116} /><span className="mapa-paquete" aria-hidden="true">□</span></div></div><span className="landing-comunidad-tag">Seguí cada encomienda en su recorrido</span></div>
-          <div className="landing-comunidad-copy"><span className="landing-eyebrow">HECHO PARA CONECTAR</span><h2>De una ciudad<br />a otra, <em>en camino.</em></h2><p>Clientes y comisionistas coordinan el envío y la entrega de cada encomienda. Y cuando necesitás viajar, también podés encontrar y organizar traslados de pasajeros.</p><div className="landing-opinion"><span>“</span><div><strong>Paquetes y viajes, más fáciles de coordinar</strong><small>Todo el recorrido y la información de cada solicitud, en un mismo lugar.</small></div><Icon nombre="checkcircle" tamano={19} /></div></div>
+          <div className="landing-comunidad-visual"><div className="landing-mapa-ilustrado" role="img" aria-label="Mapa ilustrado con una ruta de entrega, origen, destino y el canguro de ComiTrack llevando un paquete"><div className="mapa-cuadricula" /><svg className="mapa-calles" viewBox="0 0 520 330" aria-hidden="true"><path d="M-20 70 115 120 205 55 345 95 535 30M-15 245 100 200 215 265 345 205 530 275M55-15 100 90 75 180 145 345M270-20 240 75 300 155 265 240 325 350M440-15 385 75 430 165 385 250 455 350" /><path d="M95 225C135 195 156 205 185 166S240 100 285 125s65 80 110 58 50-47 85-41" className="mapa-ruta-linea" /></svg><span className="mapa-etiqueta mapa-origen"><i /> Retiro</span><span className="mapa-etiqueta mapa-destino"><i /> Entrega</span><div className="mapa-mascota"><Mascota ancho={116} /><span className="mapa-paquete" aria-hidden="true">□</span></div></div></div>
+          <div className="landing-comunidad-copy"><span className="landing-eyebrow">HECHO PARA CONECTAR</span><h2>De una ciudad<br />a otra, <em>en camino.</em></h2><p>Clientes y comisionistas coordinan el envío y la entrega de cada encomienda. Y cuando necesitás viajar, también podés encontrar y organizar traslados de pasajeros.</p><div className="landing-opinion"><span><Icon nombre="checkcircle" tamano={19} /></span><div><strong>Paquetes y viajes, más fáciles de coordinar</strong><small>Todo el recorrido y la información de cada solicitud, en un mismo lugar.</small></div></div></div>
+        </section>
+
+        <section className="landing-opiniones" aria-labelledby="opiniones-titulo">
+          <div className="landing-opiniones-cabecera"><div><span className="landing-eyebrow">VOCES DE LA COMUNIDAD</span><h2 id="opiniones-titulo">¿Cómo te va con <em>ComiTrack?</em></h2><p>Clientes y comisionistas pueden compartir su experiencia y ayudar a mejorar la aplicación.</p></div><span className="landing-opiniones-total">{opiniones.length} opiniones</span></div>
+          <div className="landing-opiniones-grid">
+            <div className="landing-opiniones-lista">
+              {opiniones.map((opinion, indice) => <article className="landing-opinion-card" key={`${opinion.nombre}-${indice}`}>
+                <div className="landing-opinion-meta"><span className="landing-opinion-avatar">{opinion.nombre.charAt(0).toUpperCase()}</span><div><strong>{opinion.nombre}</strong><small>{opinion.rol}</small></div>{opinion.ejemplo && <span className="landing-opinion-ejemplo">Ejemplo</span>}</div>
+                <p>{opinion.texto}</p>
+              </article>)}
+            </div>
+            <form className="landing-opinion-form" onSubmit={publicarOpinion}>
+              <h3>Dejá tu opinión</h3><p>Contanos qué experiencia tuviste usando ComiTrack. Se guarda en este navegador.</p>
+              <label>Tu nombre<input value={nombreOpinion} onChange={evento => setNombreOpinion(evento.target.value)} maxLength={50} required placeholder="Por ejemplo, Alex" /></label>
+              <label>Participás como<select value={rolOpinion} onChange={evento => setRolOpinion(evento.target.value)}><option>Cliente</option><option>Comisionista</option></select></label>
+              <label>Tu opinión<textarea value={textoOpinion} onChange={evento => setTextoOpinion(evento.target.value)} maxLength={400} required rows={4} placeholder="¿Qué te resultó útil?" /></label>
+              <button className="landing-cta" type="submit">Publicar opinión <Icon nombre="arrow" tamano={17} /></button>
+            </form>
+          </div>
         </section>
 
         <section className="landing-cierre"><div><span className="landing-eyebrow">EL PRÓXIMO VIAJE EMPIEZA ACÁ</span><h2>¿A dónde vamos?</h2><p>Organizá tu actividad o encontrá el viaje que necesitás.</p></div><button type="button" className="landing-cta landing-cta-claro" onClick={onIngresar}>Ingresar a ComiTrack <Icon nombre="arrow" tamano={18} /></button><div className="landing-cierre-mascota"><Mascota ancho={100} /></div></section>

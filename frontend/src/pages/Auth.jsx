@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { api, guardarSesion } from '../api/client.js'
+import { api, guardarSesion, guardarContinuacionVerificacion } from '../api/client.js'
 import Icon from '../components/Icon.jsx'
 import { Logo, Campo, CampoPassword, Alerta } from '../components/ui.jsx'
 import Avatar from '../components/Avatar.jsx'
@@ -61,7 +61,7 @@ export default function Auth({ onAuthenticated }) {
   const [ahora, setAhora] = useState(Date.now())
   const [cargando, setCargando] = useState(false)
   const [registroExitoso, setRegistroExitoso] = useState(null) // rol con el que se registro
-  const [pasoRegistro, setPasoRegistro] = useState('datos')
+  const [registroIdentidad, setRegistroIdentidad] = useState(null)
   const [recuperacionEnviada, setRecuperacionEnviada] = useState(false)
   const [restablecimientoExitoso, setRestablecimientoExitoso] = useState(false)
   const [requiereVerificacion, setRequiereVerificacion] = useState(false)
@@ -120,30 +120,33 @@ function cambiarModo(nuevo) {
   setError(null)
   setErrores({})
   setRegistroExitoso(null)
+  setRegistroIdentidad(null)
   setRecuperacionEnviada(false)
   setRestablecimientoExitoso(false)
   setRequiereVerificacion(false)
   setMensajeReenvio('')
   setErrorReenvio('')
   setForm((f) => ({ ...formularioInicial, email: f.email }))
-  setPasoRegistro('datos')
 }
 
-  async function completarRegistro(verificacion) {
-    setCargando(true)
-    setError(null)
-    try {
-      const endpoint = rol === 'comisionista' ? '/auth/register-comisionista' : '/auth/register'
-      const datos = { ...form, dni: form.dni.replace(/\D/g, ''), verificacion }
-      const respuesta = await api.post(endpoint, datos)
-      setRegistroExitoso({ rol, email: respuesta.email ?? form.email, verificacionEnviada: respuesta.verificacionEnviada, identidadPendiente: respuesta.estadoVerificacionIdentidad === 'PENDIENTE_REVISION' })
-      setPasoRegistro('datos')
-    } catch (err) {
-      setError(err.message || 'No se pudo completar el registro. Tus datos siguen en esta pantalla para que puedas corregirlos o reintentar.')
-      throw err
-    } finally {
-      setCargando(false)
-    }
+  function completarRegistro() {
+    setRegistroExitoso({
+      rol: registroIdentidad.rol,
+      email: registroIdentidad.email,
+      verificacionEnviada: registroIdentidad.verificacionEnviada,
+      identidadPendiente: true,
+    })
+    setRegistroIdentidad(null)
+  }
+
+  function continuarLuego() {
+    setRegistroExitoso({
+      rol: registroIdentidad.rol,
+      email: registroIdentidad.email,
+      verificacionEnviada: registroIdentidad.verificacionEnviada,
+      identidadPendiente: false,
+    })
+    setRegistroIdentidad(null)
   }
 
   async function reenviarVerificacion() {
@@ -197,11 +200,6 @@ function cambiarModo(nuevo) {
         return
       }
 
-      if (registrando) {
-        setPasoRegistro('identidad')
-        return
-      }
-
       // US11 (cliente) pega a /auth/register; US06 (comisionista) pega a
       // /auth/register-comisionista. El login es el mismo endpoint para cualquier rol.
       const endpoint =
@@ -213,7 +211,13 @@ function cambiarModo(nuevo) {
       const respuesta = await api.post(endpoint, datos)
 
       if (registrando) {
-        setRegistroExitoso({ rol, email: respuesta.email ?? form.email, verificacionEnviada: respuesta.verificacionEnviada })
+        guardarContinuacionVerificacion({ email: respuesta.email ?? form.email, rol })
+        setRegistroExitoso({
+          rol,
+          email: respuesta.email ?? form.email,
+          verificacionEnviada: respuesta.verificacionEnviada,
+          identidadPendiente: false,
+        })
       } else {
         guardarSesion(respuesta)
         onAuthenticated()
@@ -240,6 +244,7 @@ function cambiarModo(nuevo) {
           <p>
             Tu cuenta de {registroExitoso.rol === 'comisionista' ? 'comisionista' : 'cliente'} fue creada para {registroExitoso.email}.
             {registroExitoso.identidadPendiente && ' La verificación de identidad quedó pendiente de revisión administrativa; no fue aprobada automáticamente.'}
+            {!registroExitoso.identidadPendiente && ' Tu cuenta está creada. Abrí el enlace del correo para continuar directamente con la verificación de identidad.'}
             {registroExitoso.verificacionEnviada
               ? ' Abrí el enlace que te enviamos para verificar el correo; vence en una hora.'
               : ' No pudimos enviar el enlace. Revisá la configuración de correo o solicitá uno nuevo.'}
@@ -249,9 +254,25 @@ function cambiarModo(nuevo) {
           <button type="button" className="btn btn-bloque" onClick={reenviarVerificacion} disabled={cargandoReenvio}>
             {cargandoReenvio ? 'Enviando...' : 'Reenviar enlace de verificación'}
           </button>
-          <button type="button" className="btn btn-primario btn-bloque" onClick={() => cambiarModo('login')}>
-            Ir a iniciar sesión <Icon nombre="arrow" />
-          </button>
+        </div>
+      </main>
+    )
+  }
+
+  if (registroIdentidad) {
+    return (
+      <main className="auth-pagina">
+        <div className="auth-card">
+          <Logo />
+          <p className="auth-kicker">Cuenta creada · Verificación de identidad</p>
+          <h1>Continuá con tu documento</h1>
+          <p className="auth-sub">Ya creamos tu cuenta. Usaremos el nombre, apellido y DNI que ingresaste para comparar la lectura del documento.</p>
+          <VerificacionIdentidad
+            perfilRegistro={{ rol: registroIdentidad.rol }}
+            tokenVerificacion={registroIdentidad.token}
+            onRegistroCompleto={completarRegistro}
+            onCancelarRegistro={continuarLuego}
+          />
         </div>
       </main>
     )
@@ -350,27 +371,6 @@ function cambiarModo(nuevo) {
             <button type="button" onClick={() => cambiarModo('login')}>Volver a iniciar sesión</button>
           </p>
         </form>
-      </main>
-    )
-  }
-
-  if (registrando && pasoRegistro === 'identidad') {
-    return (
-      <main className="auth-pagina">
-        <div className="auth-card">
-          <Logo />
-          <p className="auth-kicker">Crear cuenta · Identidad</p>
-          <h1>Verificá tu identidad</h1>
-          <p className="auth-sub">Paso 2 de 2. Al enviar se creará tu cuenta y quedará pendiente de revisión administrativa.</p>
-          {error && <Alerta tipo="error" titulo="No se pudo completar el registro">{error}</Alerta>}
-          {cargando && <Alerta tipo="aviso">Enviando los resultados y creando tu cuenta…</Alerta>}
-          <VerificacionIdentidad
-            perfilRegistro={{ nombre: form.nombre, apellido: form.apellido, dni: form.dni.replace(/\D/g, ''), rol }}
-            onRegistroCompleto={completarRegistro}
-            onCancelarRegistro={() => { setError(null); setPasoRegistro('datos') }}
-          />
-          <p className="auth-pie"><button type="button" onClick={() => { setError(null); setPasoRegistro('datos') }}>Volver a los datos</button></p>
-        </div>
       </main>
     )
   }

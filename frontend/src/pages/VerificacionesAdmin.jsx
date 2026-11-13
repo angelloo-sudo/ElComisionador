@@ -82,7 +82,7 @@ export default function VerificacionesAdmin() {
       <header className="verif-encabezado">
         <p className="auth-kicker">Administración</p>
         <h2>Revisión de identidad</h2>
-        <p>Revisá los resultados preliminares. El sistema no certifica la identidad ni la autenticidad del DNI.</p>
+        <p>Revisá los la lectura del código y coincidencia con el perfil. El sistema no certifica la identidad ni la autenticidad del DNI.</p>
       </header>
       {error && <Alerta tipo="error" titulo="No se pudo completar la acción">{error}</Alerta>}
       {aviso && <Alerta tipo="exito" titulo="Decisión guardada">{aviso}</Alerta>}
@@ -112,9 +112,8 @@ export default function VerificacionesAdmin() {
             </div>
 
             <div className="verif-admin-resultados">
-              <section><h4>Lectura OCR</h4><p>{s.resultado_ocr === 'legible' ? 'Lectura marcada como legible' : s.resultado_ocr === 'no_legible' ? 'No se pudo leer el documento' : 'Requiere revisión manual'}</p><small>No se almacenan nombre, fechas ni DNI completo extraídos del documento.</small></section>
+              <section><h4>Lectura PDF417</h4><p>{s.resultado_ocr === 'legible' ? 'Código leído; datos coincidentes' : s.resultado_ocr === 'no_legible' ? 'No se pudo leer el código' : 'Lectura incompleta'}</p><small>Se conserva solo el DNI parcial y el resultado de la comparación.</small></section>
               <section><h4>Comparación con el perfil</h4><ul>{['nombre', 'apellido', 'dni'].map((campo) => <li key={campo}><span>{campo[0].toUpperCase() + campo.slice(1)}</span><Indicador valor={s.coincidencias?.[campo]} /></li>)}</ul></section>
-              <section><h4>Movimientos en cámara</h4><ul>{[['rostro_unico', 'Un rostro'], ['parpadeo', 'Parpadeo'], ['giro', 'Giro'], ['frente', 'Regreso al frente']].map(([campo, etiqueta]) => <li key={campo}><span>{etiqueta}</span><Indicador valor={s.controles_faciales?.[campo] === true} /></li>)}</ul></section>
             </div>
 
             {s.motivo_resolucion && <div className="verif-observacion"><strong>Observación de resolución</strong><p>{s.motivo_resolucion}</p><small>Resuelta {s.resuelta_en ? formatoFecha(s.resuelta_en) : ''}{s.resuelta_por ? ` · Administrador #${s.resuelta_por}` : ''}</small></div>}
@@ -122,15 +121,15 @@ export default function VerificacionesAdmin() {
             {s.estado === 'PENDIENTE_REVISION' && <div className="verif-admin-acciones">
               {accion?.id === s.id ? (
                 <div className="verif-resolver">
-                  <div><strong>{accion.decision === 'APROBADA_MANUALMENTE' ? 'Aprobar controles preliminares' : accion.decision === 'RECHAZADA' ? 'Rechazar solicitud' : 'Solicitar corrección'}</strong>
+                  <div><strong>{accion.decision === 'APROBADA_MANUALMENTE' ? 'Aprobar solicitud de identidad' : accion.decision === 'RECHAZADA' ? 'Rechazar solicitud' : 'Solicitar corrección'}</strong>
                     {accion.decision === 'APROBADA_MANUALMENTE'
-                      ? <label className="check-linea"><input type="checkbox" checked={confirmar} onChange={(e) => setConfirmar(e.target.checked)} /><span>Entiendo que esta decisión acepta controles preliminares y no certifica oficialmente la identidad.</span></label>
+                      ? <label className="check-linea"><input type="checkbox" checked={confirmar} onChange={(e) => setConfirmar(e.target.checked)} /><span>Entiendo que esta decisión se basa en la lectura y coincidencia del código y no certifica oficialmente la identidad.</span></label>
                       : <label className="verif-motivo">Explicación para el usuario<textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} maxLength={500} rows={3} placeholder="Describí qué debe corregir o por qué se rechaza (3 a 500 caracteres)." /></label>}
                   </div>
                   <div className="verif-botones"><button className="btn" type="button" onClick={() => setAccion(null)} disabled={guardando}>Cancelar</button><button className="btn btn-primario" type="button" onClick={resolver} disabled={guardando}>{guardando ? 'Guardando…' : 'Confirmar decisión'}</button></div>
                 </div>
               ) : (
-                <div className="verif-botones"><button className="btn" type="button" onClick={() => prepararAccion(s.id, 'REQUIERE_CORRECCION')}>Solicitar corrección</button><button className="btn" type="button" onClick={() => prepararAccion(s.id, 'RECHAZADA')}>Rechazar</button><button className="btn btn-primario" type="button" onClick={() => prepararAccion(s.id, 'APROBADA_MANUALMENTE')}>Aceptar controles preliminares</button></div>
+                <div className="verif-botones"><button className="btn" type="button" onClick={() => prepararAccion(s.id, 'REQUIERE_CORRECCION')}>Solicitar corrección</button><button className="btn" type="button" onClick={() => prepararAccion(s.id, 'RECHAZADA')}>Rechazar</button><button className="btn btn-primario" type="button" onClick={() => prepararAccion(s.id, 'APROBADA_MANUALMENTE')}>Aceptar solicitud de identidad</button></div>
               )}
             </div>}
           </article>

@@ -77,6 +77,26 @@ describe('autenticacion de clientes', () => {
     assert.equal(account.rows[0].dni, datos.dni)
     assert.equal(account.rows[0].email_verificado, false)
     assert.notEqual(account.rows[0].password_hash, password)
+    assert.equal('tokenVerificacionIdentidad' in response.body, false)
+    const tokenCorreo = jwt.sign({ sub: String(datos.dni), dni: datos.dni, email, rol: 'cliente', tipo: 'verificacion_email' }, process.env.JWT_SECRET, { expiresIn: '1h' })
+    const verificacionCorreo = await api.post('/api/auth/verificar-email').send({ token: tokenCorreo })
+    assert.equal(verificacionCorreo.status, 200, JSON.stringify(verificacionCorreo.body))
+    const tokenIdentidad = verificacionCorreo.body.tokenVerificacion
+    const alcance = jwt.verify(tokenIdentidad, process.env.JWT_SECRET)
+    assert.equal(alcance.tipo, 'verificacion_identidad')
+    assert.equal(alcance.rol, 'cliente')
+    assert.equal((await api.get('/api/auth/perfil').set({ Authorization: `Bearer ${tokenIdentidad}` })).status, 401)
+    const perfilVerificacion = await api.get('/api/verificaciones/registro/perfil').set({ Authorization: `Bearer ${tokenIdentidad}` })
+    assert.equal(perfilVerificacion.status, 200)
+    assert.equal(perfilVerificacion.body.dni, datos.dni)
+
+    const inicio = await api.post('/api/verificaciones').set({ Authorization: `Bearer ${tokenIdentidad}` }).send({ consentimiento: true })
+    assert.equal(inicio.status, 201, JSON.stringify(inicio.body))
+    const lectura = await api.patch(`/api/verificaciones/${inicio.body.id}/documento`).set({ Authorization: `Bearer ${tokenIdentidad}` }).send({ dni: datos.dni, nombre: 'Ana Cliente', apellido: 'Prueba' })
+    assert.equal(lectura.status, 200, JSON.stringify(lectura.body))
+    const revision = await api.patch(`/api/verificaciones/${inicio.body.id}/enviar`).set({ Authorization: `Bearer ${tokenIdentidad}` }).send({})
+    assert.equal(revision.status, 200, JSON.stringify(revision.body))
+    assert.equal(revision.body.estado, 'PENDIENTE_REVISION')
   })
 
   it('verifica una cuenta pendiente y habilita el login con un token de correo valido', async () => {
@@ -352,6 +372,7 @@ describe('autenticacion de clientes', () => {
     })
     const response = await api.post('/api/auth/register-comisionista').send(body)
     assert.equal(response.status, 201, JSON.stringify(response.body))
+    assert.equal(jwt.verify(response.body.tokenVerificacionIdentidad, process.env.JWT_SECRET).rol, 'comisionista')
     const profile = await query(
       `SELECT u.rol, m.presentacion, m.foto_perfil FROM usuarios u JOIN comisionistas m ON m.usuario_id = u.id WHERE u.email = $1`,
       [email],
