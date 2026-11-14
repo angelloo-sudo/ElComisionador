@@ -46,6 +46,18 @@ function crearTokenVerificacionIdentidad(usuario) {
   )
 }
 
+// Despues de confirmar el correo: el comisionista sigue con la verificacion de identidad (DNI);
+// el cliente ya puede iniciar sesion, porque no verifica identidad.
+function respuestaCorreoVerificado(perfil, yaEstaba) {
+  if (perfil.rol !== 'comisionista') {
+    return { mensaje: yaEstaba ? 'El correo ya está verificado. Ya podés iniciar sesión.' : 'Correo verificado. Ya podés iniciar sesión.', rol: perfil.rol, email: perfil.email }
+  }
+  return {
+    mensaje: yaEstaba ? 'El correo ya está verificado. Continuá con identidad.' : 'Correo verificado. Continuá con identidad.',
+    tokenVerificacion: crearTokenVerificacionIdentidad(perfil), rol: perfil.rol, email: perfil.email,
+  }
+}
+
 async function enviarVerificacion(usuario) {
   await enviarEmailVerificacion({ email: usuario.email, token: crearTokenVerificacion(usuario) })
 }
@@ -440,7 +452,10 @@ async function registrarConRol(req, res, next, rolFijo) {
     }
 
     res.status(201).json({
-      mensaje: 'Cuenta creada. Ahora podés continuar con la verificación de identidad y confirmar tu correo.',
+      // Solo el comisionista verifica su identidad (DNI); el cliente solo confirma el correo.
+      mensaje: perfil.rol === 'comisionista'
+        ? 'Cuenta creada. Ahora podés continuar con la verificación de identidad y confirmar tu correo.'
+        : 'Cuenta creada. Confirmá tu correo para empezar a usar ComiTrack.',
       email: perfil.email,
       verificacionEnviada,
     })
@@ -511,13 +526,13 @@ export async function verificarEmail(req, res, next) {
       }
       if (existente.rows[0].email_verificado) {
         const perfil = await buscarPerfilPorId(existente.rows[0].id)
-        return res.json({ mensaje: 'El correo ya est\u00e1 verificado. Continu\u00e1 con identidad.', tokenVerificacion: crearTokenVerificacionIdentidad(perfil), rol: perfil.rol, email: perfil.email })
+        return res.json(respuestaCorreoVerificado(perfil, true))
       }
       return res.status(400).json({ mensaje: 'El enlace de verificación no es válido' })
     }
 
     const perfil = await buscarPerfilPorId(actualizacion.rows[0].id)
-    res.json({ mensaje: 'Correo verificado. Continu\u00e1 con identidad.', tokenVerificacion: crearTokenVerificacionIdentidad(perfil), rol: perfil.rol, email: perfil.email })
+    res.json(respuestaCorreoVerificado(perfil, false))
   } catch (e) { next(e) }
 }
 

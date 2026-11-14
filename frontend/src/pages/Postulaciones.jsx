@@ -77,7 +77,7 @@ function DetalleSolicitud({ s }) {
           <Fila etiqueta="Tipo de contenido">{CONTENIDOS[s.tipo_contenido] ?? s.tipo_contenido ?? '-'}{s.contenido_descripcion ? `: ${s.contenido_descripcion}` : ''}</Fila>
           <Fila etiqueta="¿Es frágil?">{s.fragil ? 'Sí, es frágil' : 'No'}</Fila>
           <Fila etiqueta="Peso">{Number(s.peso_kg)} kg</Fila>
-          <Fila etiqueta="Medidas (largo × ancho × profundidad)">{Number(s.largo_cm)} × {Number(s.ancho_cm)} × {Number(s.profundidad_cm)} cm</Fila>
+          <Fila etiqueta="Medidas (largo × ancho × alto)">{Number(s.largo_cm)} × {Number(s.ancho_cm)} × {Number(s.profundidad_cm)} cm</Fila>
           <Fila etiqueta="Emisor">{s.emisor_nombre} {s.emisor_apellido} · {s.emisor_telefono}</Fila>
           <Fila etiqueta="Receptor">{s.receptor_nombre} {s.receptor_apellido} · {s.receptor_telefono}</Fila>
         </>

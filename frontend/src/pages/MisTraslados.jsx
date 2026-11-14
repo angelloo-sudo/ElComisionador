@@ -6,6 +6,8 @@ import { api } from '../api/client.js'
 import Icon from '../components/Icon.jsx'
 import { Alerta, Campo, formatoFecha, Modal, Toast, Mascota } from '../components/ui.jsx'
 import { formatoDuracion, formatoPesos } from '../utils/tarifa.js'
+import LocalidadSelect from '../components/LocalidadSelect.jsx'
+import useLocalidades from '../hooks/useLocalidades.js'
 
 const fechaLocal = (fecha) => formatoFecha(`${fecha}T12:00:00`)
 const hora = (h) => (h ? h.slice(0, 5) : '-')
@@ -21,14 +23,34 @@ function normalizarLocalidad(valor) {
   return String(valor ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es-AR').trim()
 }
 
-function tramoInicial(viaje, filtros) {
-  const puntos = [viaje.origen, ...(viaje.paradas ?? []).map((p) => p.localidad), viaje.destino]
-  const origenBuscado = normalizarLocalidad(filtros.origen)
-  const destinoBuscado = normalizarLocalidad(filtros.destino)
-  const inicio = origenBuscado ? puntos.findIndex((p) => normalizarLocalidad(p).includes(origenBuscado)) : 0
-  const fin = destinoBuscado ? puntos.findLastIndex((p) => normalizarLocalidad(p).includes(destinoBuscado)) : puntos.length - 1
-  if (inicio >= 0 && fin >= 0 && inicio < fin) return [puntos[inicio], puntos[fin]]
-  return [viaje.origen, viaje.destino]
+const aMinutos = (h) => Number(String(h).slice(0, 2)) * 60 + Number(String(h).slice(3, 5))
+
+// Todas las combinaciones posibles de un viaje entre origen, paradas y destino, respetando el
+// orden del recorrido: A→B, A→C, B→C... Cada una es una opción para solicitar.
+export function combinacionesDeViaje(viaje) {
+  const puntos = [
+    { localidad: viaje.origen, hora: viaje.hora_salida },
+    ...(viaje.paradas ?? []).map((p) => ({ localidad: p.localidad, hora: p.hora_estimada })),
+    { localidad: viaje.destino, hora: viaje.hora_llegada },
+  ]
+  const opciones = []
+  for (let i = 0; i < puntos.length - 1; i++) {
+    for (let j = i + 1; j < puntos.length; j++) {
+      const completo = i === 0 && j === puntos.length - 1
+      const { hora: horaDesde } = puntos[i]
+      const { hora: horaHasta } = puntos[j]
+      opciones.push({
+        ...viaje,
+        opcion_id: `${viaje.viaje_id}-${i}-${j}`,
+        desde: puntos[i].localidad,
+        hasta: puntos[j].localidad,
+        hora_desde: horaDesde,
+        duracion_tramo: completo || !horaDesde || !horaHasta ? viaje.duracion_min : (aMinutos(horaHasta) - aMinutos(horaDesde) + 1440) % 1440,
+        completo,
+      })
+    }
+  }
+  return opciones
 }
 
 const ESTADOS_SOLICITUD = {
@@ -45,7 +67,10 @@ const ESTADOS_PASAJERO_CLIENTE = {
   cancelado_comisionista: { texto: 'Cancelada por el comisionista', clase: 'gris' },
 }
 
-export function BadgeSolicitud({ estado, retirada = false, entregada = false, estadoPasajero = null }) {
+export function BadgeSolicitud({ estado, retirada = false, entregada = false, estadoPasajero = null, estadoViaje = null }) {
+  // Rechazada o cancelada se muestran así aunque después se cancele el viaje; si no, un viaje
+  // cancelado se muestra solo como "Viaje cancelado".
+  if (estadoViaje === 'cancelado' && !['rechazada', 'cancelada'].includes(estado)) return <span className="badge punto rojo">Viaje cancelado</span>
   // Una encomienda aceptada que el comisionista ya retiro se muestra como "Retirada".
   const e = estado === 'aceptada' && ESTADOS_PASAJERO_CLIENTE[estadoPasajero] ? ESTADOS_PASAJERO_CLIENTE[estadoPasajero] : entregada && estado === 'aceptada' ? { texto: 'Entregada', clase: 'verde' } : retirada && estado === 'aceptada' ? { texto: 'Retirada', clase: 'verde' } : ESTADOS_SOLICITUD[estado] ?? { texto: estado, clase: 'gris' }
   return <span className={`badge punto ${e.clase}`}>{e.texto}</span>
@@ -63,6 +88,7 @@ const FILTROS_SOLICITUDES_VACIOS = { estado: '', tipo: '' }
 export default function MisTraslados() {
   const navegar = useNavigate()
   const ubicacion = useLocation()
+  const { localidades, cargando: cargandoLocalidades } = useLocalidades()
   // Dos pestañas: "viajes" (disponibles) y "solicitudes" (las mías). Cada una tiene sus propios filtros.
   const [pestana, setPestana] = useState(ubicacion.state?.pestana === 'solicitudes' ? 'solicitudes' : 'viajes')
   const [filtrosSol, setFiltrosSol] = useState(FILTROS_SOLICITUDES_VACIOS)
@@ -72,9 +98,6 @@ export default function MisTraslados() {
   const [error, setError] = useState('')
   const [filtros, setFiltros] = useState(FILTROS_VACIOS)
   const [filtrosAplicados, setFiltrosAplicados] = useState(FILTROS_VACIOS)
-  const [consultaIA, setConsultaIA] = useState('')
-  const [buscandoIA, setBuscandoIA] = useState(false)
-  const [errorIA, setErrorIA] = useState('')
   const [aCancelar, setACancelar] = useState(null)
   const [procesando, setProcesando] = useState(false)
   const [errorCancelacion, setErrorCancelacion] = useState('')
@@ -108,21 +131,11 @@ export default function MisTraslados() {
   const solicitudesVisibles = solicitudes.filter((s) => (!filtrosSol.estado || s.estado === filtrosSol.estado) && (!filtrosSol.tipo || s.tipo === filtrosSol.tipo))
   const cambiarFiltro = (e) => setFiltros({ ...filtros, [e.target.name]: e.target.value })
 
-  async function buscarConIA(e) {
-    e.preventDefault()
-    if (buscandoIA) return
-    setBuscandoIA(true)
-    setErrorIA('')
-    try {
-      const resultado = await api.post('/solicitudes/interpretar-busqueda', { mensaje: consultaIA })
-      setFiltros(resultado.filtros)
-      setFiltrosAplicados(resultado.filtros)
-    } catch (err) {
-      setErrorIA(err.message || 'No pudimos interpretar la búsqueda.')
-    } finally {
-      setBuscandoIA(false)
-    }
-  }
+  // Cada viaje se muestra como todas sus combinaciones de subida y bajada; si se eligió origen o
+  // destino, solo las que empiezan o terminan ahí.
+  const opciones = viajes.flatMap(combinacionesDeViaje).filter((o) =>
+    (!filtrosAplicados.origen || normalizarLocalidad(o.desde) === normalizarLocalidad(filtrosAplicados.origen))
+    && (!filtrosAplicados.destino || normalizarLocalidad(o.hasta) === normalizarLocalidad(filtrosAplicados.destino)))
 
   async function confirmarCancelacion() {
     if (!aCancelar || procesando) return
@@ -165,30 +178,9 @@ export default function MisTraslados() {
 
       {pestana === 'viajes' ? (
         <>
-      <form className="card chat-busqueda-viajes" onSubmit={buscarConIA}>
-        <label htmlFor="consulta-viaje">¿A dónde desea viajar?</label>
-        <div className="chat-busqueda-viajes-fila">
-          <input
-            id="consulta-viaje"
-            type="text"
-            value={consultaIA}
-            onChange={(e) => setConsultaIA(e.target.value)}
-            placeholder="Ej: Quiero viajar de Córdoba a Villa María mañana"
-            maxLength={500}
-            required
-            aria-describedby={errorIA ? 'error-busqueda-ia' : undefined}
-          />
-          <button type="submit" className="btn btn-primario" disabled={buscandoIA || !consultaIA.trim()}>
-            <Icon nombre="search" tamano={16} /> {buscandoIA ? 'Buscando...' : 'Enviar'}
-          </button>
-        </div>
-        <p className="chat-busqueda-viajes-ayuda">Gemini procesa tu consulta para extraer los filtros. No incluyas datos personales.</p>
-        {errorIA && <p id="error-busqueda-ia" className="chat-busqueda-viajes-error" role="alert">{errorIA}</p>}
-      </form>
-
       <form className="card filtros filtros-3" onSubmit={(e) => { e.preventDefault(); setFiltrosAplicados(filtros) }}>
-        <Campo label="Origen" icono="pin"><input name="origen" value={filtros.origen} onChange={cambiarFiltro} placeholder="Ej: Córdoba" /></Campo>
-        <Campo label="Destino" icono="pin"><input name="destino" value={filtros.destino} onChange={cambiarFiltro} placeholder="Ej: Villa María" /></Campo>
+        <LocalidadSelect requerido={false} label="Origen" placeholder="Todas" value={filtros.origen} onChange={(origen) => setFiltros((f) => ({ ...f, origen }))} localidades={localidades} deshabilitado={cargandoLocalidades} />
+        <LocalidadSelect requerido={false} label="Destino" placeholder="Todas" value={filtros.destino} onChange={(destino) => setFiltros((f) => ({ ...f, destino }))} localidades={localidades} deshabilitado={cargandoLocalidades} />
         <Campo label="Fecha" icono="calendar"><input type="date" name="fecha" value={filtros.fecha} onChange={cambiarFiltro} /></Campo>
         <div className="acciones">
           <button type="submit" className="btn btn-primario"><Icon nombre="search" tamano={16} /> Buscar</button>
@@ -200,13 +192,13 @@ export default function MisTraslados() {
         <div className="card-cabecera">
           <div>
             <h2>Viajes disponibles</h2>
-            <p>Viajes programados por los comisionistas. Los cupos muestran los lugares ya confirmados sobre el total.</p>
+            <p>Cada fila es una forma de hacer el viaje: del origen, de una parada o hasta una parada. Los cupos muestran los lugares ya confirmados sobre el total.</p>
           </div>
         </div>
         <div className="tabla-wrap">
           {cargando ? (
             <p className="vacio">Cargando viajes...</p>
-          ) : viajes.length === 0 ? (
+          ) : opciones.length === 0 ? (
             <p className="vacio">{hayFiltros ? 'No hay viajes disponibles con esos filtros.' : 'No hay viajes programados en este momento.'}</p>
           ) : (
             <table className="tabla">
@@ -214,18 +206,16 @@ export default function MisTraslados() {
                 <tr><th>Recorrido</th><th>Fecha</th><th>Salida</th><th>Duración</th><th>Comisionista</th><th>Precio por pasajero</th><th>Cupos pasajeros</th><th></th></tr>
               </thead>
               <tbody>
-                {viajes.map((v) => (
-                  <tr key={v.opcion_id ?? v.viaje_id}>
-                    <td className="col-recorrido">{v.origen}<span className="flecha">→</span>{v.destino}
-                      {v.paradas?.length > 0 && <small className="campo-ayuda">Paradas: {v.paradas.map((p) => p.localidad).join(' · ')}</small>}
+                {opciones.map((v) => (
+                  <tr key={v.opcion_id}>
+                    <td className="col-recorrido">{v.desde}<span className="flecha">→</span>{v.hasta}
+                      {!v.completo && <small className="campo-ayuda">Viaje completo: {v.origen} → {v.destino}</small>}
                     </td>
                     <td>{fechaLocal(v.fecha)}</td>
-                    <td>{hora(v.hora_salida)}</td>
-                    <td>{formatoDuracion(v.duracion_min)}</td>
+                    <td>{hora(v.hora_desde)}</td>
+                    <td>{formatoDuracion(v.duracion_tramo)}</td>
                     <td>{`${v.comisionista_nombre} ${v.comisionista_apellido ?? ''}`.trim()}</td>
-                    <td>{precioPorPasajero(v)}
-                      {v.paradas?.length > 0 && <small className="campo-ayuda">Precio del tramo al elegir las paradas</small>}
-                    </td>
+                    <td>{v.completo ? precioPorPasajero(v) : <span className="campo-ayuda">Se calcula al solicitar</span>}</td>
                     <td>
                       {v.ocupados} / {v.cupo_total}
                       {v.cupos_disponibles === 0 && <span className="badge punto rojo" style={{ marginLeft: 8 }}>Completo</span>}
@@ -244,10 +234,7 @@ export default function MisTraslados() {
                         
                         <button type="button" className="btn btn-chico btn-primario" disabled={(v.mis_solicitudes ?? []).length >= 2}
                           title={(v.mis_solicitudes ?? []).length >= 2 ? 'Ya solicitaste como pasajero y como encomienda' : undefined}
-                          onClick={() => {
-                            const [desde, hasta] = tramoInicial(v, filtrosAplicados)
-                            navegar(`/mis-traslados/solicitar/${v.viaje_id}?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`)
-                          }}>
+                          onClick={() => navegar(`/mis-traslados/solicitar/${v.viaje_id}?desde=${encodeURIComponent(v.desde)}&hasta=${encodeURIComponent(v.hasta)}`)}>
                           <Icon nombre="seat" tamano={13} /> Solicitar
                         </button>
                       </div>
@@ -318,9 +305,8 @@ export default function MisTraslados() {
                     <td>{`${s.comisionista_nombre ?? ''} ${s.comisionista_apellido ?? ''}`.trim() || '-'}</td>
                     <td>{s.monto == null ? <span className="campo-ayuda">A convenir</span> : formatoPesos(s.monto)}</td>
                     <td>
-                      <BadgeSolicitud estado={s.estado} retirada={Boolean(s.retirada_en)} entregada={Boolean(s.entregada_en)} estadoPasajero={s.estado_pasajero} />
+                      <BadgeSolicitud estado={s.estado} retirada={Boolean(s.retirada_en)} entregada={Boolean(s.entregada_en)} estadoPasajero={s.estado_pasajero} estadoViaje={s.estado_viaje} />
                       {s.estado === 'rechazada' && s.motivo_rechazo && <div className="campo-ayuda" style={{ marginTop: 6, maxWidth: 260 }}>Motivo: {s.motivo_rechazo}</div>}
-                      {s.estado_viaje === 'cancelado' && s.estado !== 'cancelada' && <span className="badge punto rojo" style={{ marginLeft: 8 }}>Viaje cancelado</span>}
                     </td>
                     <td>
                       {s.puede_cancelar && (

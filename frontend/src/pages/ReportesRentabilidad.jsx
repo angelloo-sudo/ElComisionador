@@ -1,3 +1,5 @@
+// Listado de reportes generados. Se muestra dentro de la pestaña Rentabilidad, debajo del
+// generador; "recarga" cambia cada vez que se genera un reporte nuevo para refrescar la lista.
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client.js'
@@ -9,7 +11,7 @@ import { validarRangoReportesRentabilidad } from '../utils/filtrosReportesRentab
 const LIMITE = 20
 const FILTROS_VACIOS = { fechaInicio: '', fechaFin: '' }
 
-export default function ReportesRentabilidad() {
+export default function ReportesRentabilidad({ recarga = 0 }) {
   const [datos, setDatos] = useState({ reportes: [], paginacion: { total: 0 } })
   const [filtrosBorrador, setFiltrosBorrador] = useState(FILTROS_VACIOS)
   const [filtrosAplicados, setFiltrosAplicados] = useState(null)
@@ -33,7 +35,7 @@ export default function ReportesRentabilidad() {
       .catch((e) => { if (vigente) setError(e.message) })
       .finally(() => { if (vigente) setCargando(false) })
     return () => { vigente = false }
-  }, [offset, filtrosAplicados])
+  }, [offset, filtrosAplicados, recarga])
 
   function actualizarFiltro(evento) {
     setFiltrosBorrador((actuales) => ({ ...actuales, [evento.target.name]: evento.target.value }))
@@ -64,10 +66,9 @@ export default function ReportesRentabilidad() {
   const total = datos.paginacion.total ?? 0
   const hayFiltroAplicado = filtrosAplicados !== null
   return (
-    <section className="reportes-rentabilidad">
+    <section className="reportes-rentabilidad reportes-generados" aria-labelledby="reportes-generados-titulo">
       <div className="barra-pagina">
-        <div><h2>Reportes generados</h2><p>Consultá las emisiones guardadas con sus valores originales.</p></div>
-        <Link className="btn btn-primario" to="/rentabilidad"><Icon nombre="plus" />Generar reporte</Link>
+        <div><h2 id="reportes-generados-titulo">Reportes generados</h2><p>Cada reporte que generás queda guardado con sus valores originales.</p></div>
       </div>
 
       <form className="card filtros-gastos reportes-filtros" onSubmit={aplicarFiltros} noValidate>
@@ -88,7 +89,7 @@ export default function ReportesRentabilidad() {
             <button className="btn btn-primario" type="button" onClick={limpiarFiltros}>Limpiar filtros</button>
           </div>
         ) : (
-          <div className="card reportes-sin-datos"><Icon nombre="wallet" tamano={30} /><h3>Todavía no generaste reportes</h3><p>Cuando emitas un reporte, vas a poder volver a consultar sus datos desde acá.</p><Link className="btn btn-primario" to="/rentabilidad">Generar primer reporte</Link></div>
+          <div className="card reportes-sin-datos"><Icon nombre="wallet" tamano={30} /><h3>Todavía no generaste reportes</h3><p>Elegí un período arriba y tocá “Generar reporte”: va a aparecer en esta lista.</p></div>
         )
       ) : !error && <>
         <div className="card tabla-wrap">

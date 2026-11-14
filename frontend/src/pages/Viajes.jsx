@@ -10,12 +10,15 @@ import { Campo, Alerta, Toast, BadgeEstado, ESTADOS_VIAJE, formatoFecha, textoRe
 import { codigoViaje } from './ViajeNuevo.jsx'
 import { estadoVisibleViaje, hoyEnCordoba, puedeIniciarViaje } from '../utils/estadoViaje.js'
 import { formatoDuracion } from '../utils/tarifa.js'
+import LocalidadSelect from '../components/LocalidadSelect.jsx'
+import useLocalidades from '../hooks/useLocalidades.js'
 
 const FILTROS_VACIOS = { fecha: '', origen: '', destino: '', estado: '' }
 
 export default function Viajes() {
   const navegar = useNavigate()
   const ubicacion = useLocation()
+  const { localidades, cargando: cargandoLocalidades } = useLocalidades()
   const [viajes, setViajes] = useState([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState(null)
@@ -140,12 +143,8 @@ export default function Viajes() {
         <Campo label="Fecha" icono="calendar">
           <input type="date" name="fecha" value={filtros.fecha} onChange={handleFiltroChange} />
         </Campo>
-        <Campo label="Origen" icono="pin">
-          <input name="origen" value={filtros.origen} onChange={handleFiltroChange} placeholder="Ej: Córdoba" />
-        </Campo>
-        <Campo label="Destino" icono="pin">
-          <input name="destino" value={filtros.destino} onChange={handleFiltroChange} placeholder="Ej: Villa María" />
-        </Campo>
+        <LocalidadSelect requerido={false} label="Origen" placeholder="Todas" value={filtros.origen} onChange={(origen) => setFiltros((f) => ({ ...f, origen }))} localidades={localidades} deshabilitado={cargandoLocalidades} />
+        <LocalidadSelect requerido={false} label="Destino" placeholder="Todas" value={filtros.destino} onChange={(destino) => setFiltros((f) => ({ ...f, destino }))} localidades={localidades} deshabilitado={cargandoLocalidades} />
         <Campo label="Estado">
           <select name="estado" value={filtros.estado} onChange={handleFiltroChange}>
             <option value="">Todos</option>

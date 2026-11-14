@@ -463,3 +463,13 @@ CREATE TABLE IF NOT EXISTS reportes_rentabilidad (
 );
 CREATE INDEX IF NOT EXISTS reportes_rentabilidad_usuario_fecha_idx
   ON reportes_rentabilidad (usuario_id, generado_en DESC, id DESC);
+
+-- Opiniones de la comunidad: solo las publica un usuario con sesión iniciada
+-- (cliente o comisionista) y se muestran a todos en la portada.
+CREATE TABLE IF NOT EXISTS opiniones (
+  id          SERIAL PRIMARY KEY,
+  usuario_id  INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  texto       VARCHAR(400) NOT NULL CHECK (char_length(btrim(texto)) >= 5),
+  creado_en   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS opiniones_fecha_idx ON opiniones (creado_en DESC, id DESC);

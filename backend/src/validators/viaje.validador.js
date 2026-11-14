@@ -1,6 +1,7 @@
 // US10 - Validaciones de negocio para el alta de un viaje.
 import { esLocalidadValida } from '../services/localidades.service.js'
 import { hoyEnCordoba } from '../services/estado-viaje.js'
+import { errorOrdenParadas } from '../utils/horarios.js'
 
 const REGEX_HORA = /^([01]\d|2[0-3]):([0-5]\d)$/
 // Los viajes repetitivos no tienen fecha de fin: se repiten hasta que el comisionista los cancele.
@@ -84,7 +85,6 @@ export function validarViaje(req, res, next) {
     errores.push('Las paradas deben enviarse como una lista')
   } else if (Array.isArray(paradas)) {
     const localidades = new Set([String(origen ?? '').trim().toLocaleLowerCase(), String(destino ?? '').trim().toLocaleLowerCase()])
-    let horaAnterior = hora_salida
     paradas.forEach((parada, i) => {
       if (!parada || typeof parada.localidad !== 'string' || !parada.localidad.trim()) {
         errores.push(`La localidad de la parada ${i + 1} es obligatoria`)
@@ -96,11 +96,13 @@ export function validarViaje(req, res, next) {
       localidades.add(clave)
       if (!REGEX_HORA.test(parada.hora_estimada ?? '')) {
         errores.push(`La hora estimada de la parada ${i + 1} debe tener formato HH:MM`)
-      } else {
-        if (REGEX_HORA.test(horaAnterior ?? '') && parada.hora_estimada <= horaAnterior) errores.push('Los horarios de las paradas deben ser posteriores y estar ordenados')
-        horaAnterior = parada.hora_estimada
       }
     })
+    // El orden se compara en minutos desde la salida: el recorrido puede pasar la medianoche.
+    if (REGEX_HORA.test(hora_salida ?? '') && paradas.every((p) => REGEX_HORA.test(p?.hora_estimada ?? ''))) {
+      const errorOrden = errorOrdenParadas(hora_salida, paradas, REGEX_HORA.test(hora_llegada ?? '') ? hora_llegada : null)
+      if (errorOrden) errores.push(errorOrden)
+    }
   }
 
   let fechaValida = false
@@ -137,11 +139,6 @@ export function validarViaje(req, res, next) {
     if (!Number.isInteger(minutos) || minutos < 1 || minutos > 1439 || !salidaValida) {
       errores.push('La duración debe ser un número entero de minutos entre 1 y 1439')
     }
-  }
-
-  if (Array.isArray(paradas) && hora_llegada && REGEX_HORA.test(hora_llegada)
-      && paradas.some((p) => REGEX_HORA.test(p?.hora_estimada ?? '') && p.hora_estimada >= hora_llegada)) {
-    errores.push('Todas las paradas deben ocurrir antes de la llegada al destino final')
   }
 
   if (cupo_total === undefined || cupo_total === null || cupo_total === '') {

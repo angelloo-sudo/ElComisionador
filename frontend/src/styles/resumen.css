@@ -46,7 +46,7 @@ a.kpi:hover { border-color: var(--borde-fuerte); transform: translateY(-1px); }
 .resumen-comisionista .resumen-saludo h2 { margin-top: 3px; font-size: clamp(23px, 3vw, 30px); letter-spacing: -.035em; }
 .resumen-comisionista .resumen-saludo p:not(.comisionista-fecha) { margin-top: 5px; color: var(--texto-2); }
 .comisionista-fecha { color: var(--texto-2); font-size: 12px; }
-.comisionista-kpis-principales { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.comisionista-kpis-principales { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
 .comisionista-kpis-secundarios { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .comisionista-paneles { grid-template-columns: minmax(0, 1.25fr) minmax(300px, .9fr); align-items: stretch; }
 .calendario-viajes { min-width: 0; }
@@ -59,8 +59,11 @@ a.kpi:hover { border-color: var(--borde-fuerte); transform: translateY(-1px); }
 .calendario-leyenda { display: flex; flex-wrap: wrap; gap: 14px; padding: 12px 20px 0; color: var(--texto-2); font-size: 12px; }
 .calendario-leyenda span { display: inline-flex; align-items: center; gap: 6px; }
 .calendario-leyenda i { width: 8px; height: 8px; border-radius: 50%; }
-.calendario-leyenda i.pendiente { background: var(--info); }
-.calendario-leyenda i.realizado { background: var(--verde); }
+.calendario-leyenda i.azul { background: var(--info); }
+.calendario-leyenda i.ambar { background: var(--ambar); }
+.calendario-leyenda i.verde { background: var(--verde); }
+.calendario-leyenda i.rojo { background: var(--rojo); }
+.calendario-leyenda i.gris { background: var(--texto-3); }
 .calendario-grilla { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-template-rows: 34px repeat(6, 86px); gap: 1px; margin: 14px; overflow: hidden; border: 1px solid var(--divisor); border-radius: 10px; background: var(--divisor); }
 .calendario-dia-semana { padding: 9px 5px; background: var(--hover); color: var(--texto-2); font-size: 11px; font-weight: 600; text-align: center; }
 .calendario-celda { min-width: 0; min-height: 0; padding: 6px; overflow: hidden; background: var(--card); }
@@ -69,8 +72,11 @@ a.kpi:hover { border-color: var(--borde-fuerte); transform: translateY(-1px); }
 .calendario-celda.hoy .calendario-numero { display: grid; width: 23px; height: 23px; place-items: center; border-radius: 50%; background: var(--primario); color: var(--primario-texto); font-weight: 700; }
 .calendario-salidas { display: grid; max-height: 45px; gap: 3px; overflow-y: auto; scrollbar-width: thin; }
 .calendario-salida { position: relative; display: block; min-width: 0; padding: 3px 4px; overflow: hidden; border: 1px solid transparent; border-radius: 5px; font-size: 10px; font-weight: 650; line-height: 1.35; cursor: help; }
-.calendario-salida.pendiente { border-color: var(--info-borde); background: var(--info-fondo); color: var(--info); }
-.calendario-salida.realizado { border-color: var(--verde-borde); background: var(--verde-fondo); color: var(--verde); }
+.calendario-salida.azul { border-color: var(--info-borde); background: var(--info-fondo); color: var(--info); }
+.calendario-salida.ambar { border-color: var(--ambar-borde); background: var(--ambar-fondo); color: var(--ambar); }
+.calendario-salida.verde { border-color: var(--verde-borde); background: var(--verde-fondo); color: var(--verde); }
+.calendario-salida.rojo { border-color: var(--rojo-borde); background: var(--rojo-fondo); color: var(--rojo); text-decoration: line-through; }
+.calendario-salida.gris { border-color: var(--borde); background: var(--hover); color: var(--texto-2); }
 .calendario-hora { display: block; font-weight: 750; }
 .calendario-recorrido { display: -webkit-box; overflow: hidden; font-size: 9px; font-weight: 500; line-height: 1.2; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .calendario-tooltip { position: fixed; z-index: 1000; display: grid; width: min(280px, calc(100vw - 16px)); gap: 5px; padding: 10px 12px; border: 1px solid var(--borde-fuerte); border-radius: 9px; background: var(--card); box-shadow: var(--sombra); color: var(--texto); font-size: 12px; line-height: 1.4; pointer-events: none; }

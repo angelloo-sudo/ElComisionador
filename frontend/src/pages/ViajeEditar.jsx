@@ -9,7 +9,7 @@ import { codigoViaje, SelectorHora } from './ViajeNuevo.jsx'
 import LocalidadSelect from '../components/LocalidadSelect.jsx'
 import useLocalidades from '../hooks/useLocalidades.js'
 import MapaRuta from '../components/MapaRuta.jsx'
-import { calcularLlegadasAcumuladas } from '../utils/horarios.js'
+import { calcularLlegadasAcumuladas, comoHora, aMinutos, minutosDesdeSalida, textoLlegada, llegaAlDiaSiguiente } from '../utils/horarios.js'
 
 const partirHora = (valor) => valor ? [valor.slice(0, 2), valor.slice(3, 5)] : ['', '']
 const horaValida = (valor) => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(valor)
@@ -58,25 +58,42 @@ export default function ViajeEditar() {
     && JSON.stringify(paradas) === JSON.stringify(original.paradas ?? []),
   [original, horaSalida, horaLlegada, cupo, paradas])
   const distancia = original?.distancia_km == null ? null : Number(original.distancia_km)
+  const duracionActual = horaValida(horaSalida) && horaValida(horaLlegada) ? minutosDesdeSalida(horaSalida, horaLlegada) : original?.duracion_min
+
+  // Al cambiar la salida, la llegada se actualiza sola conservando la duración del viaje
+  // (con paradas, la recalcula el mapa tramo por tramo).
+  function cambiarSalida(nueva) {
+    const anterior = salida.every(Boolean) ? `${salida[0]}:${salida[1]}` : ''
+    const siguiente = nueva.every(Boolean) ? `${nueva[0]}:${nueva[1]}` : ''
+    if (!horarioAutomatico && anterior && siguiente && llegada.every(Boolean)) {
+      const corrida = comoHora(aMinutos(`${llegada[0]}:${llegada[1]}`) + aMinutos(siguiente) - aMinutos(anterior))
+      setLlegada([corrida.slice(0, 2), corrida.slice(3)])
+    }
+    setSalida(nueva)
+    setErrores((e) => ({ ...e, salida: undefined, llegada: undefined }))
+  }
 
   function validar() {
     const nuevos = {}
     if (!horaValida(horaSalida)) nuevos.salida = 'Ingresa una hora válida (HH:MM)'
     if (!horaValida(horaLlegada)) nuevos.llegada = 'Ingresa una hora válida (HH:MM)'
-    else if (horaValida(horaSalida) && horaLlegada <= horaSalida) nuevos.llegada = 'La llegada debe ser posterior a la salida y el mismo día'
+    else if (horaValida(horaSalida) && horaLlegada === horaSalida) nuevos.llegada = 'La llegada debe ser distinta de la salida'
     const capacidad = Number(cupo)
     if (cupo === '' || !Number.isInteger(capacidad) || capacidad < 0) nuevos.cupo = 'Indica una capacidad entera igual o mayor a cero'
     else if (capacidad < ocupados) nuevos.cupo = `La capacidad no puede ser menor que los ${ocupados} lugares ocupados`
     const puntos = [original.origen, ...paradas.map((p) => p.localidad), original.destino]
     if (new Set(puntos.map((p) => p?.trim().toLocaleLowerCase())).size !== puntos.length) nuevos.paradas = 'No repitas localidades en el recorrido'
     if (horarioAutomatico && !horariosAuto) nuevos.paradas = ruta?.firma === firmaRecorrido && !ruta.aproximada
-      ? 'El horario calculado supera la medianoche del mismo día'
+      ? 'El recorrido calculado dura 24 horas o más'
       : 'Esperá el cálculo exacto de todos los tramos antes de guardar'
-    let anterior = horaSalida
+    // En minutos desde la salida, para admitir recorridos que pasan la medianoche.
+    let anterior = 0
+    const llegadaDesdeSalida = minutosDesdeSalida(horaSalida, horaLlegada)
     paradas.forEach((p, i) => {
       const hora = horarioAutomatico ? llegadasParadas[i] : p.hora_estimada
-      if (!p.localidad || !horaValida(hora) || hora <= anterior || hora >= horaLlegada) nuevos.paradas = `Revisá el horario de la parada ${i + 1}`
-      anterior = hora
+      const desde = horaValida(hora ?? '') ? minutosDesdeSalida(horaSalida, hora) : null
+      if (!p.localidad || desde == null || desde <= anterior || (llegadaDesdeSalida != null && desde >= llegadaDesdeSalida)) nuevos.paradas = `Revisá el horario de la parada ${i + 1}`
+      if (desde != null) anterior = desde
     })
     return nuevos
   }
@@ -115,10 +132,10 @@ export default function ViajeEditar() {
             <Campo label="Destino" soloLectura><input readOnly value={original.destino} /></Campo>
           </div><p className="campo-ayuda">El recorrido y la fecha no se pueden modificar.</p></div>
           <div className="seccion"><p className="seccion-titulo">Horarios</p><div className="grilla-2">
-            <Campo label="Hora de salida" requerido icono="clock" error={errores.salida}><SelectorHora etiqueta="Hora de salida" hora={salida[0]} minuto={salida[1]} onHora={(v) => setSalida([v, salida[1]])} onMinuto={(v) => setSalida([salida[0], v])} /></Campo>
+            <Campo label="Hora de salida" requerido icono="clock" error={errores.salida}><SelectorHora etiqueta="Hora de salida" hora={salida[0]} minuto={salida[1]} onHora={(v) => cambiarSalida([v, salida[1]])} onMinuto={(v) => cambiarSalida([salida[0], v])} /></Campo>
             {horarioAutomatico
-              ? <Campo label="Hora estimada de llegada automática" soloLectura error={errores.llegada}><input type="time" readOnly value={horaLlegada} /></Campo>
-              : <Campo label="Hora estimada de llegada" requerido icono="clock" error={errores.llegada}><SelectorHora etiqueta="Hora estimada de llegada" hora={llegada[0]} minuto={llegada[1]} onHora={(v) => setLlegada([v, llegada[1]])} onMinuto={(v) => setLlegada([llegada[0], v])} /></Campo>}
+              ? <Campo label="Hora estimada de llegada automática" soloLectura error={errores.llegada} ayuda={llegaAlDiaSiguiente(horaSalida, horaLlegada) ? 'Llega al día siguiente (pasa la medianoche)' : 'Se recalcula sola al cambiar la salida'}><input type="time" readOnly value={horaLlegada} /></Campo>
+              : <Campo label="Hora estimada de llegada" requerido icono="clock" error={errores.llegada} ayuda={llegaAlDiaSiguiente(horaSalida, horaLlegada) ? 'Llega al día siguiente (pasa la medianoche)' : 'Se corre sola al cambiar la salida (conserva la duración)'}><SelectorHora etiqueta="Hora estimada de llegada" hora={llegada[0]} minuto={llegada[1]} onHora={(v) => setLlegada([v, llegada[1]])} onMinuto={(v) => setLlegada([llegada[0], v])} /></Campo>}
           </div></div>
           <div className="seccion">
             <p className="seccion-titulo">Paradas intermedias</p>
@@ -145,8 +162,8 @@ export default function ViajeEditar() {
       <aside className="card"><div className="card-cabecera"><h2>Resumen</h2></div><div className="card-cuerpo">
         <div className="resumen-fila"><span>N° de viaje</span><strong>{codigoViaje(original.id)}</strong></div><div className="resumen-fila"><span>Estado</span><BadgeEstado estado={original.estado} fecha={original.fecha} /></div>
         <div className="resumen-fila"><span>Recorrido</span><strong>{original.origen} → {original.destino}</strong></div><div className="resumen-fila"><span>Fecha</span><strong>{formatoFecha(`${String(original.fecha).slice(0, 10)}T00:00:00`)}</strong></div>
-        <div className="resumen-fila"><span>Salida</span><strong>{horaSalida || '—'}</strong></div><div className="resumen-fila"><span>Llegada</span><strong>{horaLlegada || '—'}</strong></div>
-        <div className="resumen-fila"><span>Distancia</span><strong>{formatoKm(distancia)}</strong></div><div className="resumen-fila"><span>Duración</span><strong>{formatoDuracion(original.duracion_min)}</strong></div>
+        <div className="resumen-fila"><span>Salida</span><strong>{horaSalida || '—'}</strong></div><div className="resumen-fila"><span>Llegada</span><strong>{textoLlegada(horaSalida, horaLlegada) || '—'}</strong></div>
+        <div className="resumen-fila"><span>Distancia</span><strong>{formatoKm(distancia)}</strong></div><div className="resumen-fila"><span>Duración</span><strong>{formatoDuracion(duracionActual)}</strong></div>
         <div className="resumen-fila"><span>Cupo (ocupados / total)</span><strong>{ocupados} / {cupo}</strong></div>
         {original.serie_id && <div className="resumen-fila"><span>Repetición</span><strong>{textoRepeticion(original.repeticion_dias, original.serie_id)}</strong></div>}
         <div className="resumen-fila"><span>Precio por pasajero</span><strong>{formatoPesos(calcularMonto({ precioKm, distanciaKm: distancia }))}</strong></div>

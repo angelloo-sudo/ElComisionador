@@ -41,18 +41,18 @@ export default function ReporteRentabilidadDetalle() {
     setCargandoPdf(true)
     try {
       const { descargarReportePdf } = await import('../utils/reporteRentabilidadPdf.js')
-      descargarReportePdf(reporte)
+      await descargarReportePdf(reporte)
     } catch { setError('No se pudo preparar el PDF histórico. Volvé a intentarlo.') }
     finally { setCargandoPdf(false) }
   }
 
   if (cargando) return <p className="vacio" role="status">Cargando reporte…</p>
-  if (error) return <section><Alerta tipo="error" titulo="No se pudo abrir el reporte">{error}</Alerta><Link className="btn" to="/reportes-rentabilidad">Volver al listado</Link></section>
+  if (error) return <section><Alerta tipo="error" titulo="No se pudo abrir el reporte">{error}</Alerta><Link className="btn" to="/rentabilidad">Volver a Rentabilidad</Link></section>
   const balance = Number(reporte.resultado_economico)
   return <section className="reporte-rentabilidad">
     <div className="barra-pagina">
       <div><h2>Reporte #{reporte.id}</h2><p>Emitido el {new Date(reporte.generado_en).toLocaleString('es-AR')}</p></div>
-      <Link className="btn" to="/reportes-rentabilidad"><Icon nombre="arrow" />Volver al listado</Link>
+      <Link className="btn" to="/rentabilidad">Volver a Rentabilidad</Link>
     </div>
     <section className="card rentabilidad-resumen">
       <div className="rentabilidad-resumen-cabecera"><div><h3>{reporte.comisionista || 'Comisionista'}</h3><p>Período {formatoFechaISO(reporte.periodo.desde)} – {formatoFechaISO(reporte.periodo.hasta)}</p></div>

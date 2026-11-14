@@ -10,7 +10,8 @@ function normalizar(texto) {
   return texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 }
 
-export default function LocalidadSelect({ label, value, onChange, localidades, deshabilitado, error, placeholder = 'Selecciona la localidad' }) {
+// requerido=false: modo filtro (no es obligatorio y se puede limpiar con la X).
+export default function LocalidadSelect({ label, value, onChange, localidades, deshabilitado, error, placeholder = 'Selecciona la localidad', requerido = true }) {
   const id = useId()
   const [texto, setTexto] = useState(value ?? '')
   const [abierto, setAbierto] = useState(false)
@@ -57,8 +58,20 @@ export default function LocalidadSelect({ label, value, onChange, localidades, d
 
   // Mientras no haya una opcion elegida, el campo avisa que falta (validacion nativa del form).
   useEffect(() => {
-    inputRef.current?.setCustomValidity(value ? '' : 'Elegí una localidad de la lista')
+    inputRef.current?.setCustomValidity(value || !requerido ? '' : 'Elegí una localidad de la lista')
+  }, [value, requerido])
+
+  // Si el valor cambia desde afuera (por ejemplo "Limpiar filtros"), se refleja en el texto.
+  useEffect(() => {
+    if (document.activeElement !== inputRef.current) setTexto(value ?? '')
   }, [value])
+
+  function limpiar() {
+    setTexto('')
+    onChange('')
+    setFiltrando(false)
+    setAbierto(false)
+  }
 
   function elegir(nombre) {
     setTexto(nombre)
@@ -101,11 +114,12 @@ export default function LocalidadSelect({ label, value, onChange, localidades, d
     // Al salir del campo, si no se eligio nada valido, se deja el texto como esta
     // (el form marca el error); si habia una eleccion, se muestra completa.
     if (value) setTexto(value)
+    else if (!requerido) setTexto('') // en un filtro, un texto suelto no filtraría nada
   }
 
   return (
     <div className="campo localidad-select">
-      <label htmlFor={id}>{label}<span className="req">*</span></label>
+      <label htmlFor={id}>{label}{requerido && <span className="req">*</span>}</label>
       <div className={`input-wrap${error ? ' tiene-error' : ''}`}>
         <Icon nombre="pin" />
         <input
@@ -124,11 +138,23 @@ export default function LocalidadSelect({ label, value, onChange, localidades, d
           aria-controls={`${id}-lista`}
           aria-autocomplete="list"
           disabled={deshabilitado}
-          required
+          required={requerido}
         />
+        {!requerido && (texto || value) && (
+          <button
+            type="button"
+            className="localidad-limpiar"
+            tabIndex={-1}
+            aria-label={`Quitar ${label?.toLowerCase?.() ?? 'localidad'}`}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={limpiar}
+          >
+            <Icon nombre="x" tamano={15} />
+          </button>
+        )}
         <button
           type="button"
-          className="localidad-flecha"
+          className={`localidad-flecha${abierto ? ' abierta' : ''}`}
           tabIndex={-1}
           aria-label="Mostrar todas las localidades"
           disabled={deshabilitado}

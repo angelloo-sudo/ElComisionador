@@ -120,7 +120,7 @@ export function validarSolicitud(body = {}) {
     if (peso === null) errores.push('El peso del paquete debe ser mayor a 0 y hasta 1000 kg')
     if (ancho === null) errores.push('El ancho del paquete debe ser mayor a 0 y hasta 1000 cm')
     if (largo === null) errores.push('El largo del paquete debe ser mayor a 0 y hasta 1000 cm')
-    if (profundidad === null) errores.push('La profundidad del paquete debe ser mayor a 0 y hasta 1000 cm')
+    if (profundidad === null) errores.push('El alto del paquete debe ser mayor a 0 y hasta 1000 cm')
     Object.assign(datos, { peso_kg: peso, ancho_cm: ancho, largo_cm: largo, profundidad_cm: profundidad })
 
     if (typeof body.fragil !== 'boolean') errores.push('Indicá si el paquete es frágil')

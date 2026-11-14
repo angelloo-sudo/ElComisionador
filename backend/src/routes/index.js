@@ -13,6 +13,7 @@ import resumenRoutes from './resumen.routes.js'
 import notificacionesRoutes from './notificaciones.routes.js'
 import verificacionesRoutes from './verificaciones.routes.js'
 import historialRoutes from './historial.routes.js'
+import opinionesRoutes from './opiniones.routes.js'
 
 const router = Router()
 
@@ -30,5 +31,6 @@ router.use('/resumen', resumenRoutes)
 router.use('/notificaciones', notificacionesRoutes)
 router.use('/verificaciones', verificacionesRoutes)
 router.use('/historial', historialRoutes)
+router.use('/opiniones', opinionesRoutes)
 
 export default router

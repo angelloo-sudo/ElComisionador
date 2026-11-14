@@ -5,8 +5,14 @@ import { Alerta } from '../components/ui.jsx'
 import ResumenComisionista from '../components/resumen/ResumenComisionista.jsx'
 import ResumenCliente from '../components/resumen/ResumenCliente.jsx'
 
+import OpinionForm from '../components/OpinionForm.jsx'
+
 function nombreGuardado() {
   try { return JSON.parse(localStorage.getItem('comitrack_usuario') ?? 'null')?.nombre ?? '' } catch { return '' }
+}
+
+function rolGuardado() {
+  try { return JSON.parse(localStorage.getItem('comitrack_usuario') ?? 'null')?.rol ?? '' } catch { return '' }
 }
 
 export default function Dashboard() {
@@ -20,5 +26,11 @@ export default function Dashboard() {
   if (error) return <Alerta tipo="error" titulo="No se pudo cargar el resumen">{error}</Alerta>
   if (!datos) return <p className="campo-ayuda">Cargando...</p>
   const nombre = nombreGuardado()
-  return datos.rol === 'cliente' ? <ResumenCliente datos={datos} nombre={nombre} /> : <ResumenComisionista datos={datos} nombre={nombre} />
+  const puedeOpinar = ['cliente', 'comisionista'].includes(rolGuardado())
+  return (
+    <>
+      {datos.rol === 'cliente' ? <ResumenCliente datos={datos} nombre={nombre} /> : <ResumenComisionista datos={datos} nombre={nombre} />}
+      {puedeOpinar && <OpinionForm />}
+    </>
+  )
 }

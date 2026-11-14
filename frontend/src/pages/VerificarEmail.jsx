@@ -26,6 +26,13 @@ export default function VerificarEmail() {
     if (!token) { setCargando(false); return }
     api.post('/auth/verificar-email', { token })
       .then((respuesta) => {
+        // El cliente no verifica identidad: con el correo confirmado ya puede iniciar sesión.
+        if (!respuesta.tokenVerificacion) {
+          limpiarContinuacionVerificacion()
+          setContinuacion(null)
+          setMensaje(respuesta.mensaje)
+          return
+        }
         const siguiente = { ...leerContinuacionVerificacion(), token: respuesta.tokenVerificacion, rol: respuesta.rol, email: respuesta.email }
         guardarContinuacionVerificacion(siguiente)
         setContinuacion(siguiente)
@@ -55,4 +62,4 @@ export default function VerificarEmail() {
       </div>
     </main>
   )
-}
+}

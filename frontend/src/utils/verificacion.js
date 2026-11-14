@@ -32,8 +32,16 @@ export function extraerDatosPDF417(texto) {
   return { dni, nombre, apellido }
 }
 
+// El DNI trae todos los nombres y la cuenta puede tener solo uno: coincide si todas las
+// palabras del perfil aparecen en el documento (mismo criterio que el backend).
 export function compararPerfil(datos, perfil) {
-  const comparar = (extraido, registrado) => extraido && registrado ? normalizar(extraido) === normalizar(registrado) : null
+  const comparar = (extraido, registrado) => {
+    const doc = normalizar(extraido)
+    const per = normalizar(registrado)
+    if (!doc || !per) return null
+    const palabras = new Set(doc.split(' '))
+    return doc === per || per.split(' ').every((p) => palabras.has(p))
+  }
   const dniExtraido = String(datos?.dni || '').replace(/\D/g, '')
   const dniPerfil = String(perfil?.dni || '').replace(/\D/g, '')
   return { nombre: comparar(datos?.nombre, perfil?.nombre), apellido: comparar(datos?.apellido, perfil?.apellido), dni: /^\d{7,8}$/.test(dniExtraido) && dniPerfil ? dniExtraido === dniPerfil : null }

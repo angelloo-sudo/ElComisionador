@@ -3,7 +3,8 @@ import { api, guardarSesion, guardarContinuacionVerificacion } from '../api/clie
 import Icon from '../components/Icon.jsx'
 import { Logo, Campo, CampoPassword, Alerta } from '../components/ui.jsx'
 import Avatar from '../components/Avatar.jsx'
-import { prepararFotoPerfil, ACEPTA_FOTOS } from '../utils/imagen.js'
+import { validarArchivoFoto, ACEPTA_FOTOS } from '../utils/imagen.js'
+import RecortarFotoModal from '../components/RecortarFotoModal.jsx'
 import VerificacionIdentidad from './VerificacionIdentidad.jsx'
 
 const formularioInicial = { nombre: '', apellido: '', email: '', password: '', confirmarPassword: '', dni: '', telefono: '', presentacion: '', foto_perfil: '' }
@@ -68,6 +69,7 @@ export default function Auth({ onAuthenticated }) {
   const [cargandoReenvio, setCargandoReenvio] = useState(false)
   const [mensajeReenvio, setMensajeReenvio] = useState('')
   const [errorReenvio, setErrorReenvio] = useState('')
+  const [fotoParaAjustar, setFotoParaAjustar] = useState(null) // archivo elegido, antes de acomodarlo
 
   const registrando = modo === 'register'
   const segundosBloqueo = bloqueoHasta
@@ -102,17 +104,23 @@ export default function Auth({ onAuthenticated }) {
     setErrores((e) => ({ ...e, [name]: undefined }))
   }
 
-  async function elegirFoto(event) {
+  // Primero se valida el archivo y se abre el ajuste; la foto se guarda al confirmar.
+  function elegirFoto(event) {
     const archivo = event.target.files?.[0]
     event.target.value = ''
     if (!archivo) return
     try {
-      const foto = await prepararFotoPerfil(archivo)
-      setForm((f) => ({ ...f, foto_perfil: foto }))
+      validarArchivoFoto(archivo)
+      setFotoParaAjustar(archivo)
       setErrores((e) => ({ ...e, foto_perfil: undefined }))
     } catch (err) {
       setErrores((e) => ({ ...e, foto_perfil: err.message }))
     }
+  }
+
+  function fotoAjustada(foto) {
+    setForm((f) => ({ ...f, foto_perfil: foto }))
+    setFotoParaAjustar(null)
   }
 
 function cambiarModo(nuevo) {
@@ -211,7 +219,8 @@ function cambiarModo(nuevo) {
       const respuesta = await api.post(endpoint, datos)
 
       if (registrando) {
-        guardarContinuacionVerificacion({ email: respuesta.email ?? form.email, rol })
+        // Solo el comisionista sigue con la verificación de identidad después de confirmar el correo.
+        if (rol === 'comisionista') guardarContinuacionVerificacion({ email: respuesta.email ?? form.email, rol })
         setRegistroExitoso({
           rol,
           email: respuesta.email ?? form.email,
@@ -244,7 +253,9 @@ function cambiarModo(nuevo) {
           <p>
             Tu cuenta de {registroExitoso.rol === 'comisionista' ? 'comisionista' : 'cliente'} fue creada para {registroExitoso.email}.
             {registroExitoso.identidadPendiente && ' La verificación de identidad quedó pendiente de revisión administrativa; no fue aprobada automáticamente.'}
-            {!registroExitoso.identidadPendiente && ' Tu cuenta está creada. Abrí el enlace del correo para continuar directamente con la verificación de identidad.'}
+            {!registroExitoso.identidadPendiente && (registroExitoso.rol === 'comisionista'
+              ? ' Tu cuenta está creada. Abrí el enlace del correo para continuar directamente con la verificación de identidad.'
+              : ' Tu cuenta está creada. Abrí el enlace del correo para confirmarlo y después iniciá sesión.')}
             {registroExitoso.verificacionEnviada
               ? ' Abrí el enlace que te enviamos para verificar el correo; vence en una hora.'
               : ' No pudimos enviar el enlace. Revisá la configuración de correo o solicitá uno nuevo.'}
@@ -440,8 +451,10 @@ function cambiarModo(nuevo) {
                     {form.foto_perfil ? 'Cambiar foto' : 'Elegir foto'}
                     <input type="file" accept={ACEPTA_FOTOS} onChange={elegirFoto} hidden />
                   </label>
+                  {form.foto_perfil && <button type="button" className="btn btn-chico" onClick={() => setForm((f) => ({ ...f, foto_perfil: '' }))}>Quitar</button>}
                 </div>
               </Campo>
+              {fotoParaAjustar && <RecortarFotoModal archivo={fotoParaAjustar} onListo={fotoAjustada} onCancelar={() => setFotoParaAjustar(null)} />}
               <Campo label="Presentación" error={errores.presentacion}>
                 <textarea className="area" name="presentacion" value={form.presentacion} onChange={handleChange} maxLength="500" placeholder="Contales a tus clientes quién sos (opcional)" />
               </Campo>
@@ -491,4 +504,4 @@ function cambiarModo(nuevo) {
       </form>
     </main>
   )
-}
+}

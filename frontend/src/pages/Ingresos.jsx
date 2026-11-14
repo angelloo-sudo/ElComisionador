@@ -1,12 +1,11 @@
-// Epica 6: US36 (historial), US37 (detalle), US38 (modificar) y US39 (anular).
+// Epica 6: US36 (historial) y US37 (detalle).
 // Los cobros se registran solos: al llegar el pasajero a destino y al retirarse la encomienda (US35).
+// Se muestran solo los ingresos vigentes; ya no se modifican ni se anulan desde la pantalla.
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client.js'
 import Icon from '../components/Icon.jsx'
-import { Alerta, Campo, Toast } from '../components/ui.jsx'
+import { Alerta, Campo } from '../components/ui.jsx'
 import IngresoDetalleModal from '../components/ingresos/IngresoDetalleModal.jsx'
-import IngresoFormModal from '../components/ingresos/IngresoFormModal.jsx'
-import AnularIngresoModal from '../components/ingresos/AnularIngresoModal.jsx'
 import { formatoFechaISO, formatoMoneda } from '../utils/gastos.js'
 
 const FILTROS_VACIOS = { desde: '', hasta: '', forma_pago: '', tipo: '', estado: 'activo' }
@@ -21,10 +20,6 @@ export default function Ingresos() {
   const [aplicados, setAplicados] = useState(FILTROS_VACIOS)
   const [errorFiltros, setErrorFiltros] = useState(null)
   const [detalleId, setDetalleId] = useState(null)
-  const [aModificar, setAModificar] = useState(null)
-  const [aAnular, setAAnular] = useState(null)
-  const [toast, setToast] = useState(null)
-  const cerrarToast = useCallback(() => setToast(null), [])
 
   const hayFiltros = Object.entries(aplicados).some(([k, v]) => v && !(k === 'estado' && v === 'activo'))
 
@@ -43,15 +38,6 @@ export default function Ingresos() {
     setErrorFiltros(null); setAplicados(filtros)
   }
   function limpiar() { setErrorFiltros(null); setFiltros(FILTROS_VACIOS); setAplicados(FILTROS_VACIOS) }
-
-  function guardado() {
-    setAModificar(null); setDetalleId(null); cargar(aplicados)
-    setToast({ titulo: 'Ingreso modificado', texto: 'Los cambios se guardaron y el total se actualizó.' })
-  }
-  function anulado() {
-    setAAnular(null); setDetalleId(null); cargar(aplicados)
-    setToast({ titulo: 'Ingreso anulado', texto: 'Ya no suma en los totales de ingresos.' })
-  }
 
   return (
     <section>
@@ -75,11 +61,6 @@ export default function Ingresos() {
             <option value="">Todos</option><option value="pasajero">Pasajeros</option><option value="encomienda">Encomiendas</option>
           </select><Icon nombre="down" />
         </Campo>
-        <Campo label="Estado">
-          <select name="estado" value={filtros.estado} onChange={cambiar}>
-            <option value="activo">Vigentes</option><option value="anulado">Anulados</option><option value="todos">Todos</option>
-          </select><Icon nombre="down" />
-        </Campo>
         <div className="acciones">
           <button type="submit" className="btn btn-primario"><Icon nombre="search" tamano={16} /> Buscar</button>
           {hayFiltros && <button type="button" className="btn" onClick={limpiar}>Limpiar</button>}
@@ -91,7 +72,7 @@ export default function Ingresos() {
 
       <div className="gastos-resumen" aria-live="polite">
         <div><span>Total de ingresos</span><strong>{formatoMoneda(datos.resumen.total)}</strong></div>
-        <div><span>Cobros vigentes</span><strong>{datos.resumen.cantidad}</strong></div>
+        <div><span>Cantidad de cobros</span><strong>{datos.resumen.cantidad}</strong></div>
       </div>
 
       <div className="card tabla-wrap">
@@ -99,25 +80,18 @@ export default function Ingresos() {
           <p className="vacio">No se encontraron ingresos registrados</p>
         ) : (
           <table className="tabla">
-            <thead><tr><th>Fecha</th><th>Concepto</th><th>Cliente</th><th>Pago</th><th className="num">Monto</th><th>Estado</th><th></th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Concepto</th><th>Cliente</th><th>Pago</th><th className="num">Monto</th><th></th></tr></thead>
             <tbody>
               {datos.ingresos.map((i) => (
-                <tr key={i.id} className={i.estado === 'anulado' ? 'fila-baja' : ''}>
+                <tr key={i.id}>
                   <td>{formatoFechaISO(i.fecha)}</td>
                   <td>{i.concepto}</td>
                   <td>{i.cliente || '-'}</td>
                   <td>{FORMAS[i.forma_pago] ?? '-'}</td>
                   <td className="num">{formatoMoneda(i.monto)}</td>
-                  <td>{i.estado === 'anulado' ? <span className="badge punto gris">Anulado</span> : <span className="badge punto verde">Vigente</span>}</td>
                   <td>
                     <div className="acciones-fila">
                       <button type="button" className="btn btn-chico" onClick={() => setDetalleId(i.id)}>Ver detalle</button>
-                      {i.estado === 'activo' && (
-                        <>
-                          <button type="button" className="btn btn-chico" onClick={() => setAModificar(i)}><Icon nombre="pencil" tamano={13} /> Modificar</button>
-                          <button type="button" className="btn btn-chico btn-peligro" onClick={() => setAAnular(i)}>Anular</button>
-                        </>
-                      )}
                     </div>
                   </td>
                 </tr>
@@ -127,13 +101,7 @@ export default function Ingresos() {
         )}
       </div>
 
-      {detalleId && (
-        <IngresoDetalleModal id={detalleId} onClose={() => setDetalleId(null)}
-          onModificar={(i) => { setDetalleId(null); setAModificar(i) }} onAnular={(i) => { setDetalleId(null); setAAnular(i) }} />
-      )}
-      {aModificar && <IngresoFormModal ingreso={aModificar} onClose={() => setAModificar(null)} onGuardado={guardado} />}
-      {aAnular && <AnularIngresoModal ingreso={aAnular} onClose={() => setAAnular(null)} onAnulado={anulado} />}
-      {toast && <Toast titulo={toast.titulo} texto={toast.texto} onClose={cerrarToast} />}
+      {detalleId && <IngresoDetalleModal id={detalleId} onClose={() => setDetalleId(null)} />}
     </section>
   )
 }

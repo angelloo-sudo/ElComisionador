@@ -17,6 +17,14 @@ const ESTADO = {
 }
 
 const montoTexto = (m) => (m == null ? 'A convenir' : formatoPesos(m))
+
+// Rechazada o cancelada por el cliente se muestran así aunque después se cancele el viaje;
+// si no, un viaje cancelado se muestra como "Viaje cancelado".
+function estadoMostrado(s) {
+  if (['rechazada', 'cancelada'].includes(s.estado)) return ESTADO[s.estado]
+  if (s.estado_viaje === 'cancelado') return { clase: 'rojo', texto: 'Viaje cancelado' }
+  return ESTADO[s.estado] ?? { clase: 'gris', texto: s.estado }
+}
 const destinoSolicitudes = '/mis-traslados'
 
 function fechaActual() {
@@ -30,6 +38,7 @@ function fechaActividad(valor) {
 }
 
 function resumenEstadoEncomienda(s) {
+  if (s.estado_viaje === 'cancelado' && !['rechazada', 'cancelada'].includes(s.estado)) return { texto: 'Viaje cancelado', clase: 'rojo', etapa: 0, cerrado: true }
   if (s.entregada_en) return { texto: 'Entregada', clase: 'verde', etapa: 3 }
   if (s.retirada_en) return { texto: 'En camino', clase: 'azul', etapa: 2 }
   if (s.estado === 'aceptada') return { texto: 'Confirmada', clase: 'verde', etapa: 1 }
@@ -127,7 +136,6 @@ export default function ResumenCliente({ datos, nombre }) {
           <h2>Hola, {nombreMostrado}</h2>
           <p>¿Qué necesitás enviar o planificar hoy?</p>
         </div>
-        <Link to="/mis-traslados" className="btn btn-primario"><Icon nombre="plus" tamano={16} /> Nueva solicitud</Link>
       </header>
 
       {t.rechazadas_recientes > 0 && (
@@ -145,8 +153,7 @@ export default function ResumenCliente({ datos, nombre }) {
           <h3>Enviá lo que necesitás, sin vueltas.</h3>
           <p>Pedí una encomienda, reservá tu viaje o seguí cada paso desde un solo lugar.</p>
           <div className="cliente-hero-acciones">
-            <Link to="/mis-traslados" className="btn btn-primario"><Icon nombre="package" tamano={15} /> Enviar encomienda <Icon nombre="arrow" tamano={14} /></Link>
-            <Link to="/mis-traslados" className="btn"><Icon nombre="seat" tamano={15} /> Buscar un viaje <Icon nombre="arrow" tamano={14} /></Link>
+            <Link to="/mis-traslados" className="btn btn-primario"><Icon nombre="seat" tamano={15} /> Buscar un viaje <Icon nombre="arrow" tamano={14} /></Link>
           </div>
         </div>
         <div className="cliente-hero-resumen" aria-label="Resumen de solicitudes">
@@ -211,7 +218,7 @@ export default function ResumenCliente({ datos, nombre }) {
             {ultimas.length ? <ul className="lista-resumen">{ultimas.map((s) => (
               <li key={s.id}>
                 <div><span className="principal">{s.sube} → {s.baja}</span><small>{s.tipo === 'encomienda' ? 'Encomienda' : plural(s.cantidad_pasajeros, 'pasajero', 'pasajeros')} · {cuando(s.fecha, s.hora_salida)} · {montoTexto(s.monto)}</small>{s.estado === 'rechazada' && s.motivo_rechazo && <small>Motivo: {s.motivo_rechazo}</small>}</div>
-                <div className="derecha"><span className={`badge punto ${ESTADO[s.estado]?.clase ?? 'gris'}`}>{ESTADO[s.estado]?.texto ?? s.estado}</span></div>
+                <div className="derecha"><span className={`badge punto ${estadoMostrado(s).clase}`}>{estadoMostrado(s).texto}</span></div>
               </li>
             ))}</ul> : <p className="resumen-vacio">Todavía no hiciste ninguna solicitud.</p>}
           </section>

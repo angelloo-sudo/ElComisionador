@@ -12,23 +12,7 @@ function EstadoPill({ estado }) {
   return <span className={`verif-pill ${clase}`}>{formatearEstadoVerificacion(estado)}</span>
 }
 
-<<<<<<< HEAD
 export default function VerificacionIdentidad({ perfilRegistro, tokenVerificacion, onRegistroCompleto, onCancelarRegistro, onTokenInvalido }) {
-=======
-function formatearFechaDocumento(valor) {
-  const digitos = valor.replace(/\D/g, '').slice(0, 8)
-  if (digitos.length <= 2) return digitos
-  if (digitos.length <= 4) return `${digitos.slice(0, 2)}/${digitos.slice(2)}`
-  return `${digitos.slice(0, 2)}/${digitos.slice(2, 4)}/${digitos.slice(4)}`
-}
-
-function ResultadoOcr({ resultado }) {
-  const texto = resultado === 'legible' ? 'OCR legible' : resultado === 'no_legible' ? 'OCR no legible' : 'OCR requiere revisión'
-  return <span className={`verif-pill ${resultado === 'legible' ? 'exito' : 'pendiente'}`}>{texto}</span>
-}
-
-export default function VerificacionIdentidad({ perfilRegistro, onRegistroCompleto, onCancelarRegistro }) {
->>>>>>> d9bce902fc2f6a45d720ceea574b9a3f97557beb
   const registro = Boolean(perfilRegistro)
   const videoRef = useRef(null)
   const controlesRef = useRef(null)
@@ -47,20 +31,21 @@ export default function VerificacionIdentidad({ perfilRegistro, onRegistroComple
   const [coincidencias, setCoincidencias] = useState(null)
   const [error, setError] = useState('')
 
+  // @zxing/browser no tiene reset(): la cámara se libera con controles.stop().
   function detenerCamara() {
     sesionEscaneoRef.current += 1
     clearTimeout(temporizadorRef.current)
     temporizadorRef.current = null
-    controlesRef.current?.stop()
+    try { controlesRef.current?.stop() } catch { /* la cámara ya estaba detenida */ }
     controlesRef.current = null
-    lectorRef.current?.reset()
+    lectorRef.current = null
     setCamaraActiva(false)
   }
 
   useEffect(() => () => {
     sesionEscaneoRef.current += 1
-    controlesRef.current?.stop()
-    lectorRef.current?.reset()
+    clearTimeout(temporizadorRef.current)
+    try { controlesRef.current?.stop() } catch { /* la cámara ya estaba detenida */ }
   }, [])
 
   useEffect(() => {
@@ -99,7 +84,6 @@ export default function VerificacionIdentidad({ perfilRegistro, onRegistroComple
     setProcesando(true)
     setError('')
     try {
-<<<<<<< HEAD
       let id = solicitudId
       if (!id) {
         const nueva = await api.post('/verificaciones', { consentimiento: true }, registro ? { token: tokenVerificacion } : undefined)
@@ -112,68 +96,6 @@ export default function VerificacionIdentidad({ perfilRegistro, onRegistroComple
       if (resultado.resultado !== 'LECTURA_CORRECTA_Y_COINCIDENTE') {
         setEtapa('resultado')
         setError(ERROR_COINCIDENCIA)
-=======
-      const { createWorker } = await import('tesseract.js')
-      worker = await createWorker('spa', 1, {
-        workerPath: '/vendor/tesseract/worker.min.js',
-        corePath: '/vendor/tesseract',
-        langPath: '/vendor/tesseract',
-        gzip: true,
-        workerBlobURL: false,
-        logger: (m) => {
-          if (m.status === 'recognizing text') setProgreso(`Leyendo documento: ${Math.round(m.progress * 100)}%`)
-        },
-      })
-      const frente = await worker.recognize(imagenes.frente)
-      setProgreso('Leyendo el dorso del documento…')
-      const dorso = await worker.recognize(imagenes.dorso)
-      const extraidos = extraerDatosDni([frente.data.text, dorso.data.text])
-      setDatos(extraidos)
-      setEtapa('datos')
-    } catch {
-      setError('No se pudo leer el documento con el motor local. Revisá las imágenes o completá los datos manualmente.')
-      setDatos((actual) => ({ ...actual, resultado_ocr: 'no_legible' }))
-      setEtapa('datos')
-    } finally {
-      await worker?.terminate().catch(() => {})
-      setProgreso('')
-      setProcesando(false)
-    }
-  }
-
-  function actualizarDato(event) {
-    const { name, value } = event.target
-    const actualizado = ['fecha_nacimiento', 'fecha_vencimiento'].includes(name) ? formatearFechaDocumento(value) : value
-    setDatos((actual) => ({ ...actual, [name]: actualizado }))
-  }
-
-  function continuarSelfie() {
-    const dni = String(datos.dni || '').replace(/\D/g, '')
-    if (datos.resultado_ocr !== 'legible' || !/^\d{7,8}$/.test(dni) || !datos.nombre.trim() || !datos.apellido.trim()) {
-      setError('El OCR debe poder leer el DNI, el nombre y el apellido. Revisá las imágenes y repetí el análisis si no se identificaron los datos necesarios.')
-      return
-    }
-    setDatos((actual) => ({ ...actual, dni }))
-    setError('')
-    setEtapa('selfie')
-  }
-
-  async function enviar() {
-    const dniParcial = enmascararDni(datos.dni)
-    if (!dniParcial || !controles) {
-      setError('Completá los datos del DNI y la comprobación facial antes de enviar.')
-      return
-    }
-    setError('')
-    setProcesando(true)
-    try {
-      if (registro) {
-        await onRegistroCompleto({ consentimiento: true, dni_parcial: dniParcial, resultado_ocr: datos.resultado_ocr, coincidencias: diferencias, controles_faciales: controles })
-        setImagenes({ frente: null, dorso: null })
-        setDatos(DATOS_VACIOS)
-        setControles(null)
-        setSelfie(null)
->>>>>>> d9bce902fc2f6a45d720ceea574b9a3f97557beb
         return
       }
       const solicitud = await api.patch(`/verificaciones/${id}/enviar`, {}, registro ? { token: tokenVerificacion } : undefined)
@@ -209,9 +131,12 @@ export default function VerificacionIdentidad({ perfilRegistro, onRegistroComple
       const { BrowserPDF417Reader } = await import('@zxing/browser')
       await new Promise((resolver) => requestAnimationFrame(resolver))
       if (sesionEscaneo !== sesionEscaneoRef.current) return
-      const lector = new BrowserPDF417Reader()
+      // TRY_HARDER (clave 3 de DecodeHintType) mejora la lectura del código del DNI, que es muy denso.
+      const lector = new BrowserPDF417Reader(new Map([[3, true]]), { delayBetweenScanAttempts: 150 })
       lectorRef.current = lector
-      const controles = await lector.decodeFromVideoDevice(undefined, videoRef.current, (resultado) => {
+      // Cámara trasera en celulares y alta resolución: con 640x480 el PDF417 casi nunca se lee.
+      const restricciones = { audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } } }
+      const controles = await lector.decodeFromConstraints(restricciones, videoRef.current, (resultado) => {
         if (!resultado || !lectorRef.current || sesionEscaneo !== sesionEscaneoRef.current) return
         const leidos = extraerDatosPDF417(resultado.getText())
         detenerCamara()
@@ -296,60 +221,7 @@ export default function VerificacionIdentidad({ perfilRegistro, onRegistroComple
         <div className="verif-botones"><button type="button" className="btn btn-primario" disabled={procesando} onClick={comenzarEscaneo}>Volver a escanear</button></div>
       </div>}
 
-<<<<<<< HEAD
       {etapa === 'revision' && <div className="verif-card card"><Alerta tipo="exito" titulo="¡Lectura exitosa! Los datos coinciden con tu registro.">La solicitud quedó pendiente de revisión administrativa. Esta comprobación no certifica oficialmente la identidad ni la autenticidad del DNI.</Alerta><p className="verif-mensaje">No necesitás volver a escanear. Te avisaremos cuando administración resuelva la solicitud.</p></div>}
-=======
-      {etapa === 'datos' && (
-        <div className="verif-card card">
-          <div className="card-cabecera"><div><h3>Revisá la lectura OCR</h3><p>El reconocimiento puede equivocarse. Corregí lo que sea necesario.</p></div><ResultadoOcr resultado={datos.resultado_ocr} /></div>
-          <div className="verif-aviso-privado">Estos datos solo permanecen en la memoria de esta pantalla. El número completo del DNI no se envía al servidor.</div>
-          <div className="verif-campos">
-            <label>DNI leído o corregido<input name="dni" inputMode="numeric" autoComplete="off" value={datos.dni} onChange={actualizarDato} placeholder="7 u 8 dígitos" maxLength={12} /></label>
-            <label>Nombre<input name="nombre" autoComplete="off" value={datos.nombre} onChange={actualizarDato} maxLength={120} /></label>
-            <label>Apellido<input name="apellido" autoComplete="off" value={datos.apellido} onChange={actualizarDato} maxLength={120} /></label>
-            <label>Fecha de nacimiento<input name="fecha_nacimiento" inputMode="numeric" maxLength={10} value={datos.fecha_nacimiento} onChange={actualizarDato} placeholder="DD/MM/AAAA" /></label>
-            <label>Vencimiento (si se leyó)<input name="fecha_vencimiento" inputMode="numeric" maxLength={10} value={datos.fecha_vencimiento} onChange={actualizarDato} placeholder="DD/MM/AAAA" /></label>
-            <label>Número de trámite (si se leyó)<input name="numero_tramite" inputMode="numeric" autoComplete="off" value={datos.numero_tramite} onChange={actualizarDato} /></label>
-          </div>
-          <h4>Comparación con el perfil</h4>
-          <ul className="verif-coincidencias">
-            {['nombre', 'apellido', 'dni'].map((campo) => <li key={campo}><span>{campo === 'dni' ? 'DNI' : campo[0].toUpperCase() + campo.slice(1)}</span><strong className={diferencias[campo] === true ? 'coincide' : diferencias[campo] === false ? 'discrepa' : ''}>{diferencias[campo] === null ? 'Sin dato para comparar' : diferencias[campo] ? 'Coincide' : 'Hay una diferencia'}</strong></li>)}
-          </ul>
-          <p className="campo-ayuda">Las diferencias se informan al administrador. El perfil no se modifica automáticamente.</p>
-          <div className="verif-botones"><button type="button" className="btn" onClick={() => setEtapa('dni')}>Volver a las imágenes</button><button type="button" className="btn btn-primario" onClick={continuarSelfie}>Continuar a la comprobación facial</button></div>
-        </div>
-      )}
-
-      {etapa === 'selfie' && (
-        <div className="verif-card card">
-          <div className="card-cabecera"><div><h3>Comprobación facial guiada</h3><p>La cámara se usa en vivo. Al completar el desafío se captura una vista previa temporal para que la revises antes del envío.</p></div><span className="verif-paso">Paso 2 de 3</span></div>
-          <Alerta tipo="aviso" titulo="Alcance de esta comprobación">Detectar estos movimientos no confirma la identidad de la persona y no constituye una prueba de vida robusta.</Alerta>
-          <DesafioFacial onCompleto={(resultado, captura) => { setControles(resultado); setSelfie(captura); setEtapa('resumen') }} />
-          <div className="verif-botones"><button type="button" className="btn" onClick={() => { setError(''); setControles(null); setSelfie(null); setEtapa('datos') }}>Volver</button></div>
-        </div>
-      )}
-
-      {etapa === 'resumen' && (
-        <div className="verif-card card">
-          <div className="card-cabecera"><div><h3>Resumen antes de enviar</h3><p>La aprobación requiere revisión de una persona administradora.</p></div><span className="verif-paso">Paso 3 de 3</span></div>
-          <dl className="verif-resumen">
-            {selfiePreview && <div className="verif-selfie-resumen"><dt>Selfie capturada (solo vista previa)</dt><dd><img src={selfiePreview} alt="Selfie temporal para revisar antes del envío" /></dd></div>}
-            <div><dt>DNI</dt><dd>{enmascararDni(datos.dni)}</dd></div>
-            <div><dt>Nombre</dt><dd>{datos.nombre || 'No reconocido'}</dd></div>
-            <div><dt>Apellido</dt><dd>{datos.apellido || 'No reconocido'}</dd></div>
-            <div><dt>Fecha de nacimiento</dt><dd>{datos.fecha_nacimiento || 'No identificada'}</dd></div>
-            <div><dt>Vencimiento</dt><dd>{datos.fecha_vencimiento || 'No identificado'}</dd></div>
-            <div><dt>Número de trámite</dt><dd>{datos.numero_tramite ? 'Identificado; no se envía ni conserva' : 'No identificado'}</dd></div>
-            <div><dt>Resultado OCR</dt><dd>{datos.resultado_ocr}</dd></div>
-            <div><dt>Coincidencias</dt><dd>{Object.entries(diferencias).map(([k, v]) => `${k}: ${v === null ? 'sin dato' : v ? 'coincide' : 'diferencia'}`).join(' · ')}</dd></div>
-            <div><dt>Comprobación facial</dt><dd>{controles?.rostro_unico && controles?.parpadeo && controles?.giro && controles?.frente ? 'Un rostro, parpadeo, giro y regreso al frente detectados' : 'Incompleta'}</dd></div>
-          </dl>
-          <Alerta tipo="aviso" titulo="Verificación preliminar">No se envían las imágenes, la selfie ni el DNI completo. La aceptación de estos controles no certifica la autenticidad del documento ni la identidad.</Alerta>
-          {procesando && <p className="campo-ayuda">Enviando resultados…</p>}
-          <div className="verif-botones"><button type="button" className="btn" onClick={() => { setControles(null); setSelfie(null); setEtapa('selfie') }} disabled={procesando}>Repetir comprobación facial</button><button type="button" className="btn btn-primario" onClick={enviar} disabled={procesando}>{procesando ? 'Enviando…' : 'Enviar a revisión'}</button></div>
-        </div>
-      )}
->>>>>>> d9bce902fc2f6a45d720ceea574b9a3f97557beb
     </section>
   )
 }

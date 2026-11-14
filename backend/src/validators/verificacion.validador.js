@@ -1,12 +1,23 @@
 const normalizar = (valor = '') => String(valor).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
 
+// El DNI trae todos los nombres ("JUAN CARLOS") y muchas personas se registran solo con
+// uno ("Juan"). Coincide si todas las palabras cargadas en el perfil aparecen en el documento.
+export function nombresCoinciden(documento, perfil) {
+  const doc = normalizar(documento)
+  const per = normalizar(perfil)
+  if (!doc || !per) return null
+  if (doc === per) return true
+  const palabrasDoc = new Set(doc.split(' '))
+  return per.split(' ').every((palabra) => palabrasDoc.has(palabra))
+}
+
 export function compararDatosDocumentoPerfil(documento, perfil) {
   const dni = String(documento?.dni ?? '').replace(/\D/g, '')
   const dniPerfil = String(perfil?.dni ?? '').replace(/\D/g, '')
   const coincidencias = {
     dni: /^\d{7,8}$/.test(dni) && dniPerfil ? dni === dniPerfil : null,
-    nombre: normalizar(documento?.nombre) && normalizar(perfil?.nombre) ? normalizar(documento.nombre) === normalizar(perfil.nombre) : null,
-    apellido: normalizar(documento?.apellido) && normalizar(perfil?.apellido) ? normalizar(documento.apellido) === normalizar(perfil.apellido) : null,
+    nombre: nombresCoinciden(documento?.nombre, perfil?.nombre),
+    apellido: nombresCoinciden(documento?.apellido, perfil?.apellido),
   }
   return { completo: Object.values(coincidencias).every((v) => v !== null), coincidencias, dni_parcial: /^\d{7,8}$/.test(dni) ? '••••' + dni.slice(-4) : null }
 }

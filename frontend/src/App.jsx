@@ -14,7 +14,6 @@ import Postulaciones from './pages/Postulaciones.jsx'
 import Gastos from './pages/Gastos.jsx'
 import Ingresos from './pages/Ingresos.jsx'
 import ReporteRentabilidad from './pages/ReporteRentabilidad.jsx'
-import ReportesRentabilidad from './pages/ReportesRentabilidad.jsx'
 import ReporteRentabilidadDetalle from './pages/ReporteRentabilidadDetalle.jsx'
 import Tarifa from './pages/Tarifa.jsx'
 import SolicitarViaje from './pages/SolicitarViaje.jsx'
@@ -43,7 +42,6 @@ function fechaDeHoy() {
 
 function tituloDePagina(ruta, rol) {
   if (ruta.startsWith('/historial/viajes')) return 'Historial de viajes'
-  if (ruta.startsWith('/historial/clientes')) return 'Operaciones de clientes'
   if (ruta.startsWith('/historial/encomiendas')) return 'Historial de encomiendas'
   if (ruta.startsWith('/historial/pasajeros')) return 'Historial de pasajeros'
   if (ruta.startsWith('/mis-traslados/solicitar')) return 'Solicitar viaje'
@@ -59,7 +57,7 @@ function tituloDePagina(ruta, rol) {
   if (ruta.startsWith('/ingresos')) return 'Ingresos'
   if (ruta.startsWith('/graficos-rentabilidad')) return 'Gráficos de rentabilidad'
   if (ruta.startsWith('/rentabilidad')) return 'Rentabilidad'
-  if (ruta.startsWith('/reportes-rentabilidad')) return 'Reportes de rentabilidad'
+  if (ruta.startsWith('/reportes-rentabilidad')) return 'Reporte de rentabilidad'
   if (ruta.startsWith('/gastos')) return 'Gastos'
   if (ruta.startsWith('/tarifa')) return 'Mi tarifa'
   if (ruta.startsWith('/perfil')) return 'Mi perfil'
@@ -95,9 +93,43 @@ export default function App() {
   const [confirmandoSalida, setConfirmandoSalida] = useState(false)
   const [mostrarBienvenida, setMostrarBienvenida] = useState(false)
   const [notificacionesNoLeidas, setNotificacionesNoLeidas] = useState(0)
+  // La foto no se guarda en localStorage (pesa mucho): se pide al perfil y se actualiza al guardarlo.
+  const [fotoPerfil, setFotoPerfil] = useState('')
   const ubicacion = useLocation()
   const navegar = useNavigate()
   const cerrarBienvenida = useCallback(() => setMostrarBienvenida(false), [])
+  const esCliente = usuario?.rol === 'cliente'
+
+  useEffect(() => {
+    if (!token) { setFotoPerfil(''); return undefined }
+    let vigente = true
+    api.get('/auth/perfil').then((p) => { if (vigente) setFotoPerfil(p?.foto_perfil ?? '') }).catch(() => {})
+    const alActualizar = (evento) => {
+      setUsuario(usuarioGuardado())
+      setFotoPerfil(evento.detail?.foto_perfil ?? '')
+    }
+    window.addEventListener('perfil:actualizado', alActualizar)
+    return () => { vigente = false; window.removeEventListener('perfil:actualizado', alActualizar) }
+  }, [token])
+
+  useEffect(() => {
+    if (!esCliente) {
+      setNotificacionesNoLeidas(0)
+      return undefined
+    }
+    let vigente = true
+    const actualizar = () => api.get('/notificaciones/no-leidas')
+      .then(({ cantidad }) => { if (vigente) setNotificacionesNoLeidas(cantidad) })
+      .catch((error) => console.error('No se pudo actualizar el contador de notificaciones:', error))
+    actualizar()
+    const intervalo = window.setInterval(actualizar, 30_000)
+    window.addEventListener('notificaciones:actualizadas', actualizar)
+    return () => {
+      vigente = false
+      window.clearInterval(intervalo)
+      window.removeEventListener('notificaciones:actualizadas', actualizar)
+    }
+  }, [esCliente])
 
   if (ubicacion.pathname === '/verificar-email') return <VerificarEmail />
 
@@ -135,28 +167,8 @@ export default function App() {
 
   // Clientes gestionan encomiendas y traslados; comisionistas revisan envíos y viajes.
   const esComisionista = usuario?.rol === 'comisionista' || usuario?.rol === 'administrador'
-  const esCliente = usuario?.rol === 'cliente'
   const nombreCompleto = `${usuario?.nombre ?? ''} ${usuario?.apellido ?? ''}`.trim()
   const claseNav = ({ isActive }) => `nav-item${isActive ? ' activo' : ''}`
-
-  useEffect(() => {
-    if (!esCliente) {
-      setNotificacionesNoLeidas(0)
-      return undefined
-    }
-    let vigente = true
-    const actualizar = () => api.get('/notificaciones/no-leidas')
-      .then(({ cantidad }) => { if (vigente) setNotificacionesNoLeidas(cantidad) })
-      .catch((error) => console.error('No se pudo actualizar el contador de notificaciones:', error))
-    actualizar()
-    const intervalo = window.setInterval(actualizar, 30_000)
-    window.addEventListener('notificaciones:actualizadas', actualizar)
-    return () => {
-      vigente = false
-      window.clearInterval(intervalo)
-      window.removeEventListener('notificaciones:actualizadas', actualizar)
-    }
-  }, [esCliente])
 
   return (
     <div className="app">
@@ -170,14 +182,13 @@ export default function App() {
             </div>
           </div>
           <div className="barra-cuenta">
-            <div className="topbar-usuario">
+            <NavLink to="/perfil" className={({ isActive }) => `topbar-usuario topbar-usuario-enlace${isActive ? ' activo' : ''}`} aria-label="Mi perfil" title="Mi perfil">
               <div>
                 <strong>{nombreCompleto || usuario?.email}</strong>
                 <span>{usuario?.rol === 'administrador' ? 'Administrador' : esComisionista ? 'Comisionista' : 'Cliente'}</span>
               </div>
-              <Avatar nombre={usuario?.nombre ?? ''} apellido={usuario?.apellido ?? ''} tamano={40} />
-            </div>
-            <NavLink to="/perfil" className={claseNav} aria-label="Mi perfil" title="Mi perfil"><Icon nombre="user" /></NavLink>
+              <Avatar foto={fotoPerfil} nombre={usuario?.nombre ?? ''} apellido={usuario?.apellido ?? ''} tamano={40} />
+            </NavLink>
             <button type="button" className="nav-item peligro" aria-label="Cerrar sesión" title="Cerrar sesión" onClick={() => setConfirmandoSalida(true)}>
               <Icon nombre="logout" />
             </button>
@@ -188,15 +199,14 @@ export default function App() {
           {esComisionista && <NavLink to="/viajes" className={claseNav}><Icon nombre="logo" /> Viajes</NavLink>}
           {esComisionista && <NavLink to="/solicitudes" className={claseNav}><Icon nombre="checkcircle" /> Solicitudes</NavLink>}
           {esComisionista && <NavLink to="/clientes" className={claseNav}><Icon nombre="users" /> Clientes</NavLink>}
-          {usuario?.rol === 'comisionista' && <NavLink to="/historial/viajes" className={claseNav}>Historial</NavLink>}
-          {usuario?.rol === 'comisionista' && <NavLink to="/historial/clientes" className={claseNav}>Operaciones clientes</NavLink>}
+          {usuario?.rol === 'comisionista' && <NavLink to="/historial/viajes" className={({ isActive }) => claseNav({ isActive: isActive || ubicacion.pathname.startsWith('/historial') })}><Icon nombre="history" /> Historial</NavLink>}
           {usuario?.rol === 'comisionista' && <NavLink to="/tarifa" className={claseNav}><Icon nombre="tag" /> Tarifa</NavLink>}
           {usuario?.rol === 'comisionista' && <NavLink to="/ingresos" className={claseNav}><Icon nombre="wallet" /> Ingresos</NavLink>}
           {usuario?.rol === 'comisionista' && <NavLink to="/gastos" className={claseNav}><Icon nombre="wallet" /> Gastos</NavLink>}
-          {usuario?.rol === 'comisionista' && <NavLink to="/rentabilidad" className={claseNav}><Icon nombre="wallet" /> Rentabilidad</NavLink>}
+          {usuario?.rol === 'comisionista' && <NavLink to="/rentabilidad" className={({ isActive }) => claseNav({ isActive: isActive || ubicacion.pathname.startsWith('/reportes-rentabilidad') })}><Icon nombre="wallet" /> Rentabilidad</NavLink>}
           {usuario?.rol === 'cliente' && <NavLink to="/mis-traslados" className={claseNav}><Icon nombre="logo" /> Viajes</NavLink>}
           {usuario?.rol === 'cliente' && <NavLink to="/notificaciones" className={claseNav} aria-label={`Notificaciones${notificacionesNoLeidas ? `, ${notificacionesNoLeidas} sin leer` : ''}`}><Icon nombre="bell" /> Notificaciones{notificacionesNoLeidas > 0 && <span className="notificacion-contador">{notificacionesNoLeidas}</span>}</NavLink>}
-          {(esCliente || usuario?.rol === 'comisionista') && <NavLink to="/verificacion" className={claseNav}><Icon nombre="idcard" /> Verificación</NavLink>}
+          {usuario?.rol === 'comisionista' && <NavLink to="/verificacion" className={claseNav}><Icon nombre="idcard" /> Verificación</NavLink>}
           {usuario?.rol === 'administrador' && <NavLink to="/admin/verificaciones" className={claseNav}><Icon nombre="idcard" /> Verificaciones</NavLink>}
         </nav>
       </header>
@@ -215,12 +225,12 @@ export default function App() {
             {usuario?.rol === 'comisionista' && <Route path="/ingresos" element={<Ingresos />} />}
             {usuario?.rol === 'comisionista' && <Route path="/gastos" element={<Gastos />} />}
             {usuario?.rol === 'comisionista' && <Route path="/rentabilidad" element={<ReporteRentabilidad />} />}
-            {usuario?.rol === 'comisionista' && <Route path="/reportes-rentabilidad" element={<ReportesRentabilidad />} />}
+            {usuario?.rol === 'comisionista' && <Route path="/reportes-rentabilidad" element={<Navigate to="/rentabilidad" replace />} />}
             {usuario?.rol === 'comisionista' && <Route path="/reportes-rentabilidad/:id" element={<ReporteRentabilidadDetalle />} />}
             {usuario?.rol === 'cliente' && <Route path="/mis-traslados" element={<MisTraslados />} />}
             {usuario?.rol === 'cliente' && <Route path="/notificaciones" element={<Notificaciones />} />}
             {usuario?.rol === 'cliente' && <Route path="/mis-traslados/solicitar/:id" element={<SolicitarViaje />} />}
-            {(esCliente || usuario?.rol === 'comisionista') && <Route path="/verificacion" element={<VerificacionIdentidad />} />}
+            {usuario?.rol === 'comisionista' && <Route path="/verificacion" element={<VerificacionIdentidad />} />}
             {usuario?.rol === 'administrador' && <Route path="/admin/verificaciones" element={<VerificacionesAdmin />} />}
             <Route path="/perfil" element={<Perfil onCuentaDadaDeBaja={() => salir('baja')} />} />
           </Routes>

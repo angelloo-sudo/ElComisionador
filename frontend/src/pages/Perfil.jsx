@@ -4,7 +4,8 @@ import { api, guardarSesion, cerrarSesion } from '../api/client.js'
 import Avatar from '../components/Avatar.jsx'
 import Icon from '../components/Icon.jsx'
 import { Campo, CampoPassword, Alerta, Toast, Modal, formatoFecha } from '../components/ui.jsx'
-import { prepararFotoPerfil, ACEPTA_FOTOS } from '../utils/imagen.js'
+import { validarArchivoFoto, ACEPTA_FOTOS } from '../utils/imagen.js'
+import RecortarFotoModal from '../components/RecortarFotoModal.jsx'
 import '../styles/verificacion.css'
 
 const formularioInicial = {
@@ -36,7 +37,8 @@ export default function Perfil({ onCuentaDadaDeBaja }) {
   const [editando, setEditando] = useState(false)
   const [cargando, setCargando] = useState(true)
   const [fotoModificada, setFotoModificada] = useState(false)
-  const [procesandoFoto, setProcesandoFoto] = useState(false)
+  const [procesandoFoto] = useState(false)
+  const [fotoParaAjustar, setFotoParaAjustar] = useState(null) // archivo elegido, antes de acomodarlo
   const [confirmandoBaja, setConfirmandoBaja] = useState(false)
   const [entiendo, setEntiendo] = useState(false)
   const esComisionista = perfil?.rol === 'comisionista'
@@ -115,6 +117,8 @@ export default function Perfil({ onCuentaDadaDeBaja }) {
       }
       const respuesta = await api.put('/auth/perfil', datosAEnviar)
       guardarSesion(respuesta)
+      // Avisa a la barra superior para que muestre la foto y el nombre nuevos.
+      window.dispatchEvent(new CustomEvent('perfil:actualizado', { detail: respuesta.usuario }))
       setPerfil(respuesta.usuario)
       setForm(aFormulario(respuesta.usuario))
       setErrores({})
@@ -128,22 +132,25 @@ export default function Perfil({ onCuentaDadaDeBaja }) {
     }
   }
 
-  async function elegirFoto(event) {
+  // Primero se valida el archivo y se abre el ajuste; la foto cambia al confirmar.
+  function elegirFoto(event) {
     const archivo = event.target.files?.[0]
     event.target.value = '' // permite volver a elegir el mismo archivo
     if (!archivo) return
 
     setErrorGeneral('')
-    setProcesandoFoto(true)
     try {
-      const foto = await prepararFotoPerfil(archivo)
-      setForm((actual) => ({ ...actual, foto_perfil: foto }))
-      setFotoModificada(true)
+      validarArchivoFoto(archivo)
+      setFotoParaAjustar(archivo)
     } catch (error) {
       setErrorGeneral(mensajeDeError(error, 'No se pudo cargar la foto.'))
-    } finally {
-      setProcesandoFoto(false)
     }
+  }
+
+  function fotoAjustada(foto) {
+    setForm((actual) => ({ ...actual, foto_perfil: foto }))
+    setFotoModificada(true)
+    setFotoParaAjustar(null)
   }
 
   function quitarFoto() {
@@ -215,9 +222,10 @@ export default function Perfil({ onCuentaDadaDeBaja }) {
                     {form.foto_perfil && (
                       <button type="button" className="btn btn-chico" onClick={quitarFoto} disabled={cargando}>Quitar foto</button>
                     )}
-                    <span className="campo-ayuda">JPG, PNG o WebP. Se recorta en cuadrado y se achica sola.</span>
+                    <span className="campo-ayuda">JPG, PNG o WebP. Después de elegirla podés acomodarla y hacer zoom.</span>
                   </div>
                 </div>
+                {fotoParaAjustar && <RecortarFotoModal archivo={fotoParaAjustar} onListo={fotoAjustada} onCancelar={() => setFotoParaAjustar(null)} />}
               </div>
             )}
 

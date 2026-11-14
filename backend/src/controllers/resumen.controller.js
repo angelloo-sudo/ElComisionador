@@ -4,6 +4,7 @@
 // Solo lee datos que ya existen (no agrega nada a la base).
 import { query } from '../config/db.js'
 import { SQL_OCUPADOS } from '../services/viajes.service.js'
+import { obtenerEstadoViaje } from '../services/estado-viaje.js'
 
 const TZ = "NOW() AT TIME ZONE 'America/Argentina/Cordoba'"
 const INICIO = "(v.fecha + COALESCE(v.hora_salida, TIME '00:00'))"
@@ -46,14 +47,12 @@ async function resumenComisionista(usuarioId, incluirCalendario = false) {
               (SELECT COUNT(*)::int FROM solicitudes_viaje s
                WHERE s.viaje_id = v.id AND s.tipo = 'encomienda' AND s.estado = 'aceptada') AS encomiendas
        FROM viajes v
-       WHERE v.usuario_id = $1 AND (
-         v.estado = 'finalizado'
-         OR (v.estado = 'programado' AND v.fecha >= (${TZ})::date)
-       )
+       WHERE v.usuario_id = $1
        ORDER BY v.fecha, v.hora_salida, v.id`,
       [usuarioId],
     )
-    viajesCalendario = rows
+    // Mismos estados que en Viajes: un programado cuya fecha ya paso se ve como "vencido".
+    viajesCalendario = rows.map((v) => ({ ...v, estado: obtenerEstadoViaje(v.estado, v.fecha) }))
   }
 
   const { rows: pendientes } = await query(

@@ -24,6 +24,16 @@ export async function listarViajes(req, res, next) {
     const condiciones = [...fechas.clauses]
     if (origen.valor) { params.push(`%${origen.valor}%`); condiciones.push(`v.origen ILIKE $${params.length}`) }
     if (destino.valor) { params.push(`%${destino.valor}%`); condiciones.push(`v.destino ILIKE $${params.length}`) }
+    const cliente = textoFiltro(req.query.cliente, 'cliente')
+    if (cliente.error) return res.status(400).json({ mensaje: cliente.error })
+    if (cliente.valor) {
+      params.push(`%${cliente.valor}%`)
+      const n = params.length
+      condiciones.push(`(EXISTS (SELECT 1 FROM solicitudes_viaje s JOIN clientes c ON c.id = s.cliente_id JOIN usuarios u ON u.id = c.usuario_id
+                                 WHERE s.viaje_id = v.id AND (concat_ws(' ', u.nombre, u.apellido) ILIKE $${n} OR concat_ws(' ', s.nombre, s.apellido) ILIKE $${n}))
+                     OR EXISTS (SELECT 1 FROM encomiendas e LEFT JOIN clientes c ON c.id = e.cliente_remitente_id LEFT JOIN usuarios u ON u.id = c.usuario_id
+                                 WHERE e.viaje_id = v.id AND (concat_ws(' ', u.nombre, u.apellido) ILIKE $${n} OR e.remitente_nombre ILIKE $${n})))`)
+    }
     const { rows } = await query(
       `SELECT v.id, v.origen, v.destino, v.fecha::text AS fecha, v.hora_salida, v.hora_llegada,
               v.distancia_km, v.duracion_min, v.cupo_total, v.estado, v.iniciado_en, v.finalizado_en,
@@ -135,6 +145,12 @@ export async function listarEncomiendas(req, res, next) {
       if (f.error) return res.status(400).json({ mensaje: f.error })
       if (f.valor) { params.push(`%${f.valor}%`); condiciones.push(`${col} ILIKE $${params.length}`) }
     }
+    const clienteEnc = textoFiltro(req.query.cliente, 'cliente')
+    if (clienteEnc.error) return res.status(400).json({ mensaje: clienteEnc.error })
+    if (clienteEnc.valor) {
+      params.push(`%${clienteEnc.valor}%`)
+      condiciones.push(`(cliente ILIKE $${params.length} OR remitente_nombre ILIKE $${params.length})`)
+    }
     const { rows } = await query(
       `SELECT * FROM (
          SELECT e.id, 'encomienda'::varchar AS origen_registro, e.cliente_remitente_id AS cliente_id,
@@ -221,6 +237,14 @@ export async function listarPasajeros(req, res, next) {
     const nombre = textoFiltro(req.query.nombre, 'nombre/apellido')
     if (nombre.error) return res.status(400).json({ mensaje: nombre.error })
     if (nombre.valor) { params.push(`%${nombre.valor}%`); condiciones.push(`concat_ws(' ', s.nombre, s.apellido) ILIKE $${params.length}`) }
+    const clientePas = textoFiltro(req.query.cliente, 'cliente')
+    if (clientePas.error) return res.status(400).json({ mensaje: clientePas.error })
+    if (clientePas.valor) {
+      params.push(`%${clientePas.valor}%`)
+      condiciones.push(`(concat_ws(' ', s.nombre, s.apellido) ILIKE $${params.length}
+        OR EXISTS (SELECT 1 FROM clientes c JOIN usuarios u ON u.id = c.usuario_id
+                   WHERE c.id = s.cliente_id AND concat_ws(' ', u.nombre, u.apellido) ILIKE $${params.length}))`)
+    }
     for (const [key, col] of [['origen', 'COALESCE(s.origen_localidad, v.origen)'], ['destino', 'COALESCE(s.destino_localidad, v.destino)']]) {
       const f = textoFiltro(req.query[key], key)
       if (f.error) return res.status(400).json({ mensaje: f.error })

@@ -19,9 +19,17 @@ test('no inventa horarios cuando una ruta es aproximada', async () => {
   )
 })
 
-test('rechaza un recorrido que supera la medianoche', async () => {
+test('permite un recorrido que termina al día siguiente', async () => {
+  const minutos = [45, 31]
+  const horario = await calcularHorarioRecorrido('Origen', 'Destino', [{ localidad: 'Parada' }], '23:00', async () => ({ aproximada: false, duracion_min: minutos.shift(), distancia_km: 1 }))
+  assert.deepEqual(horario.paradas.map((p) => p.hora_estimada), ['23:45'])
+  assert.equal(horario.hora_llegada, '00:16')
+  assert.equal(horario.duracion_min, 76)
+})
+
+test('rechaza un recorrido que dura 24 horas o más', async () => {
   await assert.rejects(
-    calcularHorarioRecorrido('Origen', 'Destino', [], '23:30', async () => ({ aproximada: false, duracion_min: 31, distancia_km: 1 })),
+    calcularHorarioRecorrido('Origen', 'Destino', [], '23:30', async () => ({ aproximada: false, duracion_min: 1440, distancia_km: 1 })),
     (error) => error.code === 'HORARIO_MEDIANOCHE',
   )
 })

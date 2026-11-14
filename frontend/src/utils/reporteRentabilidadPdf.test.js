@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
+import { readFileSync } from 'node:fs'
 import { crearDocumentoReporte } from './reporteRentabilidadPdf.js'
 
 const reporte = {
@@ -24,6 +25,21 @@ describe('PDF US49', () => {
     const vacio = { ...reporte, ingresos: [], gastos: [], total_ingresos: '0.00', total_gastos: '0.00', resultado_economico: '0.00' }
     const bytes = new Uint8Array(crearDocumentoReporte(vacio).output('arraybuffer'))
     assert.equal(new TextDecoder().decode(bytes.slice(0, 4)), '%PDF')
+  })
+
+  it('usa la fuente Inter y el canguro cuando se le pasan los recursos', () => {
+    const leer = (ruta) => readFileSync(new URL(ruta, import.meta.url)).toString('base64')
+    const recursos = {
+      fuentes: { regular: leer('../assets/fuentes/Inter-Regular.ttf'), bold: leer('../assets/fuentes/Inter-Bold.ttf') },
+      logo: `data:image/png;base64,${leer('../assets/canguro-pdf.png')}`,
+    }
+    const conTrayecto = { ...reporte, ingresos: [{ ...reporte.ingresos[0], trayecto: { origen: 'Córdoba', destino: 'Villa María', fecha: '2026-11-01' } }] }
+    const doc = crearDocumentoReporte(conTrayecto, recursos)
+    assert.equal(doc.getFont().fontName, 'Inter')
+    const bytes = new Uint8Array(doc.output('arraybuffer'))
+    const texto = new TextDecoder('latin1').decode(bytes)
+    assert.match(texto, /Inter/)
+    assert.match(texto, /\/Subtype \/Image/)
   })
 
   it('continúa en páginas nuevas cuando el detalle es extenso', () => {

@@ -8,7 +8,7 @@ import Icon from '../components/Icon.jsx'
 import MapaRuta from '../components/MapaRuta.jsx'
 import { formatoDuracion, formatoKm, formatoPesos, horaDeLlegada, calcularMonto } from '../utils/tarifa.js'
 import { Campo, Alerta, Toast, BadgeEstado, formatoFecha } from '../components/ui.jsx'
-import { calcularLlegadasAcumuladas } from '../utils/horarios.js'
+import { calcularLlegadasAcumuladas, comoHora, aMinutos, minutosDesdeSalida, textoLlegada, llegaAlDiaSiguiente } from '../utils/horarios.js'
 import { hoyEnCordoba } from '../utils/estadoViaje.js'
 
 const HORAS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
@@ -28,6 +28,18 @@ const DIAS_SEMANA = [
 ]
 
 const DIAS_CORTOS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb']
+
+// Anticipación del recordatorio por correo que se puede elegir al registrar el viaje.
+export const OPCIONES_RECORDATORIO = [
+  { valor: '15', texto: '15 minutos antes' },
+  { valor: '30', texto: '30 minutos antes' },
+  { valor: '60', texto: '1 hora antes' },
+  { valor: '120', texto: '2 horas antes' },
+  { valor: '360', texto: '6 horas antes' },
+  { valor: '720', texto: '12 horas antes' },
+  { valor: '1440', texto: '1 día antes' },
+  { valor: '10080', texto: '7 días antes' },
+]
 
 export function codigoViaje(id) {
   return `V-${String(id).padStart(4, '0')}`
@@ -79,6 +91,8 @@ export default function ViajeNuevo() {
   // Repeticion: 'unico' | 'diario' | 'semanal'
   const [tipoRepeticion, setTipoRepeticion] = useState('unico')
   const [diasSel, setDiasSel] = useState([])
+  const [quiereRecordatorio, setQuiereRecordatorio] = useState(false)
+  const [anticipacion, setAnticipacion] = useState('60')
   const [errores, setErrores] = useState({})
   const [errorGeneral, setErrorGeneral] = useState(null) // { tipo, titulo, texto }
   const [guardando, setGuardando] = useState(false)
@@ -107,6 +121,19 @@ export default function ViajeNuevo() {
     }
   }
 
+  // Al cambiar la salida con la llegada ya cargada a mano, la llegada se corre lo mismo
+  // (se conserva la duración del viaje).
+  function cambiarSalida(nueva) {
+    const anterior = salida[0] && salida[1] ? `${salida[0]}:${salida[1]}` : ''
+    const siguiente = nueva[0] && nueva[1] ? `${nueva[0]}:${nueva[1]}` : ''
+    if (modoEstimacion === 'llegada' && anterior && siguiente && llegada[0] && llegada[1]) {
+      const corrida = comoHora(aMinutos(`${llegada[0]}:${llegada[1]}`) + aMinutos(siguiente) - aMinutos(anterior))
+      setLlegada([corrida.slice(0, 2), corrida.slice(3)])
+    }
+    setSalida(nueva)
+    setErrores((e) => ({ ...e, salida: undefined, llegada: undefined }))
+  }
+
   function cambiarCupo(delta) {
     const actual = Number(form.cupo_total) || 0
     cambiar('cupo_total', String(Math.max(0, actual + delta)))
@@ -128,8 +155,8 @@ export default function ViajeNuevo() {
     : modoEstimacion === 'llegada' && horaLlegadaManual && horaSalida
       ? (Number(horaLlegadaManual.slice(0, 2)) * 60 + Number(horaLlegadaManual.slice(3)) - Number(horaSalida.slice(0, 2)) * 60 - Number(horaSalida.slice(3)) + 1440) % 1440
       : duracionRuta
-  const horaLlegada = paradas.length ? horaLlegadaAuto : modoEstimacion === 'llegada'
-    ? horaLlegadaManual && horaLlegadaManual < horaSalida ? `${horaLlegadaManual} (+1 día)` : horaLlegadaManual
+  const horaLlegada = paradas.length ? textoLlegada(horaSalida, horaLlegadaAuto) ?? '' : modoEstimacion === 'llegada'
+    ? textoLlegada(horaSalida, horaLlegadaManual) ?? ''
     : horaDeLlegada(horaSalida, duracionMin) ?? ''
   const montoPorPasajero = calcularMonto({ precioKm, distanciaKm: ruta && !ruta.aproximada ? ruta.distancia_km : null })
 
@@ -156,18 +183,21 @@ export default function ViajeNuevo() {
     if (paradas.length && !horariosAuto) e.paradas = ruta?.firma === firmaRecorrido && ruta.aproximada
       ? 'No se pudieron calcular tiempos exactos para todos los tramos; intentá nuevamente'
       : ruta?.firma === firmaRecorrido && !ruta.aproximada
-        ? 'El horario calculado supera la medianoche del mismo día'
+        ? 'El recorrido calculado dura 24 horas o más'
         : 'Esperando el cálculo exacto de los tramos'
-    let horaAnterior = horaSalida
+    // Se compara en minutos desde la salida: el recorrido puede pasar la medianoche.
+    let minutosAnterior = 0
     for (let i = 0; i < paradas.length; i++) {
       const p = paradas[i]
       if (!p.localidad) e[`parada_${i}`] = 'Selecciona una localidad'
       const horaParada = paradas.length ? llegadasParadas[i] : p.hora_estimada
+      const desdeSalida = minutosDesdeSalida(horaSalida, horaParada)
       if (!horaValida(horaParada)) e[`parada_hora_${i}`] = 'No hay una hora calculada válida'
-      else if (horaAnterior && horaParada <= horaAnterior) e[`parada_hora_${i}`] = 'Debe ser posterior a la hora anterior'
-      if (horaParada) horaAnterior = horaParada
+      else if (desdeSalida != null && desdeSalida <= minutosAnterior) e[`parada_hora_${i}`] = 'Debe ser posterior a la hora anterior'
+      if (desdeSalida != null) minutosAnterior = desdeSalida
     }
-    if (horaLlegada && horaAnterior && horaAnterior >= horaLlegada) e.paradas = 'Las paradas deben ocurrir antes de la llegada final'
+    const llegadaDesdeSalida = minutosDesdeSalida(horaSalida, horaLlegadaAuto)
+    if (paradas.length && llegadaDesdeSalida != null && llegadaDesdeSalida <= minutosAnterior) e.paradas = 'Las paradas deben ocurrir antes de la llegada final'
     const cupo = Number(form.cupo_total)
     if (form.cupo_total === '' || !Number.isInteger(cupo) || cupo < 0) e.cupo = 'Indica un cupo de pasajeros igual o mayor a 0'
     if (tipoRepeticion === 'semanal' && diasSel.length === 0) e.dias = 'Elegí al menos un día de la semana para repetir el viaje'
@@ -198,6 +228,7 @@ export default function ViajeNuevo() {
           tipoRepeticion === 'unico'
             ? { tipo: 'unico' }
             : { tipo: tipoRepeticion, dias: tipoRepeticion === 'semanal' ? diasSel : undefined },
+        ...(quiereRecordatorio && { recordatorio: { minutos_anticipacion: Number(anticipacion) } }),
       }
       const guardado = await api.post('/viajes', payload)
       const lista = guardado?.viajes ?? [guardado]
@@ -229,6 +260,8 @@ export default function ViajeNuevo() {
     setRuta(null)
     setTipoRepeticion('unico')
     setDiasSel([])
+    setQuiereRecordatorio(false)
+    setAnticipacion('60')
     setErrores({})
     setErrorGeneral(null)
     setRegistrado(null)
@@ -333,7 +366,7 @@ export default function ViajeNuevo() {
                   <input type="date" name="fecha" value={form.fecha} min={hoyISO()} onChange={(e) => cambiar('fecha', e.target.value)} />
                 </Campo>
                 <Campo label="Hora de salida" requerido icono="clock" error={errores.salida}>
-                  <SelectorHora etiqueta="Hora de salida" hora={salida[0]} minuto={salida[1]} onHora={(h) => { setSalida([h, salida[1]]); setErrores((e) => ({ ...e, salida: undefined })) }} onMinuto={(m) => { setSalida([salida[0], m]); setErrores((e) => ({ ...e, salida: undefined })) }} />
+                  <SelectorHora etiqueta="Hora de salida" hora={salida[0]} minuto={salida[1]} onHora={(h) => cambiarSalida([h, salida[1]])} onMinuto={(m) => cambiarSalida([salida[0], m])} />
                 </Campo>
                 {modoEstimacion === 'mapa' && <Campo label="Duración estimada" icono="clock" soloLectura ayuda={duracionMin == null ? 'Se calcula sola al elegir origen y destino' : 'Calculada por el sistema'}>
                   <input type="text" readOnly tabIndex={-1} value={recorridoElegido ? (duracionMin != null ? formatoDuracion(duracionMin) : (ruta ? 'No disponible' : 'Calculando...')) : ''} placeholder="Automática" aria-label="Duración del viaje (calculada)" />
@@ -347,9 +380,9 @@ export default function ViajeNuevo() {
                   <button type="button" role="radio" aria-checked={modoEstimacion === 'duracion'} className={modoEstimacion === 'duracion' ? 'activo' : ''} onClick={() => setModoEstimacion('duracion')}>Ingresar duración</button>
                 </div>
               </div>}
-              {paradas.length > 0 && <Campo label="Llegada estimada automática" soloLectura ayuda={horaLlegadaAuto ? 'Calculada acumulando los tramos del recorrido' : 'Esperando un cálculo exacto de la ruta'}><input type="time" readOnly value={horaLlegadaAuto} /></Campo>}
+              {paradas.length > 0 && <Campo label="Llegada estimada automática" soloLectura ayuda={horaLlegadaAuto ? (llegaAlDiaSiguiente(horaSalida, horaLlegadaAuto) ? 'Llega al día siguiente (pasa la medianoche)' : 'Calculada acumulando los tramos del recorrido') : 'Esperando un cálculo exacto de la ruta'}><input type="time" readOnly value={horaLlegadaAuto} /></Campo>}
               {paradas.length === 0 && modoEstimacion === 'llegada' && <div className="grilla-2" style={{ marginTop: 12 }}>
-                <Campo label="Hora estimada de llegada" requerido icono="clock" error={errores.llegada}>
+                <Campo label="Hora estimada de llegada" requerido icono="clock" error={errores.llegada} ayuda={llegaAlDiaSiguiente(horaSalida, horaLlegadaManual) ? 'Llega al día siguiente (pasa la medianoche)' : 'Si cambiás la salida, la llegada se corre sola'}>
                   <SelectorHora etiqueta="Hora estimada de llegada" hora={llegada[0]} minuto={llegada[1]} onHora={(h) => { setLlegada([h, llegada[1]]); setErrores((e) => ({ ...e, llegada: undefined })) }} onMinuto={(m) => { setLlegada([llegada[0], m]); setErrores((e) => ({ ...e, llegada: undefined })) }} />
                 </Campo>
               </div>}
@@ -396,6 +429,25 @@ export default function ViajeNuevo() {
                 <p className="campo-ayuda" style={{ marginTop: 12 }}>El viaje se repite hasta que lo canceles. Se crean con 3 meses de anticipación y la serie se va extendiendo sola.</p>
               )}
             </div>
+
+            <div className="seccion">
+              <p className="seccion-titulo">Recordatorio</p>
+              <label className="check-linea">
+                <input type="checkbox" checked={quiereRecordatorio} onChange={(e) => setQuiereRecordatorio(e.target.checked)} />
+                <span>Quiero recibir un recordatorio por correo antes de salir</span>
+              </label>
+              {quiereRecordatorio && (
+                <div className="grilla-2" style={{ marginTop: 12 }}>
+                  <Campo label="Anticipación" icono="bell">
+                    <select value={anticipacion} onChange={(e) => setAnticipacion(e.target.value)} aria-label="Anticipación del recordatorio">
+                      {OPCIONES_RECORDATORIO.map((o) => <option key={o.valor} value={o.valor}>{o.texto}</option>)}
+                    </select>
+                    <Icon nombre="down" />
+                  </Campo>
+                </div>
+              )}
+              <p className="campo-ayuda" style={{ marginTop: 8 }}>{quiereRecordatorio ? (tipoRepeticion === 'unico' ? 'Te enviamos un correo antes de la salida.' : 'Se aplica a cada viaje de la serie.') : 'Si no marcás esta opción, no programamos ningún aviso.'}</p>
+            </div>
           </div>
           <div className="card-pie">
             <button type="button" className="btn" onClick={() => navegar('/viajes')} disabled={guardando}>Cancelar</button>
@@ -416,6 +468,7 @@ export default function ViajeNuevo() {
             <div className="resumen-fila"><span>Llegada (aprox.)</span><strong>{horaLlegada || '—'}</strong></div>
             <div className="resumen-fila"><span>Cupo</span><strong>{`${Number(form.cupo_total) || 0} pasajero${Number(form.cupo_total) === 1 ? '' : 's'}`}</strong></div>
             <div className="resumen-fila"><span>Repetición</span><strong>{textoRepeticion}</strong></div>
+            <div className="resumen-fila"><span>Recordatorio</span><strong>{quiereRecordatorio ? OPCIONES_RECORDATORIO.find((o) => o.valor === anticipacion)?.texto : 'Sin recordatorio'}</strong></div>
             <div className="resumen-fila"><span>Tu precio por km</span><strong>{precioKm ? formatoPesos(precioKm) : '—'}</strong></div>
             <div className="resumen-fila"><span>Precio por pasajero</span><strong>{formatoPesos(montoPorPasajero)}</strong></div>
             {precioKm === null && (

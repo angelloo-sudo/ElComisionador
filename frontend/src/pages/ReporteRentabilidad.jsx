@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import ReportesGenerados from './ReportesRentabilidad.jsx'
 import { api } from '../api/client.js'
 import { Alerta, Campo } from '../components/ui.jsx'
 import Icon from '../components/Icon.jsx'
@@ -33,6 +33,7 @@ export default function ReporteRentabilidad() {
   const [cargando, setCargando] = useState(false)
   const [cargandoPdf, setCargandoPdf] = useState(false)
   const [error, setError] = useState(null)
+  const [recargaListado, setRecargaListado] = useState(0)
 
   async function generar(e) {
     e.preventDefault()
@@ -44,6 +45,7 @@ export default function ReporteRentabilidad() {
     try {
       const params = new URLSearchParams({ desde, hasta })
       setReporte(await api.get(`/finanzas/rentabilidad?${params}`))
+      setRecargaListado((n) => n + 1) // el reporte nuevo aparece en "Reportes generados"
     } catch (e2) {
       setError(e2.message || 'No se pudo generar el reporte.')
     } finally { setCargando(false) }
@@ -53,7 +55,7 @@ export default function ReporteRentabilidad() {
     setCargandoPdf(true)
     try {
       const { descargarReportePdf } = await import('../utils/reporteRentabilidadPdf.js')
-      descargarReportePdf(reporte)
+      await descargarReportePdf(reporte)
     } catch {
       setError('No se pudo preparar el PDF. Volvé a intentarlo.')
     } finally { setCargandoPdf(false) }
@@ -66,7 +68,6 @@ export default function ReporteRentabilidad() {
     <section className="reporte-rentabilidad">
       <div className="barra-pagina">
         <div><h2>Reporte de rentabilidad</h2><p>Consultá el balance de tus ingresos y gastos para un período.</p></div>
-        <Link className="btn" to="/reportes-rentabilidad">Ver reportes guardados</Link>
       </div>
       <form className="card filtros-gastos rentabilidad-filtros" onSubmit={generar}>
         <Campo label="Fecha de inicio" icono="calendar"><input type="date" value={desde} onChange={(e) => { setDesde(e.target.value); setReporte(null); setError(null) }} required /></Campo>
@@ -89,8 +90,6 @@ export default function ReporteRentabilidad() {
             <div className="rentabilidad-resultado"><span>Resultado económico</span><strong>{formatoMoneda(reporte.resultado_economico)}</strong></div>
           </div>
           <div className="rentabilidad-acciones">
-            {reporte.id && <Link className="btn" to={`/reportes-rentabilidad/${reporte.id}`}>Abrir reporte guardado</Link>}
-            {reporte.id && <Link className="btn" to="/reportes-rentabilidad">Historial</Link>}
             <button type="button" className="btn btn-primario" onClick={descargarPdf} disabled={cargandoPdf}><Icon nombre="download" />{cargandoPdf ? 'Preparando PDF…' : 'Descargar PDF'}</button>
           </div>
         </section>
@@ -101,6 +100,8 @@ export default function ReporteRentabilidad() {
           {movimientoTabla('Detalle de gastos', reporte.gastos, 'gastos', reporte.total_gastos)}
         </div>
       </>}
+
+      <ReportesGenerados recarga={recargaListado} />
     </section>
   )
 }

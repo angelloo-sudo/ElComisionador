@@ -129,10 +129,20 @@ async function extenderSerie(serieId, hasta) {
       )
       if (nuevos.length) {
         const { rows: paradas } = await cliente.query('SELECT orden, localidad, hora_estimada FROM paradas_viaje WHERE viaje_id = $1 ORDER BY orden', [ultimo.id])
+        // Los viajes nuevos de la serie heredan el recordatorio elegido al registrarla.
+        const { rows: [recordatorio] } = await cliente.query(
+          `SELECT minutos_anticipacion FROM recordatorios_viaje WHERE viaje_id = $1 AND estado <> 'cancelado'`, [ultimo.id],
+        )
         for (const nuevo of nuevos) {
           for (const p of paradas) await cliente.query(
             'INSERT INTO paradas_viaje (viaje_id, orden, localidad, hora_estimada) VALUES ($1, $2, $3, $4)',
             [nuevo.id, p.orden, p.localidad, p.hora_estimada],
+          )
+          if (recordatorio) await cliente.query(
+            `INSERT INTO recordatorios_viaje (viaje_id, minutos_anticipacion, programado_para, estado)
+             SELECT v.id, $2, ((v.fecha + v.hora_salida) AT TIME ZONE 'America/Argentina/Buenos_Aires') - make_interval(mins => $2), 'pendiente'
+             FROM viajes v WHERE v.id = $1 AND v.hora_salida IS NOT NULL`,
+            [nuevo.id, recordatorio.minutos_anticipacion],
           )
         }
       }

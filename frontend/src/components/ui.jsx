@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import Icon from './Icon.jsx'
 import { estadoVisibleViaje } from '../utils/estadoViaje.js'
+import canguroCabecera from '../assets/canguro-cabecera.png'
 
 // Mascota de ComiTrack: el canguro repartidor con su cajita (salta, deja viento y una sombrita).
 export function Mascota({ ancho = 56, className = '' }) {
@@ -24,7 +25,7 @@ export function Mascota({ ancho = 56, className = '' }) {
 export function Logo() {
   return (
     <div className="marca">
-      <Mascota />
+      <img className="marca-mascota" src={canguroCabecera} alt="" aria-hidden="true" />
       <span>ComiTrack</span>
     </div>
   )

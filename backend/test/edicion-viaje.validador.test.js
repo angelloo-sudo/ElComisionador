@@ -25,8 +25,20 @@ test('rechaza origen, destino, fecha y otros campos no editables', () => {
   assert.match(resultado.cuerpo.mensaje, /Solo se pueden modificar/)
 })
 
-test('rechaza horarios inválidos, llegada anterior y cupo no entero', () => {
+test('rechaza horarios inválidos, llegada igual a la salida y cupo no entero', () => {
   assert.equal(validar({ hora_salida: '25:00', hora_llegada: '26:00', cupo_total: 2 }).continuo, false)
-  assert.equal(validar({ hora_salida: '12:00', hora_llegada: '11:55', cupo_total: 2 }).continuo, false)
+  assert.equal(validar({ hora_salida: '12:00', hora_llegada: '12:00', cupo_total: 2 }).continuo, false)
   assert.equal(validar({ hora_salida: '10:00', hora_llegada: '11:00', cupo_total: 2.5 }).continuo, false)
+})
+
+test('acepta un viaje que llega al día siguiente, con paradas pasada la medianoche', () => {
+  assert.equal(validar({ hora_salida: '22:00', hora_llegada: '01:30', cupo_total: 2 }).continuo, true)
+  assert.equal(validar({ hora_salida: '22:00', hora_llegada: '01:30', cupo_total: 2, paradas: [
+    { localidad: 'Villa María', hora_estimada: '23:30' },
+    { localidad: 'Bell Ville', hora_estimada: '00:40' },
+  ] }).continuo, true)
+  assert.equal(validar({ hora_salida: '22:00', hora_llegada: '01:30', cupo_total: 2, paradas: [
+    { localidad: 'Villa María', hora_estimada: '00:40' },
+    { localidad: 'Bell Ville', hora_estimada: '23:30' },
+  ] }).continuo, false)
 })

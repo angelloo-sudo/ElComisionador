@@ -9,6 +9,7 @@ import { validarAnticipacionRecordatorio } from '../validators/recordatorio.vali
 import { calcularRuta, centroLocalidad } from '../services/geo.service.js'
 import { ubicarEnRuta } from '../services/tramo.service.js'
 import { calcularHorarioRecorrido } from '../services/horario-recorrido.service.js'
+import { errorOrdenParadas } from '../utils/horarios.js'
 
 const SQL_PARADAS = `COALESCE((SELECT json_agg(json_build_object('id', p.id, 'orden', p.orden, 'localidad', p.localidad, 'hora_estimada', to_char(p.hora_estimada, 'HH24:MI')) ORDER BY p.orden)
   FROM paradas_viaje p WHERE p.viaje_id = v.id), '[]'::json) AS paradas`
@@ -207,6 +208,13 @@ export async function crear(req, res, next) {
     const { origen, destino, fecha, hora_salida, hora_llegada: llegadaIngresada, duracion_min: duracionIngresada, cupo_total, repeticion } = req.body
     const paradas = req.body.paradas ?? []
     const usuarioId = req.usuario?.id
+    // Recordatorio por correo (opcional), elegido al registrar el viaje.
+    const recordatorio = req.body.recordatorio
+    const minutosRecordatorio = recordatorio == null ? null : recordatorio.minutos_anticipacion
+    if (recordatorio != null) {
+      const errorRecordatorio = validarAnticipacionRecordatorio(minutosRecordatorio)
+      if (errorRecordatorio) return res.status(400).json({ mensaje: errorRecordatorio })
+    }
 
     // La ruta aporta distancia y una estimación automática. El comisionista puede
     // reemplazar esa estimación ingresando hora de llegada o duración.
@@ -236,9 +244,8 @@ export async function crear(req, res, next) {
       }
     }
 
-    if (paradas.some((p) => p.hora_estimada >= hora_llegada)) {
-      return res.status(400).json({ mensaje: 'Todas las paradas deben ocurrir antes de la llegada al destino final' })
-    }
+    const errorParadas = errorOrdenParadas(hora_salida, paradas, hora_llegada)
+    if (errorParadas) return res.status(400).json({ mensaje: errorParadas })
     if (paradas.length) {
       try {
         const rutaCompleta = await calcularRuta(origen.trim(), destino.trim())
@@ -289,6 +296,16 @@ export async function crear(req, res, next) {
       })
     }
 
+    // El recordatorio debe poder enviarse antes de la primera salida.
+    if (minutosRecordatorio != null) {
+      const { rows: [inicio] } = await query(
+        `SELECT EXTRACT(EPOCH FROM ((($1::date + $2::time) AT TIME ZONE 'America/Argentina/Buenos_Aires') - NOW()))::int AS segundos`,
+        [fechas[0], hora_salida],
+      )
+      const errorTiempo = validarAnticipacionRecordatorio(minutosRecordatorio, inicio.segundos)
+      if (errorTiempo) return res.status(400).json({ mensaje: errorTiempo })
+    }
+
     const serieId = esSerie ? randomUUID() : null
     const repeticionDias = !esSerie
       ? null
@@ -315,6 +332,14 @@ export async function crear(req, res, next) {
           await cliente.query(
             `INSERT INTO paradas_viaje (viaje_id, orden, localidad, hora_estimada) VALUES ($1, $2, $3, $4)`,
             [rows[0].id, i + 1, parada.localidad.trim(), parada.hora_estimada],
+          )
+        }
+        if (minutosRecordatorio != null) {
+          await cliente.query(
+            `INSERT INTO recordatorios_viaje (viaje_id, minutos_anticipacion, programado_para, estado)
+             SELECT v.id, $2, ((v.fecha + v.hora_salida) AT TIME ZONE 'America/Argentina/Buenos_Aires') - make_interval(mins => $2), 'pendiente'
+             FROM viajes v WHERE v.id = $1`,
+            [rows[0].id, minutosRecordatorio],
           )
         }
         creados.push(rows[0])
@@ -516,7 +541,7 @@ export async function actualizar(req, res, next) {
     }
     const { rows: actualizados } = await cliente.query(
       `UPDATE viajes SET hora_salida = $1, hora_llegada = $2,
-       duracion_min = COALESCE($6, EXTRACT(EPOCH FROM ($2::time - $1::time))::int / 60),
+       duracion_min = COALESCE($6, ((EXTRACT(EPOCH FROM ($2::time - $1::time))::int / 60) + 1440) % 1440),
        distancia_km = COALESCE($7, distancia_km), cupo_total = $3
        WHERE id = $4 AND usuario_id = $5 AND estado = 'programado' RETURNING *`,
       [hora_salida, hora_llegada, cupo_total, id, usuarioId, duracionActualizada, distanciaActualizada],

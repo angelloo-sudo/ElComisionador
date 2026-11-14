@@ -22,7 +22,8 @@ export function autenticar(req, res, next) {
           if (!rows[0]?.email_verificado) return res.status(403).json({ codigo: 'EMAIL_NO_VERIFICADO', mensaje: 'Verificá tu correo para continuar.' })
           const rutaDeVerificacion = req.baseUrl.endsWith('/verificaciones')
             || (req.baseUrl.endsWith('/auth') && req.method === 'GET' && req.path === '/perfil')
-          if (!rows[0]?.identidad_aprobada && !rutaDeVerificacion) return res.status(403).json({ codigo: 'IDENTIDAD_PENDIENTE', mensaje: 'Completá la verificación de identidad y esperá la aprobación administrativa.' })
+          // Solo el comisionista necesita la identidad (DNI) aprobada; el cliente no verifica identidad.
+          if (req.usuario.rol === 'comisionista' && !rows[0]?.identidad_aprobada && !rutaDeVerificacion) return res.status(403).json({ codigo: 'IDENTIDAD_PENDIENTE', mensaje: 'Completá la verificación de identidad y esperá la aprobación administrativa.' })
           next()
         }).catch(next)
       return

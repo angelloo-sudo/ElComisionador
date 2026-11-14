@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { createPortal } from 'react-dom'
-import { Alerta } from '../ui.jsx'
+import { Alerta, ESTADOS_VIAJE } from '../ui.jsx'
 import { codigoViaje } from '../../pages/ViajeNuevo.jsx'
 import { formatoPesos } from '../../utils/tarifa.js'
 import { cuando, plural } from './util.js'
@@ -23,6 +23,11 @@ function inicioMesActual() {
 
 function claveFecha(fecha) {
   return String(fecha).slice(0, 10)
+}
+
+// El calendario usa los mismos estados y colores que la lista de Viajes.
+function estadoCalendario(estado) {
+  return ESTADOS_VIAJE[estado] ?? { texto: estado, clase: 'gris' }
 }
 
 function CalendarioViajes({ viajes }) {
@@ -60,7 +65,7 @@ function CalendarioViajes({ viajes }) {
       <div className="card-cabecera calendario-cabecera">
         <div>
           <h2>Calendario de viajes</h2>
-          <p>Salidas pendientes y viajes realizados.</p>
+          <p>Todos tus viajes con su estado.</p>
         </div>
         <div className="calendario-controles">
           <button type="button" className="btn" aria-label="Mes anterior" onClick={() => setMes(new Date(Date.UTC(anio, numeroMes - 1, 1)))}>‹</button>
@@ -70,8 +75,7 @@ function CalendarioViajes({ viajes }) {
         </div>
       </div>
       <div className="calendario-leyenda" aria-label="Estados de los viajes">
-        <span><i className="pendiente" />Pendiente</span>
-        <span><i className="realizado" />Realizado</span>
+        {Object.entries(ESTADOS_VIAJE).map(([valor, e]) => <span key={valor}><i className={e.clase} />{e.texto}</span>)}
       </div>
       <div className="calendario-grilla">
         {DIAS_SEMANA.map((dia) => <div key={dia} className="calendario-dia-semana">{dia}</div>)}
@@ -88,11 +92,12 @@ function CalendarioViajes({ viajes }) {
               <span className="calendario-numero">{numeroDia}</span>
               <div className="calendario-salidas">
                 {delDia.map((viaje) => {
-                  const detalles = `${viaje.hora_salida ? String(viaje.hora_salida).slice(0, 5) : 'Sin hora'} · ${viaje.origen} → ${viaje.destino} · ${viaje.pasajeros_ocupados}/${viaje.cupo_total ?? '—'} Pasajeros · ${viaje.encomiendas} Encomiendas · ${viaje.estado === 'finalizado' ? 'Realizado' : 'Pendiente'}`
+                  const estado = estadoCalendario(viaje.estado)
+                  const detalles = `${viaje.hora_salida ? String(viaje.hora_salida).slice(0, 5) : 'Sin hora'} · ${viaje.origen} → ${viaje.destino} · ${viaje.pasajeros_ocupados}/${viaje.cupo_total ?? '—'} Pasajeros · ${viaje.encomiendas} Encomiendas · ${estado.texto}`
                   return (
                     <span
                       key={viaje.id}
-                      className={`calendario-salida ${viaje.estado === 'finalizado' ? 'realizado' : 'pendiente'}`}
+                      className={`calendario-salida ${estado.clase}`}
                       tabIndex={0}
                       aria-label={detalles}
                       aria-describedby={tooltip?.viaje.id === viaje.id ? `calendario-tooltip-${viaje.id}` : undefined}
@@ -121,7 +126,7 @@ function CalendarioViajes({ viajes }) {
       >
         <strong>{tooltip.viaje.origen} → {tooltip.viaje.destino}</strong>
         <span>{tooltip.viaje.pasajeros_ocupados}/{tooltip.viaje.cupo_total ?? '—'} Pasajeros · {tooltip.viaje.encomiendas} Encomiendas</span>
-        <span>{tooltip.viaje.estado === 'finalizado' ? 'Realizado' : 'Pendiente'}</span>
+        <span>{estadoCalendario(tooltip.viaje.estado).texto}</span>
       </div>,
       document.body,
     )}
@@ -180,7 +185,6 @@ export default function ResumenComisionista({ datos, nombre }) {
       )}
 
       <div className="resumen-kpis comisionista-kpis-principales">
-        <Kpi titulo="Solicitudes por responder" valor={t.solicitudes_pendientes} detalle={t.solicitudes_pendientes ? 'Esperan tu respuesta' : 'Estás al día'} a="/solicitudes" destacado={t.solicitudes_pendientes > 0} />
         <Kpi titulo="Viajes esta semana" valor={t.viajes_semana} detalle={t.viajes_hoy ? `${plural(t.viajes_hoy, 'sale hoy', 'salen hoy')}` : 'Ninguno sale hoy'} a="/viajes" />
         {t.gastos_mes != null && <Kpi titulo="Gastos del mes" valor={formatoPesos(t.gastos_mes)} a="/gastos" />}
       </div>
@@ -228,12 +232,6 @@ export default function ResumenComisionista({ datos, nombre }) {
             </>
           )}
         </section>
-      </div>
-
-      <div className="resumen-kpis comisionista-kpis-secundarios">
-        <Kpi titulo="Cupos libres" valor={t.cupos_libres} detalle={`en ${plural(t.viajes_programados, 'viaje programado', 'viajes programados')}`} a="/viajes" chico />
-        <Kpi titulo="Encomiendas aceptadas" valor={t.encomiendas_en_curso} detalle="En viajes por salir" a="/solicitudes" chico />
-        <Kpi titulo="Tu precio por km" valor={datos.precio_km != null ? formatoPesos(datos.precio_km) : 'Sin configurar'} a="/tarifa" chico />
       </div>
 
       {!Array.isArray(viajesCalendario) && (
