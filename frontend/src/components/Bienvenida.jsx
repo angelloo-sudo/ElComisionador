@@ -132,7 +132,6 @@ export default function Bienvenida({ nombre, onCerrar }) {
         <span className="bienvenida-etiqueta">COMITRACK</span>
         <h2>¡Te damos la bienvenida{nombre ? `, ${nombre}` : ''}!</h2>
         <p>Nos alegra tenerte acá</p>
-        <button type="button" className="bienvenida-continuar" onClick={onCerrar}>Continuar</button>
       </div>
     </div>
   )

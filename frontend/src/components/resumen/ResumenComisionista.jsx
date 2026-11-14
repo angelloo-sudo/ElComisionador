@@ -6,7 +6,7 @@ import { Alerta, ESTADOS_VIAJE } from '../ui.jsx'
 import { codigoViaje } from '../../pages/ViajeNuevo.jsx'
 import { formatoPesos } from '../../utils/tarifa.js'
 import { cuando, plural } from './util.js'
-import { hoyEnCordoba } from '../../utils/estadoViaje.js'
+import { estadoVisibleViaje, hoyEnCordoba } from '../../utils/estadoViaje.js'
 import '../../styles/resumen.css'
 
 const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
@@ -41,7 +41,8 @@ function CalendarioViajes({ viajes }) {
   const diasDelMes = new Date(Date.UTC(anio, numeroMes + 1, 0)).getUTCDate()
   const cantidadCeldas = 42
   const tituloMes = new Intl.DateTimeFormat('es-AR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(mes)
-  const viajesPorFecha = viajes.reduce((grupos, viaje) => {
+  const viajesVisibles = viajes.filter((viaje) => !['cancelado', 'vencido'].includes(estadoVisibleViaje(viaje.estado, viaje.fecha)))
+  const viajesPorFecha = viajesVisibles.reduce((grupos, viaje) => {
     const fecha = claveFecha(viaje.fecha)
     grupos[fecha] ??= []
     grupos[fecha].push(viaje)
@@ -75,7 +76,7 @@ function CalendarioViajes({ viajes }) {
         </div>
       </div>
       <div className="calendario-leyenda" aria-label="Estados de los viajes">
-        {Object.entries(ESTADOS_VIAJE).map(([valor, e]) => <span key={valor}><i className={e.clase} />{e.texto}</span>)}
+        {Object.entries(ESTADOS_VIAJE).filter(([valor]) => !['cancelado', 'vencido'].includes(valor)).map(([valor, e]) => <span key={valor}><i className={e.clase} />{e.texto}</span>)}
       </div>
       <div className="calendario-grilla">
         {DIAS_SEMANA.map((dia) => <div key={dia} className="calendario-dia-semana">{dia}</div>)}

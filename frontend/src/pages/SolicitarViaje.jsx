@@ -512,6 +512,7 @@ export default function SolicitarViaje() {
   const [cargando, setCargando] = useState(true)
   const [errorCarga, setErrorCarga] = useState(null)
   const [enviadas, setEnviadas] = useState(0)
+  const [tipoActivo, setTipoActivo] = useState('encomienda')
   // Tramo elegido en la lista (para el mapa y los cupos del encabezado).
   const [tramo, setTramo] = useState(null)
   // Paradas ya confirmadas de otros pasajeros/encomiendas del viaje (solo localidades).
@@ -611,9 +612,30 @@ export default function SolicitarViaje() {
         </div>
       </div>
 
+      <div className="solicitud-tipo-selector" role="tablist" aria-label="Tipo de solicitud">
+        {[
+          { value: 'encomienda', label: 'Encomienda' },
+          { value: 'pasajero', label: 'Pasajero' },
+        ].map((tipo) => (
+          <button
+            key={tipo.value}
+            type="button"
+            role="tab"
+            aria-selected={tipoActivo === tipo.value}
+            className={tipoActivo === tipo.value ? 'activo' : ''}
+            onClick={() => setTipoActivo(tipo.value)}
+          >
+            {tipo.label}
+          </button>
+        ))}
+      </div>
+
       <div className="solicitud-columnas">
-        <FormularioSolicitud tipo="encomienda" viaje={viaje} locInicial={locInicial} perfil={perfil} bloqueo={bloqueoEncomienda} onEnviada={() => setEnviadas((n) => n + 1)} />
-        <FormularioSolicitud tipo="pasajero" viaje={viaje} locInicial={locInicial} perfil={perfil} bloqueo={bloqueoPasajero} onEnviada={() => setEnviadas((n) => n + 1)} />
+        {tipoActivo === 'encomienda' ? (
+          <FormularioSolicitud tipo="encomienda" viaje={viaje} locInicial={locInicial} perfil={perfil} bloqueo={bloqueoEncomienda} onEnviada={() => setEnviadas((n) => n + 1)} />
+        ) : (
+          <FormularioSolicitud tipo="pasajero" viaje={viaje} locInicial={locInicial} perfil={perfil} bloqueo={bloqueoPasajero} onEnviada={() => setEnviadas((n) => n + 1)} />
+        )}
       </div>
 
       <div className="solicitud-pie">

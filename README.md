@@ -87,14 +87,10 @@ ecto:
    psql -U postgres -d comitrack -v ON_ERROR_STOP=1 -f backend/db/schema.sql
    ```
 
-   `backend/db/schema.sql` contiene la definición de referencia de la estructura
-   PostgreSQL para instalaciones nuevas. No lo ejecutes sobre una base existente
-   sin analizar antes su contenido y los posibles efectos: el proyecto no utiliza
-   un sistema de migraciones automáticas.
-
-   Los cambios futuros sobre bases existentes se prepararán como sentencias SQL
-   puntuales, se revisarán y se ejecutarán manualmente. No se aplican automáticamente
-   durante el inicio o despliegue de la aplicación.
+   `backend/db/schema.sql` es la referencia de SQL puro para instalaciones nuevas.
+   No se usa una carpeta de migraciones ni un sistema de migraciones automáticas.
+   Los cambios sobre una base existente se aplican como sentencias SQL puntuales,
+   se revisan y se ejecutan manualmente.
 
 4. Cargar las dos cuentas de prueba:
 
