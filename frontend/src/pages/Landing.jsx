@@ -25,26 +25,11 @@ export default function Landing({ onIngresar }) {
       return opinionesIniciales
     }
   })
-  const [nombreOpinion, setNombreOpinion] = useState('')
-  const [rolOpinion, setRolOpinion] = useState('Cliente')
-  const [textoOpinion, setTextoOpinion] = useState('')
-
-  function publicarOpinion(evento) {
-    evento.preventDefault()
-    const nuevaOpinion = { nombre: nombreOpinion.trim(), rol: rolOpinion, texto: textoOpinion.trim(), ejemplo: false }
-    if (!nuevaOpinion.nombre || !nuevaOpinion.texto) return
-    const actualizadas = [nuevaOpinion, ...opiniones]
-    setOpiniones(actualizadas)
-    try { localStorage.setItem(claveOpiniones, JSON.stringify(actualizadas)) } catch { /* La opinión sigue visible durante esta visita. */ }
-    setNombreOpinion('')
-    setTextoOpinion('')
-  }
-
   return (
     <div className="landing">
       <header className="landing-nav">
         <a className="landing-marca" href="#inicio" aria-label="ComiTrack, inicio">
-          <Mascota ancho={48} />
+          <Mascota ancho={58} />
           <span>ComiTrack</span>
         </a>
         <nav className="landing-links" aria-label="Navegación principal">
@@ -60,7 +45,7 @@ export default function Landing({ onIngresar }) {
         <section className="landing-hero">
           <div className="landing-hero-copy">
             <span className="landing-eyebrow"><span /> ENCOMIENDAS Y VIAJES, EN UN SOLO LUGAR</span>
-            <h1>Tus encomiendas<br /><em>llegan más lejos.</em></h1>
+            <h1>Tus envíos<br /><em>llegan más lejos.</em></h1>
             <p>Conectá con un comisionista para enviar o recibir paquetes. También encontrá viajes y coordiná traslados de pasajeros desde un mismo lugar.</p>
             <div className="landing-acciones">
               <button type="button" className="landing-cta" onClick={onIngresar}>Empezar ahora <Icon nombre="arrow" tamano={18} /></button>
@@ -101,7 +86,7 @@ export default function Landing({ onIngresar }) {
         </section>
 
         <section className="landing-opiniones" aria-labelledby="opiniones-titulo">
-          <div className="landing-opiniones-cabecera"><div><span className="landing-eyebrow">VOCES DE LA COMUNIDAD</span><h2 id="opiniones-titulo">¿Cómo te va con <em>ComiTrack?</em></h2><p>Clientes y comisionistas pueden compartir su experiencia y ayudar a mejorar la aplicación.</p></div><span className="landing-opiniones-total">{opiniones.length} opiniones</span></div>
+          <div className="landing-opiniones-cabecera"><div><span className="landing-eyebrow">VOCES DE LA COMUNIDAD</span><h2 id="opiniones-titulo">¿Cómo te va con <em>ComiTrack?</em></h2><p>Experiencias de clientes y comisionistas que forman parte de la comunidad.</p></div><span className="landing-opiniones-total">{opiniones.length} opiniones</span></div>
           <div className="landing-opiniones-grid">
             <div className="landing-opiniones-lista">
               {opiniones.map((opinion, indice) => <article className="landing-opinion-card" key={`${opinion.nombre}-${indice}`}>
@@ -109,20 +94,33 @@ export default function Landing({ onIngresar }) {
                 <p>{opinion.texto}</p>
               </article>)}
             </div>
-            <form className="landing-opinion-form" onSubmit={publicarOpinion}>
-              <h3>Dejá tu opinión</h3><p>Contanos qué experiencia tuviste usando ComiTrack. Se guarda en este navegador.</p>
-              <label>Tu nombre<input value={nombreOpinion} onChange={evento => setNombreOpinion(evento.target.value)} maxLength={50} required placeholder="Por ejemplo, Alex" /></label>
-              <label>Participás como<select value={rolOpinion} onChange={evento => setRolOpinion(evento.target.value)}><option>Cliente</option><option>Comisionista</option></select></label>
-              <label>Tu opinión<textarea value={textoOpinion} onChange={evento => setTextoOpinion(evento.target.value)} maxLength={400} required rows={4} placeholder="¿Qué te resultó útil?" /></label>
-              <button className="landing-cta" type="submit">Publicar opinión <Icon nombre="arrow" tamano={17} /></button>
-            </form>
           </div>
         </section>
 
-        <section className="landing-cierre"><div><span className="landing-eyebrow">EL PRÓXIMO VIAJE EMPIEZA ACÁ</span><h2>¿A dónde vamos?</h2><p>Organizá tu actividad o encontrá el viaje que necesitás.</p></div><button type="button" className="landing-cta landing-cta-claro" onClick={onIngresar}>Ingresar a ComiTrack <Icon nombre="arrow" tamano={18} /></button><div className="landing-cierre-mascota"><Mascota ancho={100} /></div></section>
+        <section className="landing-cierre"><div><span className="landing-eyebrow">EL PRÓXIMO VIAJE EMPIEZA ACÁ</span><h2>¿A dónde vamos?</h2><p>Organizá tu actividad o encontrá el viaje que necesitás.</p></div><button type="button" className="landing-cta landing-cta-claro" onClick={onIngresar}>Ingresar a ComiTrack <Icon nombre="arrow" tamano={18} /></button></section>
       </main>
 
-      <footer className="landing-footer"><a className="landing-marca landing-marca-footer" href="#inicio"><Mascota ancho={34} /><span>ComiTrack</span></a><span>Movemos historias, conectamos caminos.</span><a href="#inicio">Volver arriba ↑</a></footer>
+      <footer className="landing-footer">
+        <div className="landing-footer-identidad">
+          <a className="landing-marca landing-marca-footer" href="#inicio"><Mascota ancho={40} /><span>ComiTrack</span></a>
+          <p>¿Necesitás ayuda? Estamos para acompañarte.</p>
+        </div>
+        <div className="landing-footer-contacto" aria-label="Contacto y soporte">
+          <a href="mailto:comitrack5@gmail.com"><Icon nombre="mail" tamano={16} /> comitrack5@gmail.com</a>
+        </div>
+        <div className="landing-footer-equipo">
+          <h2>Desarrolladores</h2>
+          <ul>
+            <li>Bartolleli, Francisco</li>
+            <li>Jofre, Matias Javier</li>
+            <li>Mansilla, Joaquin</li>
+            <li>Pais, Angel</li>
+            <li>Rogani, Facundo</li>
+            <li>Villafañe, Fabrizio</li>
+          </ul>
+        </div>
+        <a className="landing-footer-arriba" href="#inicio">Volver arriba ↑</a>
+      </footer>
     </div>
   )
 }
