@@ -21,6 +21,26 @@ const solicitudValida = (extra = {}) => ({
   ...extra,
 })
 
+const encomiendaValida = (extra = {}) => ({
+  tipo: 'encomienda',
+  origen_calle: 'San Martin',
+  origen_altura: '100',
+  origen_codigo_postal: '5000',
+  destino_calle: 'Colon',
+  destino_altura: '200',
+  destino_codigo_postal: '5000',
+  fragil: false,
+  tipo_contenido: 'ropa',
+  emisor_nombre: 'Ana',
+  emisor_apellido: 'Perez',
+  emisor_telefono: '3512345678',
+  receptor_nombre: 'Juan',
+  receptor_apellido: 'Lopez',
+  receptor_telefono: '3512345679',
+  forma_pago: 'efectivo',
+  ...extra,
+})
+
 describe('validación del equipaje de pasajeros', () => {
   it('acepta hasta una valija grande y un bolso de mano por pasajero', () => {
     const { errores, datos } = validarSolicitud(solicitudValida())
@@ -94,6 +114,22 @@ describe('validación del equipaje de pasajeros', () => {
 })
 
 describe('solicitud de encomienda con dimensiones completas', () => {
+  it('acepta los tamaños de paquete sin peso ni medidas individuales', () => {
+    for (const tamano of ['pequeno', 'mediano', 'grande']) {
+      const { errores, datos } = validarSolicitud(encomiendaValida({ tamano }))
+
+      assert.deepEqual(errores, [])
+      assert.equal(datos.tamano, tamano)
+      assert.equal(datos.peso_kg, null)
+    }
+  })
+
+  it('rechaza un tamaño de paquete desconocido', () => {
+    const { errores } = validarSolicitud(encomiendaValida({ tamano: 'extra' }))
+
+    assert.ok(errores.includes('Elegí el tamaño del paquete'))
+  })
+
   it('exige largo, ancho y profundidad positivos', () => {
     const { errores, datos } = validarSolicitud({
       tipo: 'encomienda',

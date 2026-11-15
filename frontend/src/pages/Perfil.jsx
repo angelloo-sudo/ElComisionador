@@ -352,7 +352,7 @@ export default function Perfil({ onCuentaDadaDeBaja }) {
             </div>
           </div>
 
-          {['cliente', 'comisionista'].includes(perfil.rol) && (
+          {perfil.rol === 'comisionista' && (
             <div className="card verif-perfil-acceso">
               <div><h3>Verificación preliminar de identidad</h3><p>Consultá el estado de tu solicitud o comenzá una verificación para comparar tus datos.</p></div>
               <Link className="btn btn-primario" to="/verificacion"><Icon nombre="idcard" tamano={16} /> Abrir verificación</Link>

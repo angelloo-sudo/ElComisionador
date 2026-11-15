@@ -5,6 +5,7 @@ import { esLocalidadValida } from '../services/localidades.service.js'
 
 export const TIPOS_SOLICITUD = ['pasajero', 'encomienda']
 export const TIPOS_CONTENIDO = ['electronica', 'ropa', 'alimentos', 'libros', 'hogar', 'documentacion', 'juguetes', 'otro']
+const TAMANOS_PAQUETE = ['pequeno', 'mediano', 'grande']
 export const FORMAS_PAGO = ['efectivo', 'transferencia']
 export const MAX_PASAJEROS_POR_SOLICITUD = 20
 
@@ -113,15 +114,28 @@ export function validarSolicitud(body = {}) {
     }
 
   } else {
-    const peso = numeroPositivo(body.peso_kg, 1000)
-    const ancho = numeroPositivo(body.ancho_cm, 1000)
-    const largo = numeroPositivo(body.largo_cm, 1000)
-    const profundidad = numeroPositivo(body.profundidad_cm, 1000)
-    if (peso === null) errores.push('El peso del paquete debe ser mayor a 0 y hasta 1000 kg')
-    if (ancho === null) errores.push('El ancho del paquete debe ser mayor a 0 y hasta 1000 cm')
-    if (largo === null) errores.push('El largo del paquete debe ser mayor a 0 y hasta 1000 cm')
-    if (profundidad === null) errores.push('El alto del paquete debe ser mayor a 0 y hasta 1000 cm')
-    Object.assign(datos, { peso_kg: peso, ancho_cm: ancho, largo_cm: largo, profundidad_cm: profundidad })
+    if (body.tamano !== undefined) {
+      const tamano = texto(body.tamano)
+      if (!TAMANOS_PAQUETE.includes(tamano)) errores.push('Elegí el tamaño del paquete')
+      Object.assign(datos, {
+        tamano: TAMANOS_PAQUETE.includes(tamano) ? tamano : null,
+        peso_kg: null,
+        ancho_cm: null,
+        largo_cm: null,
+        profundidad_cm: null,
+      })
+    } else {
+      // Compatibilidad con clientes anteriores que todavía envían peso y medidas.
+      const peso = numeroPositivo(body.peso_kg, 1000)
+      const ancho = numeroPositivo(body.ancho_cm, 1000)
+      const largo = numeroPositivo(body.largo_cm, 1000)
+      const profundidad = numeroPositivo(body.profundidad_cm, 1000)
+      if (peso === null) errores.push('El peso del paquete debe ser mayor a 0 y hasta 1000 kg')
+      if (ancho === null) errores.push('El ancho del paquete debe ser mayor a 0 y hasta 1000 cm')
+      if (largo === null) errores.push('El largo del paquete debe ser mayor a 0 y hasta 1000 cm')
+      if (profundidad === null) errores.push('El alto del paquete debe ser mayor a 0 y hasta 1000 cm')
+      Object.assign(datos, { tamano: null, peso_kg: peso, ancho_cm: ancho, largo_cm: largo, profundidad_cm: profundidad })
+    }
 
     if (typeof body.fragil !== 'boolean') errores.push('Indicá si el paquete es frágil')
     datos.fragil = body.fragil

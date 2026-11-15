@@ -19,6 +19,12 @@ const CONTENIDOS = {
   electronica: 'Electrónica', ropa: 'Ropa', alimentos: 'Comestibles', libros: 'Libros',
   hogar: 'Hogar', documentacion: 'Documentación', juguetes: 'Juguetes', otro: 'Otro',
 }
+const TAMANOS_PAQUETE = {
+  pequeno: 'Chico: hasta 30 a 40 cm',
+  mediano: 'Mediano: 40 x 30 x 30 cm',
+  grande: 'Grande: mayor a 40 x 30 x 30 cm',
+}
+const TAMANOS_RESUMEN = { pequeno: 'Chico', mediano: 'Mediano', grande: 'Grande' }
 // Una sola pantalla "Solicitudes" con dos pestañas: pasajeros y encomiendas.
 const TEXTOS = {
   pasajero: {
@@ -76,8 +82,14 @@ function DetalleSolicitud({ s }) {
         <>
           <Fila etiqueta="Tipo de contenido">{CONTENIDOS[s.tipo_contenido] ?? s.tipo_contenido ?? '-'}{s.contenido_descripcion ? `: ${s.contenido_descripcion}` : ''}</Fila>
           <Fila etiqueta="¿Es frágil?">{s.fragil ? 'Sí, es frágil' : 'No'}</Fila>
-          <Fila etiqueta="Peso">{Number(s.peso_kg)} kg</Fila>
-          <Fila etiqueta="Medidas (largo × ancho × alto)">{Number(s.largo_cm)} × {Number(s.ancho_cm)} × {Number(s.profundidad_cm)} cm</Fila>
+          {s.tamano ? (
+            <Fila etiqueta="Tamaño">{TAMANOS_PAQUETE[s.tamano] ?? s.tamano}</Fila>
+          ) : (
+            <>
+              <Fila etiqueta="Peso">{s.peso_kg == null ? '-' : `${Number(s.peso_kg)} kg`}</Fila>
+              <Fila etiqueta="Medidas (largo × ancho × alto)">{s.largo_cm == null ? '-' : `${Number(s.largo_cm)} × ${Number(s.ancho_cm)} × ${Number(s.profundidad_cm)} cm`}</Fila>
+            </>
+          )}
           <Fila etiqueta="Emisor">{s.emisor_nombre} {s.emisor_apellido} · {s.emisor_telefono}</Fila>
           <Fila etiqueta="Receptor">{s.receptor_nombre} {s.receptor_apellido} · {s.receptor_telefono}</Fila>
         </>
@@ -172,7 +184,7 @@ export default function Postulaciones() {
   const quien = (s) => (s.tipo === 'pasajero' ? `${s.nombre} ${s.apellido}` : `${s.emisor_nombre} ${s.emisor_apellido}`)
   const resumen = (s) => (s.tipo === 'pasajero'
     ? `${s.cantidad_pasajeros} pasajero${s.cantidad_pasajeros === 1 ? '' : 's'}${s.lleva_equipaje ? ' · con equipaje' : ''}`
-    : `${CONTENIDOS[s.tipo_contenido] ?? 'Paquete'} · ${Number(s.peso_kg)} kg${s.fragil ? ' · frágil' : ''}`)
+    : `${CONTENIDOS[s.tipo_contenido] ?? 'Paquete'} · ${TAMANOS_RESUMEN[s.tamano] ?? (s.peso_kg == null ? 'tamaño sin especificar' : `${Number(s.peso_kg)} kg`)}${s.fragil ? ' · frágil' : ''}`)
 
   return (
     <section>

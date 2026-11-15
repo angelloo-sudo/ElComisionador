@@ -138,7 +138,7 @@ const COLUMNAS_SOLICITUD = [
   'tipo', 'origen_localidad', 'destino_localidad', 'origen_calle', 'origen_altura', 'origen_codigo_postal', 'origen_descripcion',
   'destino_calle', 'destino_altura', 'destino_codigo_postal',
   'nombre', 'apellido', 'dni', 'telefono', 'lleva_equipaje', 'equipaje_detalle', 'cantidad_pasajeros', 'forma_pago',
-  'peso_kg', 'ancho_cm', 'largo_cm', 'profundidad_cm', 'fragil', 'tipo_contenido', 'contenido_descripcion',
+  'peso_kg', 'ancho_cm', 'largo_cm', 'profundidad_cm', 'tamano', 'fragil', 'tipo_contenido', 'contenido_descripcion',
   'emisor_nombre', 'emisor_apellido', 'emisor_telefono', 'receptor_nombre', 'receptor_apellido', 'receptor_telefono',
 ]
 

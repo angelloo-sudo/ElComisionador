@@ -241,6 +241,7 @@ CREATE TABLE IF NOT EXISTS solicitudes_viaje (
 );
 
 ALTER TABLE solicitudes_viaje ADD COLUMN IF NOT EXISTS profundidad_cm NUMERIC(8,2) CHECK (profundidad_cm > 0);
+ALTER TABLE solicitudes_viaje ADD COLUMN IF NOT EXISTS tamano VARCHAR(10) CHECK (tamano IN ('pequeno', 'mediano', 'grande'));
 
 CREATE INDEX IF NOT EXISTS solicitudes_viaje_viaje_idx ON solicitudes_viaje (viaje_id, estado);
 CREATE INDEX IF NOT EXISTS solicitudes_viaje_cliente_idx ON solicitudes_viaje (cliente_id);
