@@ -1,14 +1,21 @@
-const normalizar = (valor = '') => String(valor).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
+const normalizar = (valor) => String(valor ?? '').normalize('NFKD').replace(/\p{M}/gu, '').toLocaleLowerCase('es-AR').replace(/[^\p{L}\p{N} ]/gu, ' ').replace(/\s+/g, ' ').trim()
+
+function variantesNombre(valor) {
+  const original = String(valor ?? '')
+  const variantes = [normalizar(original)]
+  if (/ñ/i.test(original)) variantes.push(normalizar(original.replace(/ñ/gi, 'xx')))
+  return [...new Set(variantes)]
+}
 
 // El DNI trae todos los nombres ("JUAN CARLOS") y muchas personas se registran solo con
 // uno ("Juan"). Coincide si todas las palabras cargadas en el perfil aparecen en el documento.
 export function nombresCoinciden(documento, perfil) {
-  const doc = normalizar(documento)
-  const per = normalizar(perfil)
-  if (!doc || !per) return null
-  if (doc === per) return true
-  const palabrasDoc = new Set(doc.split(' '))
-  return per.split(' ').every((palabra) => palabrasDoc.has(palabra))
+  const variantesDoc = variantesNombre(documento)
+  const variantesPerfil = variantesNombre(perfil)
+  if (variantesDoc.every((variante) => !variante) || variantesPerfil.every((variante) => !variante)) return null
+  return variantesDoc.some((doc) =>
+    variantesPerfil.some((per) => doc === per || per.split(' ').every((palabra) => new Set(doc.split(' ')).has(palabra))),
+  )
 }
 
 export function compararDatosDocumentoPerfil(documento, perfil) {

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client.js'
-import { Alerta } from '../components/ui.jsx'
+import { Alerta, Campo } from '../components/ui.jsx'
 import Icon from '../components/Icon.jsx'
 import { formatoFechaISO, formatoMoneda } from '../utils/gastos.js'
 import { validarRangoReportesRentabilidad } from '../utils/filtrosReportesRentabilidad.js'
@@ -72,8 +72,8 @@ export default function ReportesRentabilidad({ recarga = 0 }) {
       </div>
 
       <form className="card filtros-gastos reportes-filtros" onSubmit={aplicarFiltros} noValidate>
-        <label>Fecha de inicio<input type="date" name="fechaInicio" value={filtrosBorrador.fechaInicio} onChange={actualizarFiltro} aria-invalid={Boolean(errorFiltro)} /></label>
-        <label>Fecha de fin<input type="date" name="fechaFin" value={filtrosBorrador.fechaFin} onChange={actualizarFiltro} aria-invalid={Boolean(errorFiltro)} /></label>
+        <Campo label="Fecha de inicio" icono="calendar"><input type="date" name="fechaInicio" value={filtrosBorrador.fechaInicio} onChange={actualizarFiltro} aria-invalid={Boolean(errorFiltro)} /></Campo>
+        <Campo label="Fecha de fin" icono="calendar"><input type="date" name="fechaFin" value={filtrosBorrador.fechaFin} onChange={actualizarFiltro} aria-invalid={Boolean(errorFiltro)} /></Campo>
         <div className="acciones">
           <button className="btn btn-primario" type="submit" disabled={cargando}>Filtrar</button>
           <button className="btn" type="button" onClick={limpiarFiltros} disabled={cargando && !hayFiltroAplicado}>Limpiar filtros</button>

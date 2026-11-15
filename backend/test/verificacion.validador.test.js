@@ -1,12 +1,20 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { compararDatosDocumentoPerfil, validarDatosDocumento, validarEnvioVerificacion, validarIdVerificacion, validarResolucion } from '../src/validators/verificacion.validador.js'
+import { compararDatosDocumentoPerfil, nombresCoinciden, validarDatosDocumento, validarEnvioVerificacion, validarIdVerificacion, validarResolucion } from '../src/validators/verificacion.validador.js'
 
 describe('validaciones del flujo de identidad', () => {
   it('compara los campos del PDF417 con el perfil y no acepta valores incompletos como coincidencia', () => {
     assert.deepEqual(compararDatosDocumentoPerfil({ dni: '30.456.789', nombre: 'MARTINA   SOFIA', apellido: 'PEREZ' }, { dni: '30456789', nombre: 'Martina Sofía', apellido: 'Pérez' }), {
       completo: true, coincidencias: { dni: true, nombre: true, apellido: true }, dni_parcial: '••••6789',
     })
+    assert.deepEqual(compararDatosDocumentoPerfil({ dni: '30456789', nombre: 'martina sofia', apellido: 'perez' }, { dni: '30456789', nombre: 'MARTINA SOFÍA', apellido: 'PÉREZ' }).coincidencias, {
+      dni: true, nombre: true, apellido: true,
+    })
+    assert.deepEqual(compararDatosDocumentoPerfil({ dni: '30456789', nombre: 'Martina', apellido: 'Pérez' }, { dni: '30456789', nombre: null, apellido: null }).coincidencias, {
+      dni: true, nombre: null, apellido: null,
+    })
+    assert.equal(nombresCoinciden('VILLAFAxxE', 'Villafañe'), true)
+    assert.equal(nombresCoinciden('VILLAFAxxE', 'Villafaye'), false)
     const parcial = compararDatosDocumentoPerfil({ dni: '', nombre: 'MARTINA', apellido: '' }, { dni: '30456789', nombre: 'Martina', apellido: 'Perez' })
     assert.equal(parcial.completo, false)
     assert.equal(parcial.coincidencias.dni, null)

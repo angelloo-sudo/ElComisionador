@@ -40,7 +40,7 @@ Todas las rutas requieren el JWT existente. El backend verifica rol y propiedad;
 | `GET /api/verificaciones/admin/:id` | Administrador consulta el detalle | Devuelve los mismos datos mínimos de una solicitud individual; requiere rol administrador. |
 | `PATCH /api/verificaciones/admin/:id/resolver` | Administrador resuelve | `{ "decision": "APROBADA_MANUALMENTE" }` o decisión `RECHAZADA` / `REQUIERE_CORRECCION` con `motivo` de 3 a 500 caracteres. |
 
-El payload de envío no contiene imágenes, selfie, DNI completo, OCR textual, fechas de nacimiento/vencimiento, número de trámite ni vectores faciales. El servidor rechaza OCR distinto de `legible` y controles faciales incompletos. En PostgreSQL se persisten solo los campos ya contemplados por `verificaciones_identidad`: DNI parcial, calidad OCR, comparaciones booleanas, controles booleanos, marcas de tiempo y resolución.
+La petición de lectura envía temporalmente el DNI completo, nombre y apellido al servidor para compararlos con el perfil; la petición de envío no incluye el DNI completo, imágenes, selfie, OCR textual, fechas de nacimiento/vencimiento, número de trámite ni vectores faciales. El servidor rechaza lecturas incompletas. En PostgreSQL se persisten solo los campos ya contemplados por `verificaciones_identidad`: DNI parcial, calidad OCR, comparaciones booleanas, controles booleanos, marcas de tiempo y resolución.
 
 ## Estados
 
@@ -54,8 +54,9 @@ El payload de envío no contiene imágenes, selfie, DNI completo, OCR textual, f
 ## Privacidad y límites
 
 - Las imágenes se procesan en el navegador y no se envían a la API de ComiTrack ni se escriben en PostgreSQL, carpetas públicas, `localStorage` o `sessionStorage`.
-- Solo se envían y conservan los resultados mínimos validados por el backend. El DNI se muestra parcialmente oculto en el historial y en el panel administrativo.
+- Solo se envían y conservan los resultados mínimos validados por el backend. El DNI completo se muestra temporalmente en la pantalla del resultado del escaneo mientras permanece en memoria; el historial y el panel administrativo muestran solo los últimos cuatro dígitos.
 - No se modifica automáticamente el perfil. Los desacuerdos se presentan al administrador.
+- La comparación de nombres ignora mayúsculas y acentos; si el perfil contiene `ñ`, también acepta la representación `xx` que puede devolver la lectura PDF417.
 - No hay integración con RENAPER ni proveedor KYC, y no se consulta una API externa para validar documentos.
 - La lectura OCR puede equivocarse. Los controles faciales no son una prueba de vida robusta ni protegen contra fotos, videos o ataques de presentación. La decisión administrativa no certifica oficialmente identidad.
 - MediaPipe puede transmitir métricas técnicas de utilización; este comportamiento no contiene las imágenes ni el resultado facial según su aviso de privacidad.

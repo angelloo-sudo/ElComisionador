@@ -83,13 +83,14 @@ function SelectorEquipaje({ id, label, value, max, onChange, error }) {
 
 // Formulario de una solicitud (pasajero o encomienda) con su propio tramo, precio y envío.
 // En encomienda la localidad de retiro y de entrega queda fija: es la del tramo elegido en la lista.
-function FormularioSolicitud({ tipo, viaje, locInicial, perfil, bloqueo, onEnviada }) {
+function FormularioSolicitud({ tipo, viaje, locInicial, perfil, errorPerfil, bloqueo, onEnviada }) {
   const esPasajero = tipo === 'pasajero'
   const [fragil, setFragil] = useState(null) // null = sin responder
   const [form, setForm] = useState(() => ({
     ...FORM_INICIAL,
     ...(esPasajero && perfil ? { nombre: perfil.nombre ?? '', apellido: perfil.apellido ?? '', dni: perfil.dni ?? '', telefono: perfil.telefono ?? '' } : {}),
   }))
+  const perfilPasajeroAplicado = useRef(esPasajero && Boolean(perfil))
   const [errores, setErrores] = useState({})
   const [errorGeneral, setErrorGeneral] = useState(null)
   const [guardando, setGuardando] = useState(false)
@@ -101,6 +102,18 @@ function FormularioSolicitud({ tipo, viaje, locInicial, perfil, bloqueo, onEnvia
   const [loc, setLoc] = useState(locInicial)
   // Tramo elegido: { estado: 'cargando' | 'ok' | 'invalido' | 'no_disponible', precio_persona, completo, ... }
   const [tramo, setTramo] = useState(null)
+
+  useEffect(() => {
+    if (!esPasajero || !perfil || perfilPasajeroAplicado.current) return
+    perfilPasajeroAplicado.current = true
+    setForm((actual) => ({
+      ...actual,
+      nombre: actual.nombre || perfil.nombre || '',
+      apellido: actual.apellido || perfil.apellido || '',
+      dni: actual.dni || perfil.dni || '',
+      telefono: actual.telefono || perfil.telefono || '',
+    }))
+  }, [esPasajero, perfil])
 
   const okOrigen = verif.origen?.estado === 'ok' ? verif.origen.clave : ''
   const okDestino = verif.destino?.estado === 'ok' ? verif.destino.clave : ''
@@ -402,6 +415,7 @@ function FormularioSolicitud({ tipo, viaje, locInicial, perfil, bloqueo, onEnvia
           <>
             <div className="seccion">
               <p className="seccion-titulo">Tus datos</p>
+              {!perfil && errorPerfil && <Alerta tipo="aviso" titulo="No pudimos cargar tus datos automáticamente">Completá los campos manualmente. También podés revisar tu conexión e intentarlo de nuevo.</Alerta>}
               <div className="grilla-2">
                 <Campo label="Nombre" requerido icono="user" error={errores.nombre}><input value={form.nombre} onChange={txt('nombre')} maxLength={120} /></Campo>
                 <Campo label="Apellido" requerido error={errores.apellido}><input value={form.apellido} onChange={txt('apellido')} maxLength={120} /></Campo>
@@ -509,6 +523,7 @@ export default function SolicitarViaje() {
   const navegar = useNavigate()
   const [viaje, setViaje] = useState(null)
   const [perfil, setPerfil] = useState(null)
+  const [errorPerfil, setErrorPerfil] = useState(null)
   const [cargando, setCargando] = useState(true)
   const [errorCarga, setErrorCarga] = useState(null)
   const [enviadas, setEnviadas] = useState(0)
@@ -522,8 +537,15 @@ export default function SolicitarViaje() {
   }))), [otrasParadas])
 
   useEffect(() => {
-    Promise.all([api.get(`/solicitudes/viajes-disponibles/${id}`), api.get('/auth/perfil').catch(() => null)])
-      .then(([v, p]) => { setViaje(v); setPerfil(p) })
+    const cargarPerfil = api.get('/auth/perfil')
+      .then((p) => ({ perfil: p, error: null }))
+      .catch(() => ({ perfil: null, error: true }))
+    Promise.all([api.get(`/solicitudes/viajes-disponibles/${id}`), cargarPerfil])
+      .then(([v, resultadoPerfil]) => {
+        setViaje(v)
+        setPerfil(resultadoPerfil.perfil)
+        setErrorPerfil(resultadoPerfil.error)
+      })
       .catch((err) => setErrorCarga(err.message))
       .finally(() => setCargando(false))
     api.get(`/solicitudes/viajes-disponibles/${id}/paradas`).then((r) => setOtrasParadas(r.paradas ?? [])).catch(() => setOtrasParadas([]))
@@ -634,7 +656,7 @@ export default function SolicitarViaje() {
         {tipoActivo === 'encomienda' ? (
           <FormularioSolicitud tipo="encomienda" viaje={viaje} locInicial={locInicial} perfil={perfil} bloqueo={bloqueoEncomienda} onEnviada={() => setEnviadas((n) => n + 1)} />
         ) : (
-          <FormularioSolicitud tipo="pasajero" viaje={viaje} locInicial={locInicial} perfil={perfil} bloqueo={bloqueoPasajero} onEnviada={() => setEnviadas((n) => n + 1)} />
+          <FormularioSolicitud tipo="pasajero" viaje={viaje} locInicial={locInicial} perfil={perfil} errorPerfil={errorPerfil} bloqueo={bloqueoPasajero} onEnviada={() => setEnviadas((n) => n + 1)} />
         )}
       </div>
 
