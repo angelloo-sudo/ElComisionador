@@ -35,6 +35,37 @@ describe('API de verificaciones de identidad', () => {
   })
   after(async () => { await pool.end() })
 
+  it('limita al comisionista al perfil hasta que administración aprueba su identidad', async () => {
+    const comisionista = await crearUsuario('comisionista')
+    const admin = await crearUsuario('administrador')
+
+    const perfilSinVerificar = await api.get('/api/auth/perfil').set(auth(comisionista))
+    assert.equal(perfilSinVerificar.status, 200)
+    assert.equal(perfilSinVerificar.body.estado_verificacion, null)
+    const accesoAntes = await api.get('/api/viajes').set(auth(comisionista))
+    assert.equal(accesoAntes.status, 403)
+    assert.equal(accesoAntes.body.codigo, 'IDENTIDAD_PENDIENTE')
+
+    const inicio = await api.post('/api/verificaciones').set(auth(comisionista)).send({ consentimiento: true })
+    assert.equal(inicio.status, 201)
+    const lectura = await api.patch(`/api/verificaciones/${inicio.body.id}/documento`).set(auth(comisionista)).send({
+      ...datosDocumento, dni: comisionista.dni,
+    })
+    assert.equal(lectura.status, 200)
+    const envio = await api.patch(`/api/verificaciones/${inicio.body.id}/enviar`).set(auth(comisionista)).send({})
+    assert.equal(envio.status, 200)
+
+    const perfilPendiente = await api.get('/api/auth/perfil').set(auth(comisionista))
+    assert.equal(perfilPendiente.body.estado_verificacion, 'PENDIENTE_REVISION')
+    assert.equal((await api.get('/api/viajes').set(auth(comisionista)).then((r) => r.status)), 403)
+
+    const decision = await api.patch(`/api/verificaciones/admin/${inicio.body.id}/resolver`).set(auth(admin)).send({ decision: 'APROBADA_MANUALMENTE' })
+    assert.equal(decision.status, 200)
+    const perfilAutorizado = await api.get('/api/auth/perfil').set(auth(comisionista))
+    assert.equal(perfilAutorizado.body.estado_verificacion, 'APROBADA_MANUALMENTE')
+    assert.equal((await api.get('/api/viajes').set(auth(comisionista)).then((r) => r.status)), 200)
+  })
+
   it('compara PDF417, bloquea saltos de etapa y requiere aprobación administrativa', async () => {
     const cliente = await crearUsuario('cliente')
     const otro = await crearUsuario('comisionista')

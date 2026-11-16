@@ -134,7 +134,7 @@ export default function ResumenCliente({ datos, nombre }) {
         <div>
           <p className="cliente-fecha">{fecha.charAt(0).toUpperCase() + fecha.slice(1)}</p>
           <h2>Hola, {nombreMostrado}</h2>
-          <p>¿Qué necesitás enviar o planificar hoy?</p>
+          <p>¿Qué necesitas enviar o a dónde te quieres trasladar hoy?</p>
         </div>
       </header>
 

@@ -3,19 +3,40 @@
 import { query } from '../config/db.js'
 import { PRECIO_KM_MAXIMO } from '../services/tarifa.service.js'
 
+const TAMANOS_ENCOMIENDA = ['chica', 'mediana', 'grande']
+const MONTO_MINIMO_MAXIMO = 9_999_999_999.99
+
 export async function obtener(req, res, next) {
   try {
-    const { rows } = await query('SELECT precio_km FROM comisionistas WHERE usuario_id = $1', [req.usuario.id])
-    res.json({ precio_km: rows[0]?.precio_km != null ? Number(rows[0].precio_km) : null })
+    const { rows } = await query(
+      `SELECT precio_km, monto_minimo_encomienda_chica, monto_minimo_encomienda_mediana, monto_minimo_encomienda_grande
+       FROM comisionistas WHERE usuario_id = $1`,
+      [req.usuario.id],
+    )
+    const tarifa = rows[0]
+    res.json({
+      precio_km: tarifa?.precio_km != null ? Number(tarifa.precio_km) : null,
+      minimos_encomienda: Object.fromEntries(TAMANOS_ENCOMIENDA.map((tamano) => {
+        const monto = tarifa?.[`monto_minimo_encomienda_${tamano}`]
+        return [tamano, monto != null ? Number(monto) : null]
+      })),
+    })
   } catch (e) { next(e) }
 }
 
-// PUT /api/tarifa  { precio_km: 350.5 }   (null o vacio = quitar la tarifa)
+// GET returns minima keyed by chica/mediana/grande. PUT updates either setting;
+// omitted fields stay unchanged, while null clears a configured amount.
 export async function guardar(req, res, next) {
   try {
+    const precioIncluido = Object.prototype.hasOwnProperty.call(req.body ?? {}, 'precio_km')
+    const minimosIncluidos = Object.prototype.hasOwnProperty.call(req.body ?? {}, 'minimos_encomienda')
+    if (!precioIncluido && !minimosIncluidos) {
+      return res.status(400).json({ mensaje: 'Indicá el precio por km o los montos mínimos de encomienda' })
+    }
+
     const bruto = req.body?.precio_km
     let precio = null
-    if (bruto !== null && bruto !== undefined && bruto !== '') {
+    if (precioIncluido && bruto !== null && bruto !== undefined && bruto !== '') {
       precio = typeof bruto === 'string' ? Number(bruto.replace(',', '.')) : Number(bruto)
       if (!Number.isFinite(precio) || precio <= 0) {
         return res.status(400).json({ mensaje: 'El precio por km debe ser un número mayor a 0' })
@@ -25,23 +46,52 @@ export async function guardar(req, res, next) {
       }
       precio = Math.round(precio * 100) / 100
     }
-    const asociadas = await query(
-      `SELECT 1 FROM solicitudes_viaje s
-       JOIN viajes v ON v.id = s.viaje_id
-       WHERE v.usuario_id = $1 AND s.estado = 'aceptada'
-         AND COALESCE(s.estado_pasajero, '') NOT IN ('ausente', 'cancelado_comisionista')
-       LIMIT 1`,
-      [req.usuario.id],
-    )
-    if (asociadas.rowCount > 0) {
-      return res.status(409).json({ mensaje: 'No podés cambiar la tarifa mientras haya pasajeros o encomiendas aceptadas en tus viajes' })
+
+    let minimos = null
+    if (minimosIncluidos) {
+      const datos = req.body.minimos_encomienda
+      if (!datos || typeof datos !== 'object' || Array.isArray(datos)
+          || TAMANOS_ENCOMIENDA.some((tamano) => !Object.prototype.hasOwnProperty.call(datos, tamano))) {
+        return res.status(400).json({ mensaje: 'Indicá un monto mínimo para cada tamaño: chica, mediana y grande' })
+      }
+      minimos = {}
+      for (const tamano of TAMANOS_ENCOMIENDA) {
+        const brutoMonto = datos[tamano]
+        if (brutoMonto == null || brutoMonto === '') {
+          minimos[tamano] = null
+          continue
+        }
+        const monto = typeof brutoMonto === 'string' ? Number(brutoMonto.replace(',', '.')) : Number(brutoMonto)
+        if (!Number.isFinite(monto) || monto < 0 || monto > MONTO_MINIMO_MAXIMO) {
+          return res.status(400).json({ mensaje: `El monto mínimo para encomienda ${tamano} debe ser un número entre 0 y ${MONTO_MINIMO_MAXIMO}` })
+        }
+        minimos[tamano] = Math.round(monto * 100) / 100
+      }
     }
+
     const { rows } = await query(
-      `INSERT INTO comisionistas (usuario_id, precio_km) VALUES ($1, $2)
-       ON CONFLICT (usuario_id) DO UPDATE SET precio_km = EXCLUDED.precio_km
-       RETURNING precio_km`,
-      [req.usuario.id, precio],
+      `INSERT INTO comisionistas (
+         usuario_id, precio_km, monto_minimo_encomienda_chica,
+         monto_minimo_encomienda_mediana, monto_minimo_encomienda_grande
+       ) VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (usuario_id) DO UPDATE SET
+         precio_km = CASE WHEN $6 THEN EXCLUDED.precio_km ELSE comisionistas.precio_km END,
+         monto_minimo_encomienda_chica = CASE WHEN $7 THEN EXCLUDED.monto_minimo_encomienda_chica ELSE comisionistas.monto_minimo_encomienda_chica END,
+         monto_minimo_encomienda_mediana = CASE WHEN $7 THEN EXCLUDED.monto_minimo_encomienda_mediana ELSE comisionistas.monto_minimo_encomienda_mediana END,
+         monto_minimo_encomienda_grande = CASE WHEN $7 THEN EXCLUDED.monto_minimo_encomienda_grande ELSE comisionistas.monto_minimo_encomienda_grande END
+       RETURNING precio_km, monto_minimo_encomienda_chica, monto_minimo_encomienda_mediana, monto_minimo_encomienda_grande`,
+      [
+        req.usuario.id, precio, minimos?.chica ?? null, minimos?.mediana ?? null, minimos?.grande ?? null,
+        precioIncluido, minimosIncluidos,
+      ],
     )
-    res.json({ precio_km: rows[0].precio_km != null ? Number(rows[0].precio_km) : null })
+    const tarifa = rows[0]
+    res.json({
+      precio_km: tarifa.precio_km != null ? Number(tarifa.precio_km) : null,
+      minimos_encomienda: Object.fromEntries(TAMANOS_ENCOMIENDA.map((tamano) => {
+        const monto = tarifa[`monto_minimo_encomienda_${tamano}`]
+        return [tamano, monto != null ? Number(monto) : null]
+      })),
+    })
   } catch (e) { next(e) }
 }

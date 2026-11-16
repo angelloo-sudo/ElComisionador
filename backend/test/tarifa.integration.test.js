@@ -81,6 +81,13 @@ async function crearUsuario(rol) {
   )
   const tabla = rol === 'comisionista' ? 'comisionistas' : 'clientes'
   await query(`INSERT INTO ${tabla} (usuario_id) VALUES ($1)`, [u.id])
+  if (rol === 'comisionista') {
+    await query(
+      `INSERT INTO verificaciones_identidad (usuario_id, estado, consentimiento_en, resuelta_en, resuelta_por)
+       VALUES ($1, 'APROBADA_MANUALMENTE', NOW(), NOW(), $1)`,
+      [u.id],
+    )
+  }
   usuarios.push(u.id)
   const token = jwt.sign({ id: u.id, email, rol }, process.env.JWT_SECRET, { expiresIn: '1h' })
   return { id: u.id, auth: { Authorization: `Bearer ${token}` } }
@@ -118,7 +125,9 @@ describe('tarifa por km y duracion automatica', () => {
   simularMapas()
 
   it('el comisionista configura su precio por km (y solo el comisionista)', async () => {
-    assert.equal((await api.get('/api/tarifa').set(comisionista.auth)).body.precio_km, null)
+    const inicial = await api.get('/api/tarifa').set(comisionista.auth)
+    assert.equal(inicial.body.precio_km, null)
+    assert.deepEqual(inicial.body.minimos_encomienda, { chica: null, mediana: null, grande: null })
     assert.equal((await api.get('/api/tarifa').set(cliente.auth)).status, 403)
     for (const malo of [0, -5, 'abc', 2_000_000]) {
       const r = await api.put('/api/tarifa').set(comisionista.auth).send({ precio_km: malo })
@@ -127,10 +136,24 @@ describe('tarifa por km y duracion automatica', () => {
     const ok = await api.put('/api/tarifa').set(comisionista.auth).send({ precio_km: '350,5' })
     assert.equal(ok.status, 200)
     assert.equal(ok.body.precio_km, 350.5)
-    assert.equal((await api.get('/api/tarifa').set(comisionista.auth)).body.precio_km, 350.5)
+    const minimos = await api.put('/api/tarifa').set(comisionista.auth).send({
+      minimos_encomienda: { chica: '1500,5', mediana: 2500, grande: null },
+    })
+    assert.equal(minimos.status, 200, JSON.stringify(minimos.body))
+    assert.equal(minimos.body.precio_km, 350.5)
+    assert.deepEqual(minimos.body.minimos_encomienda, { chica: 1500.5, mediana: 2500, grande: null })
+    assert.equal((await api.put('/api/tarifa').set(comisionista.auth).send({
+      minimos_encomienda: { chica: -1, mediana: null, grande: null },
+    })).status, 400)
+    assert.equal((await api.put('/api/tarifa').set(comisionista.auth).send({
+      minimos_encomienda: { chica: null, mediana: null },
+    })).status, 400)
     const quitar = await api.put('/api/tarifa').set(comisionista.auth).send({ precio_km: null })
     assert.equal(quitar.body.precio_km, null)
-    await api.put('/api/tarifa').set(comisionista.auth).send({ precio_km: 400 })
+    assert.deepEqual(quitar.body.minimos_encomienda, { chica: 1500.5, mediana: 2500, grande: null })
+    await api.put('/api/tarifa').set(comisionista.auth).send({
+      precio_km: 400, minimos_encomienda: { chica: null, mediana: null, grande: null },
+    })
   })
 
   it('al registrar un viaje no pide hora de llegada: el sistema calcula distancia, duracion y llegada', async () => {
@@ -195,8 +218,14 @@ describe('tarifa por km y duracion automatica', () => {
     assert.equal(r.body.hora_llegada, null)
   })
 
-  it('el precio de la solicitud = precio/km x km x pasajeros (encomienda: una sola vez)', async () => {
+  it('calcula pasajero por km y encomienda como mínimo por tamaño más precio por km', async () => {
+    await api.put('/api/tarifa').set(comisionista.auth).send({
+      precio_km: 400,
+      minimos_encomienda: { chica: 1500, mediana: 2500, grande: 4000 },
+    })
     const { body: viaje } = await api.post('/api/viajes').set(comisionista.auth).send(viajeBase({ fecha: fechaFutura(12) }))
+    const precioTramo = await api.get(`/api/solicitudes/viajes-disponibles/${viaje.id}/tramo`).set(cliente.auth)
+    assert.deepEqual(precioTramo.body.minimos_encomienda, { chica: 1500, mediana: 2500, grande: 4000 })
     const lista = await api.get('/api/solicitudes/viajes-disponibles').set(cliente.auth)
     const visto = lista.body.find((v) => v.viaje_id === viaje.id)
     assert.equal(Number(visto.precio_pasajero), 14600)
@@ -216,25 +245,35 @@ describe('tarifa por km y duracion automatica', () => {
       viaje_id: viaje.id, tipo: 'encomienda',
       origen_calle: 'Colon', origen_altura: '100', origen_codigo_postal: '5000',
       destino_calle: 'San Martin', destino_altura: '200', destino_codigo_postal: '5000',
-      peso_kg: 2, ancho_cm: 20, largo_cm: 30, profundidad_cm: 10, fragil: false, tipo_contenido: 'ropa',
+      tamano: 'pequeno', fragil: false, tipo_contenido: 'ropa',
       emisor_nombre: 'Ana', emisor_apellido: 'Perez', emisor_telefono: '3512345678',
       receptor_nombre: 'Luis', receptor_apellido: 'Gomez', receptor_telefono: '3519876543',
       forma_pago: 'transferencia',
     })
 
     assert.equal(enc.status, 201, JSON.stringify(enc.body))
-    assert.equal(Number(enc.body.monto), 400 * 36.5)
+    assert.equal(Number(enc.body.monto), 1500 + 400 * 36.5)
 
-    // Si el comisionista cambia la tarifa, las solicitudes ya enviadas conservan su precio.
-    await api.put('/api/tarifa').set(comisionista.auth).send({ precio_km: 999 })
+    assert.equal((await api.patch(`/api/solicitudes/${pas.body.id}/aceptar`).set(comisionista.auth)).status, 200)
+    assert.equal((await api.patch(`/api/solicitudes/${enc.body.id}/aceptar`).set(comisionista.auth)).status, 200)
+    const { body: viajeSinSolicitudes } = await api.post('/api/viajes').set(comisionista.auth).send(viajeBase({ fecha: fechaFutura(13) }))
+
+    // Cambiar la tarifa conserva los montos aceptados y actualiza el precio de los viajes sin solicitudes.
+    const cambio = await api.put('/api/tarifa').set(comisionista.auth).send({ precio_km: 999 })
+    assert.equal(cambio.status, 200, JSON.stringify(cambio.body))
     const mias = await api.get('/api/solicitudes/mias').set(cliente.auth)
     const guardada = mias.body.find((s) => s.id === pas.body.id)
     assert.equal(Number(guardada.monto), 29200)
     assert.equal(guardada.precio_km, undefined)
     assert.equal(guardada.duracion_min, 45)
+    assert.equal(Number(mias.body.find((s) => s.id === enc.body.id).monto), 16100)
     const recibidas = await api.get('/api/solicitudes/recibidas?estado=todas').set(comisionista.auth)
     assert.equal(Number(recibidas.body.find((s) => s.id === pas.body.id).monto), 29200)
     assert.equal(recibidas.body.find((s) => s.id === pas.body.id).equipaje_detalle, '1 valija grande y 2 mochilas o bolsos de mano — Valija azul y mochila negra')
+    assert.equal(Number(recibidas.body.find((s) => s.id === enc.body.id).monto), 16100)
+    assert.equal(recibidas.body.find((s) => s.id === enc.body.id).tamano, 'pequeno')
+    const disponibles = await api.get('/api/solicitudes/viajes-disponibles').set(cliente.auth)
+    assert.equal(Number(disponibles.body.find((v) => v.viaje_id === viajeSinSolicitudes.id).precio_pasajero), 999 * 36.5)
     await api.put('/api/tarifa').set(comisionista.auth).send({ precio_km: 400 })
   })
 
@@ -357,6 +396,7 @@ describe('tarifa por km y duracion automatica', () => {
     assert.equal(completo.body.estado, 'ok')
     assert.equal(completo.body.precio_persona, 14600)
     assert.equal(completo.body.completo, true)
+    assert.ok(completo.body.distancia_km > 0)
 
     const q = new URLSearchParams({ desde: 'Córdoba (Capital)', hasta: 'Alta Gracia' })
     const parcial = await api.get(`/api/solicitudes/viajes-disponibles/${viaje.id}/tramo?${q}`).set(cliente.auth)
@@ -364,7 +404,7 @@ describe('tarifa por km y duracion automatica', () => {
     assert.ok(parcial.body.precio_persona > 14600 * 0.45 && parcial.body.precio_persona < 14600 * 0.55, `precio ${parcial.body.precio_persona}`)
     assert.ok(parcial.body.geometria.length >= 2)
     assert.equal(parcial.body.hasta.nombre, 'Alta Gracia')
-    assert.equal(parcial.body.km, undefined) // el cliente no ve los km
+    assert.ok(parcial.body.distancia_km > 0)
     assert.equal(parcial.body.precio_km, undefined)
 
     // Se postula subiendo en el origen y bajando en Alta Gracia, 2 pasajeros.
@@ -374,6 +414,8 @@ describe('tarifa por km y duracion automatica', () => {
     const { rows: [fila] } = await query('SELECT origen_localidad, destino_localidad, distancia_km, precio_km FROM solicitudes_viaje WHERE id = $1', [r.body.id])
     assert.equal(fila.destino_localidad, 'Alta Gracia')
     assert.ok(Number(fila.distancia_km) > 17 && Number(fila.distancia_km) < 19.5)
+    assert.equal(Number(r.body.distancia_km), Number(fila.distancia_km))
+    assert.equal(Number(parcial.body.distancia_km), Number(fila.distancia_km))
     assert.equal(Number(fila.precio_km), 400)
     const recibida = await api.get(`/api/solicitudes/${r.body.id}/tramo`).set(comisionista.auth)
     assert.equal(recibida.body.estado, 'ok')
@@ -416,6 +458,7 @@ describe('tarifa por km y duracion automatica', () => {
       const exacto = await consulta({ hasta_calle: 'Belgrano', hasta_altura: '100' })
       assert.equal(exacto.estado, 'ok')
       assert.equal(exacto.hasta.precisa, true)
+      assert.ok(exacto.distancia_km > 0)
       assert.ok(Math.abs(exacto.hasta.lon - -64.28) < 1e-6) // el pin queda en la direccion
       assert.ok(exacto.precio_persona < centro.precio_persona, `${exacto.precio_persona} vs ${centro.precio_persona}`)
 
@@ -424,6 +467,7 @@ describe('tarifa por km y duracion automatica', () => {
         origen_localidad: 'Córdoba (Capital)', destino_localidad: 'Alta Gracia', destino_calle: 'Belgrano', destino_altura: '100',
       }))
       assert.equal(r.status, 201, JSON.stringify(r.body))
+      assert.equal(Number(r.body.distancia_km), Number(exacto.distancia_km))
       assert.equal(Number(r.body.monto), Math.round(exacto.precio_persona * 2 * 100) / 100)
       const recibida = await api.get(`/api/solicitudes/${r.body.id}/tramo`).set(comisionista.auth)
       assert.equal(recibida.body.hasta.precisa, true)
@@ -498,7 +542,7 @@ describe('tarifa por km y duracion automatica', () => {
   it('paradas: una encomienda muestra el nombre del emisor (retiro) y del receptor (entrega), no "null null"', async () => {
     const { body: viaje } = await api.post('/api/viajes').set(comisionista.auth).send(viajeBase({ fecha: fechaFutura(22) }))
     const enc = await api.post('/api/solicitudes').set(cliente.auth).send({
-      viaje_id: viaje.id, tipo: 'encomienda', origen_localidad: 'Alta Gracia', destino_localidad: 'La Falda',
+      viaje_id: viaje.id, tipo: 'encomienda', tamano: 'pequeno', origen_localidad: 'Alta Gracia', destino_localidad: 'La Falda',
       origen_calle: 'Colon', origen_altura: '100', origen_codigo_postal: '5000',
       destino_calle: 'San Martin', destino_altura: '200', destino_codigo_postal: '5000',
       peso_kg: 2, ancho_cm: 20, largo_cm: 30, profundidad_cm: 10, fragil: false, tipo_contenido: 'ropa',

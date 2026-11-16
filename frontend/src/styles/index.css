@@ -356,6 +356,7 @@ textarea.area:focus { border-color: var(--foco); }
 .grilla-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .grilla-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .grilla-2 > *, .grilla-3 > *, .campo, .input-wrap { min-width: 0; }
+.tarifa-minimo-campo > label { min-height: 2.9em; }
 .seccion-titulo { font-size: 12px; letter-spacing: .12em; font-weight: 600; color: var(--texto-3); text-transform: uppercase; margin: 6px 0 14px; }
 .seccion + .seccion { margin-top: 28px; }
 
@@ -559,12 +560,17 @@ textarea.area:focus { border-color: var(--foco); }
 .localidad-opciones li.activa { background: var(--activo); }
 .localidad-opciones li.sin-resultados { color: var(--texto-3); cursor: default; }
 .localidad-flecha { background: none; border: 0; padding: 0; display: inline-flex; color: var(--texto-3); }
-.equipaje-selectores { margin: 12px 0 16px; }
+.equipaje-cantidad { max-width: 320px; margin-top: 12px; }
+.equipaje-tamanos-lista { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
 .equipaje-selector { z-index: 1; }
 .equipaje-selector:focus-within { z-index: 5; }
 .equipaje-selector-boton { height: 44px; width: 100%; padding: 0 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--borde); border-radius: 10px; background: var(--input); color: var(--texto); font: inherit; text-align: left; cursor: pointer; transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease; }
 .equipaje-selector-boton:hover, .equipaje-selector-boton[aria-expanded='true'] { border-color: var(--borde-fuerte); background: var(--hover); }
 .equipaje-selector-boton:focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; }
+.selector-desplegable-icono { display: inline-flex; flex: 0 0 auto; color: var(--texto-2); }
+.selector-desplegable-valor { flex: 1; min-width: 0; color: var(--texto); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.selector-desplegable-valor.vacio { color: var(--texto-2); }
+.equipaje-selector.tiene-error .equipaje-selector-boton { border-color: var(--rojo); background: var(--rojo-fondo); }
 .equipaje-selector-flecha { flex: 0 0 auto; color: var(--texto-2); transition: transform .2s ease, color .2s ease; }
 .equipaje-selector-flecha.abierta { transform: rotate(180deg); color: var(--primario); }
 .equipaje-selector-opciones { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 10; display: grid; gap: 3px; max-height: 220px; overflow-y: auto; padding: 5px; border: 1px solid var(--borde-fuerte); border-radius: 12px; background: var(--card); box-shadow: 0 12px 28px rgba(0,0,0,.2); }
@@ -572,8 +578,6 @@ textarea.area:focus { border-color: var(--foco); }
 .equipaje-selector-opciones button { padding: 9px 11px; border: 0; border-radius: 8px; background: transparent; color: var(--texto); font: inherit; text-align: left; cursor: pointer; }
 .equipaje-selector-opciones button:hover, .equipaje-selector-opciones button.activa { background: var(--activo); }
 .equipaje-selector-opciones button:focus-visible { outline: 2px solid var(--foco); outline-offset: -2px; }
-.campo .input-wrap:has(> textarea.area.equipaje-descripcion) { height: auto; padding: 0; border: 0; background: none; display: block; }
-.campo textarea.area.equipaje-descripcion { min-height: 72px; resize: vertical; }
 
 .viaje-detalle { display: grid; }
 .viaje-detalle .resumen-fila { padding: 12px 0; }
@@ -1203,6 +1207,7 @@ textarea.area:focus { border-color: var(--foco); }
 .rentabilidad-kpis strong { display: block; margin-top: 6px; font-size: clamp(17px, 2vw, 22px); font-weight: 650; overflow-wrap: anywhere; }
 .rentabilidad-resultado { border-color: var(--borde-fuerte) !important; }
 .rentabilidad-acciones { display: flex; justify-content: flex-end; margin-top: 16px; }
+.rentabilidad-acciones .btn-primario .icono { color: #fff; }
 .rentabilidad-grafico { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin: 18px 0; padding: 20px; }
 .rentabilidad-grafico h3 { font-size: 16px; }
 .rentabilidad-grafico p { margin-top: 4px; color: var(--texto-2); font-size: 13px; }
@@ -1373,21 +1378,22 @@ textarea.area:focus { border-color: var(--foco); }
 /* ===== Solicitar viaje: selector de tipo y formulario activo ===== */
 .solicitud-tipo-selector {
   display: flex;
-  justify-content: flex-end;
+  justify-content: stretch;
   gap: 8px;
-  margin: 0 0 20px;
-  padding: 6px;
+  margin: 0;
+  padding: 6px 6px 0;
   border: 1px solid var(--borde);
-  border-radius: 12px;
+  border-bottom: 0;
+  border-radius: 12px 12px 0 0;
   background: var(--card);
-  width: fit-content;
-  margin-left: auto;
+  width: 100%;
 }
 .solicitud-tipo-selector button {
+  flex: 1;
   min-width: 130px;
   padding: 10px 18px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 8px 8px 0 0;
   background: transparent;
   color: var(--texto-2);
   font: inherit;
@@ -1399,18 +1405,29 @@ textarea.area:focus { border-color: var(--foco); }
   color: var(--primario-texto);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
 }
+.equipaje-respuesta button.activo,
+:root[data-tema='cafe-tinto'] .equipaje-respuesta button.activo {
+  border-color: var(--primario);
+  background: var(--primario);
+  color: var(--primario-texto);
+}
 .solicitud-columnas { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
-.solicitud-columna { min-width: 0; }
+.solicitud-columna { min-width: 0; border-top: 0; border-radius: 0 0 16px 16px; }
+:root[data-tema='cafe-tinto'] .solicitud-columna::before { content: none; }
 .solicitud-columna-cabecera { display: flex; align-items: flex-start; justify-content: flex-start; gap: 12px; }
 .solicitud-columna-icono { display: grid; flex: 0 0 40px; height: 40px; place-items: center; border-radius: 11px; background: var(--primario); color: var(--primario-texto); }
 .solicitud-columna .grilla-3 { grid-template-columns: 1.4fr .8fr .8fr; }
+.solicitud-paquete-tamano { max-width: 520px; }
+.solicitud-tamano-referencia { width: min(100%, 300px); margin: 14px 0 0; padding: 12px; border: 1px solid var(--borde); border-radius: 10px; background: var(--hover); color: var(--texto-2); }
+.solicitud-tamano-referencia svg { display: block; width: 100%; height: auto; }
+.solicitud-tamano-referencia figcaption { margin-top: 6px; font-size: 13px; text-align: center; }
 .solicitud-precio { padding: 16px; border: 1px solid var(--borde); border-radius: 12px; background: var(--hover); }
 .solicitud-columna .card-pie .btn-primario { width: 100%; justify-content: center; }
 .solicitud-enviada { display: grid; justify-items: center; gap: 10px; text-align: center; }
 .solicitud-enviada .exito-detalle { width: 100%; text-align: left; }
 .solicitud-pie { display: flex; justify-content: space-between; gap: 12px; margin-top: 20px; }
 .localidad-fija { display: flex; align-items: center; gap: 8px; padding: 11px 14px; border: 1px dashed var(--borde-fuerte); border-radius: 10px; background: var(--hover); color: var(--texto-2); font-size: 14px; }
-.localidad-fija strong { margin-left: auto; color: var(--texto); }
+.localidad-fija strong { color: var(--texto); }
 @media (max-width: 1100px) {
   .solicitud-columnas { grid-template-columns: 1fr; }
 }
@@ -1418,4 +1435,5 @@ textarea.area:focus { border-color: var(--foco); }
   .solicitud-tipo-selector { width: 100%; justify-content: stretch; }
   .solicitud-tipo-selector button { flex: 1; min-width: 0; }
   .solicitud-columna .grilla-3 { grid-template-columns: 1fr; }
+  .equipaje-tamanos-lista { grid-template-columns: 1fr; }
 }

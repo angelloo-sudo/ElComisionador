@@ -21,6 +21,26 @@ const solicitudValida = (extra = {}) => ({
   ...extra,
 })
 
+const encomiendaValida = (extra = {}) => ({
+  tipo: 'encomienda',
+  origen_calle: 'San Martin',
+  origen_altura: '100',
+  origen_codigo_postal: '5000',
+  destino_calle: 'Colon',
+  destino_altura: '200',
+  destino_codigo_postal: '5000',
+  fragil: false,
+  tipo_contenido: 'ropa',
+  emisor_nombre: 'Ana',
+  emisor_apellido: 'Perez',
+  emisor_telefono: '3512345678',
+  receptor_nombre: 'Juan',
+  receptor_apellido: 'Lopez',
+  receptor_telefono: '3512345679',
+  forma_pago: 'efectivo',
+  ...extra,
+})
+
 describe('validación del equipaje de pasajeros', () => {
   it('acepta hasta una valija grande y un bolso de mano por pasajero', () => {
     const { errores, datos } = validarSolicitud(solicitudValida())
@@ -93,31 +113,34 @@ describe('validación del equipaje de pasajeros', () => {
   })
 })
 
-describe('solicitud de encomienda con dimensiones completas', () => {
-  it('exige largo, ancho y profundidad positivos', () => {
-    const { errores, datos } = validarSolicitud({
-      tipo: 'encomienda',
-      origen_calle: 'San Martin',
-      origen_altura: '100',
-      origen_codigo_postal: '5000',
-      destino_calle: 'Colon',
-      destino_altura: '200',
-      destino_codigo_postal: '5000',
+describe('solicitud de encomienda por tamaño', () => {
+  it('acepta los tamaños sin peso ni medidas individuales', () => {
+    for (const tamano of ['pequeno', 'mediano', 'grande']) {
+      const { errores, datos } = validarSolicitud(encomiendaValida({ tamano }))
+
+      assert.deepEqual(errores, [])
+      assert.equal(datos.tamano, tamano)
+      assert.equal(datos.peso_kg, null)
+      assert.equal(datos.ancho_cm, null)
+    }
+  })
+
+  it('rechaza un tamaño de paquete desconocido', () => {
+    const { errores } = validarSolicitud(encomiendaValida({ tamano: 'extra' }))
+
+    assert.ok(errores.includes('Elegí el tamaño del paquete'))
+  })
+
+  it('mantiene compatibilidad con solicitudes antiguas que envían peso y medidas', () => {
+    const { errores, datos } = validarSolicitud(encomiendaValida({
       peso_kg: 2,
       ancho_cm: 20,
       largo_cm: 30,
       profundidad_cm: 10,
-      fragil: false,
-      tipo_contenido: 'ropa',
-      emisor_nombre: 'Ana',
-      emisor_apellido: 'Perez',
-      emisor_telefono: '3512345678',
-      receptor_nombre: 'Juan',
-      receptor_apellido: 'Lopez',
-      receptor_telefono: '3512345679',
-      forma_pago: 'efectivo',
-    })
+    }))
+
     assert.deepEqual(errores, [])
+    assert.equal(datos.tamano, null)
     assert.equal(datos.profundidad_cm, 10)
   })
 })

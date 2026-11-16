@@ -94,8 +94,13 @@ function PantallaFinal({ tipo, onVolver }) {
 export default function App() {
   const [token, setToken] = useState(() => localStorage.getItem('comitrack_token'))
   const [usuario, setUsuario] = useState(usuarioGuardado)
+<<<<<<< HEAD
   const [rolServidor, setRolServidor] = useState(null)
   const [errorPerfil, setErrorPerfil] = useState('')
+=======
+  const [estadoVerificacion, setEstadoVerificacion] = useState(null)
+  const [cargandoEstadoVerificacion, setCargandoEstadoVerificacion] = useState(() => Boolean(token && usuarioGuardado()?.rol === 'comisionista'))
+>>>>>>> dde8d1a47de9e53a5552a35c51e0647a0064a2b4
   const [pantallaFinal, setPantallaFinal] = useState(null) // null | 'cerrada' | 'baja'
   const [confirmandoSalida, setConfirmandoSalida] = useState(false)
   const [mostrarBienvenida, setMostrarBienvenida] = useState(false)
@@ -111,6 +116,7 @@ export default function App() {
   useEffect(() => {
     if (!token) {
       setFotoPerfil('')
+<<<<<<< HEAD
       setRolServidor(null)
       setErrorPerfil('')
       return undefined
@@ -135,12 +141,38 @@ export default function App() {
       }
       console.error('No se pudo validar la sesión:', error)
     })
+=======
+      setEstadoVerificacion(null)
+      setCargandoEstadoVerificacion(false)
+      return undefined
+    }
+    let vigente = true
+    api.get('/auth/perfil')
+      .then((p) => {
+        if (!vigente) return
+        setFotoPerfil(p?.foto_perfil ?? '')
+        setEstadoVerificacion(p?.rol === 'comisionista' ? p.estado_verificacion : null)
+      })
+      .catch((error) => {
+        if (vigente) {
+          setEstadoVerificacion(null)
+          console.error('No se pudo consultar la autorización del comisionista:', error)
+        }
+      })
+      .finally(() => { if (vigente) setCargandoEstadoVerificacion(false) })
+>>>>>>> dde8d1a47de9e53a5552a35c51e0647a0064a2b4
     const alActualizar = (evento) => {
       setUsuario(usuarioGuardado())
       setFotoPerfil(evento.detail?.foto_perfil ?? '')
     }
+    const alActualizarEstado = (evento) => setEstadoVerificacion(evento.detail?.estado_verificacion ?? null)
     window.addEventListener('perfil:actualizado', alActualizar)
-    return () => { vigente = false; window.removeEventListener('perfil:actualizado', alActualizar) }
+    window.addEventListener('cuenta:estado-verificacion-actualizado', alActualizarEstado)
+    return () => {
+      vigente = false
+      window.removeEventListener('perfil:actualizado', alActualizar)
+      window.removeEventListener('cuenta:estado-verificacion-actualizado', alActualizarEstado)
+    }
   }, [token])
 
   useEffect(() => {
@@ -174,10 +206,17 @@ export default function App() {
     return (
       <Auth
         onAuthenticated={() => {
+          const autenticado = usuarioGuardado()
+          setEstadoVerificacion(null)
+          setCargandoEstadoVerificacion(autenticado?.rol === 'comisionista')
           setToken(localStorage.getItem('comitrack_token'))
+<<<<<<< HEAD
           setUsuario(usuarioGuardado())
           setRolServidor(null)
           setErrorPerfil('')
+=======
+          setUsuario(autenticado)
+>>>>>>> dde8d1a47de9e53a5552a35c51e0647a0064a2b4
           setMostrarBienvenida(true)
           navegar('/')
         }}
@@ -186,6 +225,13 @@ export default function App() {
   }
 
   if (ubicacion.pathname === '/ingresar') return <Navigate to="/" replace />
+  if (usuario?.rol === 'comisionista' && cargandoEstadoVerificacion) {
+    return <main className="auth-pagina"><p className="campo-ayuda" role="status">Consultando la autorización de tu cuenta…</p></main>
+  }
+  const cuentaComisionistaNoAutorizada = usuario?.rol === 'comisionista' && estadoVerificacion !== 'APROBADA_MANUALMENTE'
+  if (cuentaComisionistaNoAutorizada && !['/perfil', '/verificacion'].includes(ubicacion.pathname)) {
+    return <Navigate to="/perfil" replace />
+  }
 
   function salir(tipo) {
     cerrarSesion()
@@ -246,6 +292,7 @@ export default function App() {
           </div>
         </div>
         <nav className="nav-lista barra-navegacion" aria-label="Navegación principal">
+<<<<<<< HEAD
           <NavLink to="/" end className={claseNav}><Icon nombre="grid" /> {rolEfectivo === 'administrador' ? 'Resumen' : 'Inicio'}</NavLink>
           {esComisionista && <NavLink to="/viajes" className={claseNav}><Icon nombre="logo" /> Viajes</NavLink>}
           {esComisionista && <NavLink to="/solicitudes" className={claseNav}><Icon nombre="checkcircle" /> Solicitudes</NavLink>}
@@ -261,6 +308,22 @@ export default function App() {
           {rolEfectivo === 'administrador' && <NavLink to="/admin/usuarios" className={claseNav}><Icon nombre="users" /> Usuarios</NavLink>}
           {rolEfectivo === 'administrador' && <NavLink to="/admin/verificaciones" className={claseNav}><Icon nombre="idcard" /> Verificaciones</NavLink>}
           {rolEfectivo === 'administrador' && <NavLink to="/admin/actividad" className={claseNav}><Icon nombre="history" /> Actividad e historial</NavLink>}
+=======
+          {!cuentaComisionistaNoAutorizada && <>
+          <NavLink to="/" end className={claseNav}><Icon nombre="grid" /> {usuario?.rol === 'administrador' ? 'Resumen' : 'Inicio'}</NavLink>
+          {esComisionista && <NavLink to="/viajes" className={claseNav}><Icon nombre="logo" /> Viajes</NavLink>}
+          {esComisionista && <NavLink to="/solicitudes" className={claseNav}><Icon nombre="checkcircle" /> Solicitudes</NavLink>}
+          {esComisionista && <NavLink to="/clientes" className={claseNav}><Icon nombre="users" /> Clientes</NavLink>}
+          {usuario?.rol === 'comisionista' && <NavLink to="/historial/viajes" className={({ isActive }) => claseNav({ isActive: isActive || ubicacion.pathname.startsWith('/historial') })}><Icon nombre="history" /> Historial</NavLink>}
+          {usuario?.rol === 'comisionista' && <NavLink to="/tarifa" className={claseNav}><Icon nombre="tag" /> Tarifa</NavLink>}
+          {usuario?.rol === 'comisionista' && <NavLink to="/ingresos" className={claseNav}><Icon nombre="wallet" /> Ingresos</NavLink>}
+          {usuario?.rol === 'comisionista' && <NavLink to="/gastos" className={claseNav}><Icon nombre="wallet" /> Gastos</NavLink>}
+          {usuario?.rol === 'comisionista' && <NavLink to="/rentabilidad" className={({ isActive }) => claseNav({ isActive: isActive || ubicacion.pathname.startsWith('/reportes-rentabilidad') })}><Icon nombre="wallet" /> Rentabilidad</NavLink>}
+          {usuario?.rol === 'cliente' && <NavLink to="/mis-traslados" className={claseNav}><Icon nombre="logo" /> Viajes</NavLink>}
+          {usuario?.rol === 'cliente' && <NavLink to="/notificaciones" className={claseNav} aria-label={`Notificaciones${notificacionesNoLeidas ? `, ${notificacionesNoLeidas} sin leer` : ''}`}><Icon nombre="bell" /> Notificaciones{notificacionesNoLeidas > 0 && <span className="notificacion-contador">{notificacionesNoLeidas}</span>}</NavLink>}
+          {usuario?.rol === 'administrador' && <NavLink to="/admin/verificaciones" className={claseNav}><Icon nombre="idcard" /> Verificaciones</NavLink>}
+          </>}
+>>>>>>> dde8d1a47de9e53a5552a35c51e0647a0064a2b4
         </nav>
       </header>
 
@@ -304,7 +367,7 @@ export default function App() {
           </div>
         </Modal>
       )}
-      {mostrarBienvenida && <Bienvenida nombre={usuario?.nombre} onCerrar={cerrarBienvenida} />}
+      {mostrarBienvenida && !cuentaComisionistaNoAutorizada && <Bienvenida nombre={usuario?.nombre} onCerrar={cerrarBienvenida} />}
     </div>
   )
 }

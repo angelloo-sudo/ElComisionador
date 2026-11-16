@@ -8,16 +8,13 @@ import Icon from '../components/Icon.jsx'
 import { Campo, Alerta, formatoFecha } from '../components/ui.jsx'
 import { codigoViaje } from './ViajeNuevo.jsx'
 import MapaRuta from '../components/MapaRuta.jsx'
-import LocalidadSelect from '../components/LocalidadSelect.jsx'
-import useLocalidades from '../hooks/useLocalidades.js'
-import { formatoDuracion, formatoPesos } from '../utils/tarifa.js'
+import { formatoDuracion, formatoKm, formatoPesos } from '../utils/tarifa.js'
 
 const FORM_INICIAL = {
   // pasajero
   nombre: '', apellido: '', dni: '', telefono: '', cantidad_pasajeros: '1', forma_pago: '',
-  valijas_grandes: '0', mochilas_bolsos_mano: '0', equipaje_descripcion: '',
-  // encomienda ("alto" se guarda en la columna profundidad_cm)
-  peso_kg: '', ancho_cm: '', largo_cm: '', profundidad_cm: '', tipo_contenido: '', contenido_descripcion: '',
+  // encomienda
+  tamano: '', tipo_contenido: '', contenido_descripcion: '',
   emisor_nombre: '', emisor_apellido: '', emisor_telefono: '',
   receptor_nombre: '', receptor_apellido: '', receptor_telefono: '',
   // ubicaciones (comunes)
@@ -30,49 +27,166 @@ const TIPOS_CONTENIDO = [
   ['hogar', 'Hogar'], ['documentacion', 'Documentación'], ['juguetes', 'Juguetes'], ['otro', 'Otro'],
 ]
 
+const TAMANOS_PAQUETE = {
+  pequeno: 'Equivale a 2 cajas de zapatillas',
+  mediano: 'Equivale a una caja chica de mudanza',
+  grande: 'Equivale a un televisor de 40 pulgadas',
+}
+const TAMANO_A_MINIMO = { pequeno: 'chica', mediano: 'mediana', grande: 'grande' }
+
+const MAX_UNIDADES_EQUIPAJE = 10
+const OPCIONES_TAMANO_EQUIPAJE = [
+  { value: 'bolso_chico', label: 'Bolso chico (40 x 30 x 15 cm)', medidas: '40 x 30 x 15 cm' },
+  { value: 'valija_chica', label: 'Valija chica (55 x 35 x 25 cm)', medidas: '55 x 35 x 25 cm' },
+  { value: 'valija_mediana', label: 'Valija mediana (65 x 44 x 28 cm)', medidas: '65 x 44 x 28 cm' },
+  { value: 'valija_grande', label: 'Valija grande (75 x 50 x 30 cm)', medidas: '75 x 50 x 30 cm' },
+]
+
 const SOLO_NUMEROS = /^\d*$/
 const TEXTO_ACCION = { sube: 'sube un pasajero', baja: 'baja un pasajero', retira: 'se retira una encomienda', entrega: 'se entrega una encomienda' }
 const aMinutos = (h) => Number(String(h).slice(0, 2)) * 60 + Number(String(h).slice(3, 5))
 
-function SelectorEquipaje({ id, label, value, max, onChange, error }) {
+function detalleEquipaje(tamanos) {
+  const cantidades = new Map()
+  tamanos.forEach((tamano) => cantidades.set(tamano, (cantidades.get(tamano) ?? 0) + 1))
+  return OPCIONES_TAMANO_EQUIPAJE
+    .filter((opcion) => cantidades.has(opcion.value))
+    .map((opcion) => `${opcion.label.split(' (')[0]} (${opcion.medidas}) × ${cantidades.get(opcion.value)}`)
+    .join('; ')
+}
+
+function ReferenciaTamano({ tamano }) {
+  return (
+    <figure className="solicitud-tamano-referencia">
+      <svg viewBox="0 0 240 120" aria-hidden="true" focusable="false">
+        {tamano === 'pequeno' && (
+          <g fill="var(--card)" stroke="var(--primario)" strokeWidth="3" strokeLinejoin="round">
+            <path d="M38 43 76 26l38 17-38 17Z" />
+            <path d="M38 43v39l38 17V60Z" />
+            <path d="M114 43v39L76 99V60Z" />
+            <path d="M98 31 136 14l38 17-38 17Z" />
+            <path d="M98 31v39l38 17V48Z" />
+            <path d="M174 31v39l-38 17V48Z" />
+            <path d="M76 26v34m60-46v34" fill="none" />
+          </g>
+        )}
+        {tamano === 'mediano' && (
+          <g fill="var(--card)" stroke="var(--primario)" strokeWidth="3" strokeLinejoin="round">
+            <path d="m55 39 65-25 65 25-65 27Z" />
+            <path d="M55 39v51l65 25V66Z" />
+            <path d="M185 39v51l-65 25V66Z" />
+            <path d="M120 14v52M55 39l65 27 65-27" fill="none" />
+            <path d="m111 18 18 7-18 7" fill="none" />
+          </g>
+        )}
+        {tamano === 'grande' && (
+          <g stroke="var(--primario)" strokeWidth="3" strokeLinejoin="round">
+            <rect x="34" y="12" width="172" height="82" rx="8" fill="var(--card)" />
+            <rect x="44" y="22" width="152" height="62" rx="3" fill="var(--activo)" />
+            <path d="M120 95v10m-27 4h54" fill="none" strokeLinecap="round" />
+          </g>
+        )}
+      </svg>
+      <figcaption>{TAMANOS_PAQUETE[tamano]}</figcaption>
+    </figure>
+  )
+}
+
+function SelectorDesplegable({ id, label, value, options, placeholder, onChange, error }) {
   const [abierto, setAbierto] = useState(false)
-  const cantidad = Number(value)
+  const contenedorRef = useRef(null)
+  const botonRef = useRef(null)
+  const listaRef = useRef(null)
+  const opcionSeleccionada = options.find((opcion) => opcion.value === value)
+
+  useEffect(() => {
+    if (!abierto) return undefined
+    const cerrarAlHacerClickAfuera = (evento) => {
+      if (!contenedorRef.current?.contains(evento.target)) setAbierto(false)
+    }
+    document.addEventListener('pointerdown', cerrarAlHacerClickAfuera)
+    return () => document.removeEventListener('pointerdown', cerrarAlHacerClickAfuera)
+  }, [abierto])
+
+  function moverFoco(evento) {
+    const opciones = Array.from(listaRef.current?.querySelectorAll('[role="option"]') ?? [])
+    const indice = opciones.indexOf(evento.currentTarget)
+    if (evento.key === 'ArrowDown' || evento.key === 'ArrowUp') {
+      evento.preventDefault()
+      const direccion = evento.key === 'ArrowDown' ? 1 : -1
+      opciones[(indice + direccion + opciones.length) % opciones.length]?.focus()
+    } else if (evento.key === 'Home') {
+      evento.preventDefault()
+      opciones[0]?.focus()
+    } else if (evento.key === 'End') {
+      evento.preventDefault()
+      opciones[opciones.length - 1]?.focus()
+    } else if (evento.key === 'Escape') {
+      evento.preventDefault()
+      setAbierto(false)
+      botonRef.current?.focus()
+    }
+  }
+
+  function abrirConFlecha(evento) {
+    if (evento.key !== 'ArrowDown' && evento.key !== 'ArrowUp') return
+    evento.preventDefault()
+    setAbierto(true)
+    requestAnimationFrame(() => {
+      const opciones = listaRef.current?.querySelectorAll('[role="option"]')
+      const opcion = evento.key === 'ArrowDown' ? opciones?.[0] : opciones?.[opciones.length - 1]
+      opcion?.focus()
+    })
+  }
 
   return (
-    <div className={`equipaje-selector campo${error ? ' tiene-error' : ''}`}>
-      <label id={`${id}-label`}>{label}</label>
+    <div
+      className={`equipaje-selector campo${error ? ' tiene-error' : ''}`}
+      ref={contenedorRef}
+      onBlur={(evento) => {
+        if (!evento.currentTarget.contains(evento.relatedTarget)) setAbierto(false)
+      }}
+    >
+      <label id={`${id}-label`}>{label}<span className="req">*</span></label>
       <button
+        ref={botonRef}
         type="button"
-        className="equipaje-selector-boton"
+        className="equipaje-selector-boton selector-desplegable-boton"
         aria-labelledby={`${id}-label ${id}-valor`}
         aria-haspopup="listbox"
         aria-expanded={abierto}
         aria-controls={`${id}-opciones`}
+        aria-invalid={Boolean(error)}
         onClick={() => setAbierto((actual) => !actual)}
+        onKeyDown={abrirConFlecha}
       >
-        <span id={`${id}-valor`}>{cantidad} {cantidad === 1 ? 'unidad' : 'unidades'}</span>
+        <span className="selector-desplegable-icono"><Icon nombre="package" tamano={17} /></span>
+        <span id={`${id}-valor`} className={`selector-desplegable-valor${opcionSeleccionada ? '' : ' vacio'}`}>{opcionSeleccionada?.label ?? placeholder}</span>
         <Icon nombre="down" tamano={18} className={`equipaje-selector-flecha${abierto ? ' abierta' : ''}`} />
       </button>
       <div
+        ref={listaRef}
         className="equipaje-selector-opciones"
         id={`${id}-opciones`}
         role="listbox"
         aria-labelledby={`${id}-label`}
         hidden={!abierto}
       >
-        {Array.from({ length: Math.min(Math.max(max, 0), 20) + 1 }, (_, opcion) => (
+        {options.map((opcion) => (
           <button
+            key={opcion.value}
             type="button"
             role="option"
-            aria-selected={cantidad === opcion}
-            className={cantidad === opcion ? 'activa' : ''}
-            key={opcion}
+            aria-selected={value === opcion.value}
+            className={value === opcion.value ? 'activa' : ''}
             onClick={() => {
-              onChange(String(opcion))
+              onChange(opcion.value)
               setAbierto(false)
+              botonRef.current?.focus()
             }}
+            onKeyDown={moverFoco}
           >
-            {opcion} {opcion === 1 ? 'unidad' : 'unidades'}
+            {opcion.label}
           </button>
         ))}
       </div>
@@ -86,6 +200,9 @@ function SelectorEquipaje({ id, label, value, max, onChange, error }) {
 function FormularioSolicitud({ tipo, viaje, locInicial, perfil, errorPerfil, bloqueo, onEnviada }) {
   const esPasajero = tipo === 'pasajero'
   const [fragil, setFragil] = useState(null) // null = sin responder
+  const [llevaEquipaje, setLlevaEquipaje] = useState(null)
+  const [cantidadEquipaje, setCantidadEquipaje] = useState('1')
+  const [tamanosEquipaje, setTamanosEquipaje] = useState([''])
   const [form, setForm] = useState(() => ({
     ...FORM_INICIAL,
     ...(esPasajero && perfil ? { nombre: perfil.nombre ?? '', apellido: perfil.apellido ?? '', dni: perfil.dni ?? '', telefono: perfil.telefono ?? '' } : {}),
@@ -98,7 +215,6 @@ function FormularioSolicitud({ tipo, viaje, locInicial, perfil, errorPerfil, blo
   // Verificacion de direcciones: verif.origen / verif.destino = { clave, estado, ... }
   const [verif, setVerif] = useState({})
   const pedidos = useRef({}) // clave -> promesa, para no repetir la misma consulta
-  const { localidades, cargando: cargandoLocalidades } = useLocalidades()
   const [loc, setLoc] = useState(locInicial)
   // Tramo elegido: { estado: 'cargando' | 'ok' | 'invalido' | 'no_disponible', precio_persona, completo, ... }
   const [tramo, setTramo] = useState(null)
@@ -137,12 +253,6 @@ function FormularioSolicitud({ tipo, viaje, locInicial, perfil, errorPerfil, blo
   useEffect(() => { if (loc.origen) verificar('origen') }, [loc.origen]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (loc.destino) verificar('destino') }, [loc.destino]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  function cambiarLocalidad(prefijo, valor) {
-    setLoc((l) => ({ ...l, [prefijo]: valor }))
-    setVerif((v) => ({ ...v, [prefijo]: undefined }))
-    setErrores((e) => ({ ...e, [`${prefijo}_localidad`]: undefined }))
-  }
-
   function cambiar(campo, valor) {
     setForm((f) => ({ ...f, [campo]: valor }))
     setErrores((e) => ({ ...e, [campo]: undefined }))
@@ -151,14 +261,22 @@ function FormularioSolicitud({ tipo, viaje, locInicial, perfil, errorPerfil, blo
   }
 
   function cambiarCantidadPasajeros(valor) {
-    const nuevaCantidad = Number(valor) || 0
-    setForm((f) => ({
-      ...f,
-      cantidad_pasajeros: valor,
-      valijas_grandes: String(Math.min(Number(f.valijas_grandes) || 0, nuevaCantidad)),
-      mochilas_bolsos_mano: String(Math.min(Number(f.mochilas_bolsos_mano) || 0, nuevaCantidad)),
-    }))
-    setErrores((e) => ({ ...e, cantidad: undefined, valijas_grandes: undefined, mochilas_bolsos_mano: undefined }))
+    setForm((f) => ({ ...f, cantidad_pasajeros: valor }))
+    setErrores((e) => ({ ...e, cantidad: undefined }))
+  }
+
+  function cambiarCantidadEquipaje(valor) {
+    setCantidadEquipaje(valor)
+    const nuevaCantidad = Number(valor)
+    if (Number.isSafeInteger(nuevaCantidad) && nuevaCantidad > 0 && nuevaCantidad <= MAX_UNIDADES_EQUIPAJE) {
+      setTamanosEquipaje((actuales) => Array.from({ length: nuevaCantidad }, (_, indice) => actuales[indice] ?? ''))
+    }
+    setErrores((e) => ({ ...e, cantidad_equipaje: undefined }))
+  }
+
+  function cambiarTamanoEquipaje(indice, valor) {
+    setTamanosEquipaje((actuales) => actuales.map((tamano, i) => (i === indice ? valor : tamano)))
+    setErrores((e) => ({ ...e, [`tamano_equipaje_${indice}`]: undefined }))
   }
 
   // Comprueba que la calle y la altura existan en la localidad de esa parada. Devuelve el resultado, o null si todavia no hay datos suficientes.
@@ -194,8 +312,22 @@ function FormularioSolicitud({ tipo, viaje, locInicial, perfil, errorPerfil, blo
   // Total a pagar: el precio por persona lo calcula el sistema; con varios pasajeros se multiplica.
   const viajeCompleto = loc.origen === viaje.origen && loc.destino === viaje.destino
   const precioPersona = tramo?.estado === 'ok' ? tramo.precio_persona : (viajeCompleto && tramo?.estado !== 'invalido' ? viaje.precio_pasajero : null)
-  const monto = precioPersona == null ? null : Math.round(Number(precioPersona) * (esPasajero ? Math.max(cantidad, 1) : 1) * 100) / 100
+  const claveMinimo = TAMANO_A_MINIMO[form.tamano]
+  const minimoEncomienda = claveMinimo && tramo?.estado === 'ok'
+    ? Number(tramo.minimos_encomienda?.[claveMinimo] ?? 0)
+    : null
+  const monto = precioPersona == null || (!esPasajero && minimoEncomienda === null)
+    ? null
+    : Math.round((Number(precioPersona) * (esPasajero ? Math.max(cantidad, 1) : 1) + (esPasajero ? 0 : minimoEncomienda)) * 100) / 100
   const tramoInvalido = tramo?.estado === 'invalido'
+  const direccionResumen = (prefijo) => {
+    const calle = form[`${prefijo}_calle`].trim()
+    const altura = form[`${prefijo}_altura`].trim()
+    const localidad = String(loc[prefijo] ?? '').trim()
+    const codigoPostal = form[`${prefijo}_codigo_postal`].trim()
+    const calleAltura = [calle, altura].filter(Boolean).join(' ')
+    return [calleAltura, localidad, codigoPostal ? `CP ${codigoPostal}` : ''].filter(Boolean).join(', ') || '—'
+  }
 
   function validar() {
     const e = {}
@@ -214,20 +346,24 @@ function FormularioSolicitud({ tipo, viaje, locInicial, perfil, errorPerfil, blo
       if (!Number.isInteger(cantidad) || cantidad < 1) e.cantidad = 'Indicá cuántos pasajeros son (mínimo 1)'
       else if (cantidad > 20) e.cantidad = 'La solicitud admite hasta 20 pasajeros'
       else if (cantidad > libres) e.cantidad = `Solo quedan ${libres} lugar${libres === 1 ? '' : 'es'} en este viaje`
-      for (const campo of ['valijas_grandes', 'mochilas_bolsos_mano']) {
-        const cantidadEquipaje = Number(form[campo])
-        if (!Number.isInteger(cantidadEquipaje) || cantidadEquipaje < 0 || cantidadEquipaje > cantidad) {
-          e[campo] = `Indicá un número entre 0 y ${cantidad} (una unidad por pasajero)`
+      if (llevaEquipaje === null) e.lleva_equipaje = 'Indicá si llevás valija o bolso'
+      if (llevaEquipaje) {
+        const totalEquipaje = Number(cantidadEquipaje)
+        if (!Number.isSafeInteger(totalEquipaje) || totalEquipaje < 1) {
+          e.cantidad_equipaje = 'Indicá al menos 1 unidad de equipaje'
+        } else if (totalEquipaje > MAX_UNIDADES_EQUIPAJE) {
+          e.cantidad_equipaje = `Podés agregar hasta ${MAX_UNIDADES_EQUIPAJE} unidades de equipaje`
+        } else {
+          tamanosEquipaje.slice(0, totalEquipaje).forEach((tamano, indice) => {
+            if (!tamano) e[`tamano_equipaje_${indice}`] = `Elegí el tamaño del equipaje ${indice + 1}`
+          })
         }
       }
-      if (form.equipaje_descripcion.trim().length > 120) e.equipaje_descripcion = 'La descripción admite hasta 120 caracteres'
     } else {
       if (!form.tipo_contenido) e.tipo_contenido = 'Elegí el tipo de contenido'
       else if (form.tipo_contenido === 'otro' && form.contenido_descripcion.trim().length < 3) e.contenido_descripcion = 'Aclará qué contiene el paquete'
+      if (!form.tamano) e.tamano = 'Elegí el tamaño del paquete'
       if (fragil === null) e.fragil = 'Indicá si el paquete es frágil'
-      for (const c of ['peso_kg', 'ancho_cm', 'largo_cm', 'profundidad_cm']) {
-        if (!(Number(String(form[c]).replace(',', '.')) > 0)) e[c] = 'Ingresá un valor mayor a 0'
-      }
       for (const c of ['emisor_nombre', 'emisor_apellido', 'emisor_telefono', 'receptor_nombre', 'receptor_apellido', 'receptor_telefono']) req(c, 'Campo obligatorio')
     }
     return e
@@ -258,7 +394,6 @@ function FormularioSolicitud({ tipo, viaje, locInicial, perfil, errorPerfil, blo
         setGuardando(false)
         return
       }
-      const decimal = (v) => Number(String(v).replace(',', '.'))
       const payload = {
         viaje_id: Number(viaje.viaje_id), tipo,
         origen_localidad: loc.origen, destino_localidad: loc.destino,
@@ -268,17 +403,22 @@ function FormularioSolicitud({ tipo, viaje, locInicial, perfil, errorPerfil, blo
         ...(esPasajero
           ? {
               nombre: form.nombre, apellido: form.apellido, dni: form.dni, telefono: form.telefono,
-              valijas_grandes: Number(form.valijas_grandes), mochilas_bolsos_mano: Number(form.mochilas_bolsos_mano),
-              equipaje_descripcion: form.equipaje_descripcion,
+              lleva_equipaje: llevaEquipaje,
+              equipaje_detalle: llevaEquipaje ? detalleEquipaje(tamanosEquipaje.slice(0, Number(cantidadEquipaje))) : null,
               cantidad_pasajeros: cantidad,
             }
-          : { tipo_contenido: form.tipo_contenido, contenido_descripcion: form.tipo_contenido === 'otro' ? form.contenido_descripcion : '', fragil,
-              peso_kg: decimal(form.peso_kg), ancho_cm: decimal(form.ancho_cm), largo_cm: decimal(form.largo_cm), profundidad_cm: decimal(form.profundidad_cm),
+          : { tipo_contenido: form.tipo_contenido, contenido_descripcion: form.tipo_contenido === 'otro' ? form.contenido_descripcion : '', tamano: form.tamano, fragil,
               emisor_nombre: form.emisor_nombre, emisor_apellido: form.emisor_apellido, emisor_telefono: form.emisor_telefono,
               receptor_nombre: form.receptor_nombre, receptor_apellido: form.receptor_apellido, receptor_telefono: form.receptor_telefono }),
       }
       const creada = await api.post('/solicitudes', payload)
-      setEnviada({ cantidad, monto: creada?.monto ?? null, desde: loc.origen, hasta: loc.destino })
+      setEnviada({
+        cantidad,
+        monto: creada?.monto ?? null,
+        distanciaKm: creada?.distancia_km ?? null,
+        desde: direccionResumen('origen'),
+        hasta: direccionResumen('destino'),
+      })
       onEnviada?.()
     } catch (err) {
       setErrorGeneral({ tipo: /ya tenés|quedan|cupos|inici|programad/i.test(err.message) ? 'aviso' : 'error', titulo: 'No se pudo enviar la solicitud', texto: err.message })
@@ -308,6 +448,7 @@ function FormularioSolicitud({ tipo, viaje, locInicial, perfil, errorPerfil, blo
           <div className="exito-detalle">
             <div className="resumen-fila"><span>{esPasajero ? 'Subís en' : 'Se retira en'}</span><strong>{enviada.desde}</strong></div>
             <div className="resumen-fila"><span>{esPasajero ? 'Bajás en' : 'Se entrega en'}</span><strong>{enviada.hasta}</strong></div>
+            <div className="resumen-fila"><span>Distancia del tramo</span><strong>{formatoKm(enviada.distanciaKm)}</strong></div>
             {esPasajero && <div className="resumen-fila"><span>Pasajeros</span><strong>{enviada.cantidad}</strong></div>}
             <div className="resumen-fila"><span>Monto</span><strong>{enviada.monto == null ? 'A convenir con el comisionista' : formatoPesos(enviada.monto)}</strong></div>
             <div className="resumen-fila"><span>Estado</span><span className="badge punto ambar">Pendiente</span></div>
@@ -342,19 +483,7 @@ function FormularioSolicitud({ tipo, viaje, locInicial, perfil, errorPerfil, blo
     <div className="seccion">
       <p className="seccion-titulo">{titulo}</p>
       <div style={{ marginBottom: 16 }}>
-        {esPasajero ? (
-          <LocalidadSelect
-            label="Localidad"
-            value={loc[prefijo]}
-            onChange={(v) => cambiarLocalidad(prefijo, v)}
-            localidades={localidades}
-            deshabilitado={cargandoLocalidades}
-            error={errores[`${prefijo}_localidad`]}
-          />
-        ) : (
-          // Encomienda: la localidad es la del tramo elegido en la lista de viajes.
-          <div className="localidad-fija"><Icon nombre="pin" tamano={16} /><span>Localidad</span><strong>{loc[prefijo]}</strong></div>
-        )}
+        <div className="localidad-fija"><Icon nombre="pin" tamano={16} /><strong>{loc[prefijo]}</strong></div>
         {loc[prefijo] && loc[prefijo] !== (prefijo === 'origen' ? viaje.origen : viaje.destino) && (
           <p className="paradas-ayuda">Es una parada intermedia: el viaje va de {viaje.origen} a {viaje.destino}.</p>
         )}
@@ -435,14 +564,45 @@ function FormularioSolicitud({ tipo, viaje, locInicial, perfil, errorPerfil, blo
                   </span>
                 </Campo>
               </div>
-              <p className="campo-ayuda">Cada pasajero puede llevar hasta 1 unidad de cada tipo.</p>
-              <div className="grilla-2 equipaje-selectores">
-                <SelectorEquipaje id="valijas-grandes" label="Valijas grandes" value={form.valijas_grandes} max={cantidad} onChange={(valor) => cambiar('valijas_grandes', valor)} error={errores.valijas_grandes} />
-                <SelectorEquipaje id="mochilas-bolsos" label="Mochilas o bolsos de mano" value={form.mochilas_bolsos_mano} max={cantidad} onChange={(valor) => cambiar('mochilas_bolsos_mano', valor)} error={errores.mochilas_bolsos_mano} />
+              <div className="campo">
+                <label>¿Llevas valija o bolso?<span className="req">*</span></label>
+                <div className="segmentado equipaje-respuesta" role="radiogroup" aria-label="¿Llevas valija o bolso?">
+                  <button type="button" role="radio" aria-checked={llevaEquipaje === true} className={llevaEquipaje === true ? 'activo' : ''} onClick={() => { setLlevaEquipaje(true); setErrores((e) => ({ ...e, lleva_equipaje: undefined })) }}>Sí</button>
+                  <button type="button" role="radio" aria-checked={llevaEquipaje === false} className={llevaEquipaje === false ? 'activo' : ''} onClick={() => { setLlevaEquipaje(false); setErrores((e) => ({ ...e, lleva_equipaje: undefined })) }}>No</button>
+                </div>
+                {errores.lleva_equipaje && <p className="campo-error"><Icon nombre="alert" tamano={16} />{errores.lleva_equipaje}</p>}
               </div>
-              <Campo label="Descripción del equipaje" opcional="(opcional)" error={errores.equipaje_descripcion} ayuda="Por ejemplo: color o alguna característica. Hasta 120 caracteres.">
-                <textarea className="area equipaje-descripcion" rows={2} maxLength={120} value={form.equipaje_descripcion} onChange={txt('equipaje_descripcion')} placeholder="Ej: valija azul y mochila negra" />
-              </Campo>
+              {llevaEquipaje && (
+                <>
+                  <div className="equipaje-cantidad">
+                    <Campo label="Cantidad" requerido icono="package" error={errores.cantidad_equipaje} ayuda={`Hasta ${MAX_UNIDADES_EQUIPAJE} unidades.`}>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min="1"
+                        max={MAX_UNIDADES_EQUIPAJE}
+                        step="1"
+                        value={cantidadEquipaje}
+                        onChange={(e) => cambiarCantidadEquipaje(e.target.value)}
+                      />
+                    </Campo>
+                  </div>
+                  <div className="equipaje-tamanos-lista">
+                    {Array.from({ length: Math.min(Math.max(Number(cantidadEquipaje) || 0, 0), MAX_UNIDADES_EQUIPAJE) }, (_, indice) => (
+                      <SelectorDesplegable
+                        key={indice}
+                        id={`tamano-equipaje-${indice + 1}`}
+                        label={`Equipaje ${indice + 1}`}
+                        value={tamanosEquipaje[indice] ?? ''}
+                        placeholder="Seleccioná un tamaño"
+                        options={OPCIONES_TAMANO_EQUIPAJE}
+                        onChange={(value) => cambiarTamanoEquipaje(indice, value)}
+                        error={errores[`tamano_equipaje_${indice}`]}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
 
             {ubicacion('origen', 'Dónde te buscan', true)}
@@ -456,20 +616,32 @@ function FormularioSolicitud({ tipo, viaje, locInicial, perfil, errorPerfil, blo
 
             <div className="seccion">
               <p className="seccion-titulo">Paquete</p>
-              <div className="grilla-2">
-                <Campo label="Peso (kg)" requerido error={errores.peso_kg}><input inputMode="decimal" value={form.peso_kg} onChange={txt('peso_kg')} placeholder="Ej: 4,5" /></Campo>
-                <Campo label="Ancho (cm)" requerido error={errores.ancho_cm}><input inputMode="decimal" value={form.ancho_cm} onChange={txt('ancho_cm')} placeholder="Ej: 30" /></Campo>
-                <Campo label="Largo (cm)" requerido error={errores.largo_cm}><input inputMode="decimal" value={form.largo_cm} onChange={txt('largo_cm')} placeholder="Ej: 40" /></Campo>
-                <Campo label="Alto (cm)" requerido error={errores.profundidad_cm}><input inputMode="decimal" value={form.profundidad_cm} onChange={txt('profundidad_cm')} placeholder="Ej: 20" /></Campo>
+              <div className="solicitud-paquete-tamano">
+                <SelectorDesplegable
+                  id="tamano-paquete"
+                  label="Tamaño"
+                  value={form.tamano}
+                  placeholder="Seleccioná un tamaño"
+                  options={[
+                    { value: 'pequeno', label: 'Chico: hasta 30 a 40 cm' },
+                    { value: 'mediano', label: 'Mediano: 40 x 30 x 30 cm' },
+                    { value: 'grande', label: 'Grande: mayor a 40 x 30 x 30 cm' },
+                  ]}
+                  onChange={(value) => cambiar('tamano', value)}
+                  error={errores.tamano}
+                />
+                {form.tamano && <ReferenciaTamano tamano={form.tamano} />}
               </div>
               <div className="grilla-2" style={{ marginTop: 16 }}>
-                <Campo label="Tipo de contenido" requerido icono="package" error={errores.tipo_contenido}>
-                  <select value={form.tipo_contenido} onChange={txt('tipo_contenido')}>
-                    <option value="">Seleccioná un tipo</option>
-                    {TIPOS_CONTENIDO.map(([valor, texto]) => <option key={valor} value={valor}>{texto}</option>)}
-                  </select>
-                  <Icon nombre="down" />
-                </Campo>
+                <SelectorDesplegable
+                  id="tipo-contenido-paquete"
+                  label="Tipo de contenido"
+                  value={form.tipo_contenido}
+                  placeholder="Seleccioná un tipo"
+                  options={TIPOS_CONTENIDO.map(([value, label]) => ({ value, label }))}
+                  onChange={(value) => cambiar('tipo_contenido', value)}
+                  error={errores.tipo_contenido}
+                />
                 <div className="campo">
                   <label>¿Es frágil?<span className="req">*</span></label>
                   <div className="segmentado" role="radiogroup" aria-label="Es frágil">
@@ -496,8 +668,9 @@ function FormularioSolicitud({ tipo, viaje, locInicial, perfil, errorPerfil, blo
 
         <div className="seccion solicitud-precio">
           <p className="seccion-titulo">Precio</p>
-          <div className="resumen-fila"><span>{esPasajero ? 'Subís en' : 'Se retira en'}</span><strong>{loc.origen || '—'}</strong></div>
-          <div className="resumen-fila"><span>{esPasajero ? 'Bajás en' : 'Se entrega en'}</span><strong>{loc.destino || '—'}</strong></div>
+          <div className="resumen-fila"><span>{esPasajero ? 'Subís en' : 'Se retira en'}</span><strong>{direccionResumen('origen')}</strong></div>
+          <div className="resumen-fila"><span>{esPasajero ? 'Bajás en' : 'Se entrega en'}</span><strong>{direccionResumen('destino')}</strong></div>
+          <div className="resumen-fila"><span>Distancia del tramo</span><strong>{formatoKm(tramo?.estado === 'ok' ? tramo.distancia_km : null)}</strong></div>
           <div className="precio-total"><span>Total a pagar</span><strong>{monto == null ? '—' : formatoPesos(monto)}</strong></div>
           {monto == null && !tramoInvalido && tramo?.estado !== 'cargando' && <p className="nota-resumen" style={{ marginTop: 12 }}>El monto se acuerda con el comisionista.</p>}
           {!tramoInvalido && !viajeCompleto && monto != null && <p className="nota-resumen" style={{ marginTop: 12 }}>Pagás solo el tramo que recorrés, no el viaje completo.</p>}
@@ -636,8 +809,8 @@ export default function SolicitarViaje() {
 
       <div className="solicitud-tipo-selector" role="tablist" aria-label="Tipo de solicitud">
         {[
-          { value: 'encomienda', label: 'Encomienda' },
-          { value: 'pasajero', label: 'Pasajero' },
+          { value: 'encomienda', label: 'Enviar una encomienda' },
+          { value: 'pasajero', label: 'Viajar como pasajero' },
         ].map((tipo) => (
           <button
             key={tipo.value}
