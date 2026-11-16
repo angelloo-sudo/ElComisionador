@@ -17,7 +17,18 @@ export function autenticar(req, res, next) {
       return res.status(401).json({ mensaje: 'Token de sesión inválido' })
     }
     if (['cliente', 'comisionista'].includes(req.usuario.rol)) {
-      query(`SELECT u.email_verificado, EXISTS (SELECT 1 FROM verificaciones_identidad v WHERE v.usuario_id = u.id AND v.estado = 'APROBADA_MANUALMENTE') AS identidad_aprobada FROM usuarios u WHERE u.id = $1 AND u.activo = true`, [req.usuario.id])
+      query(
+        `SELECT u.email_verificado,
+                COALESCE((
+                  SELECT v.estado = 'APROBADA_MANUALMENTE'
+                  FROM verificaciones_identidad v
+                  WHERE v.usuario_id = u.id
+                  ORDER BY v.iniciada_en DESC, v.id DESC
+                  LIMIT 1
+                ), false) AS identidad_aprobada
+         FROM usuarios u WHERE u.id = $1 AND u.activo = true`,
+        [req.usuario.id],
+      )
         .then(({ rows }) => {
           if (!rows[0]?.email_verificado) return res.status(403).json({ codigo: 'EMAIL_NO_VERIFICADO', mensaje: 'Verificá tu correo para continuar.' })
           const rutaDeVerificacion = req.baseUrl.endsWith('/verificaciones')

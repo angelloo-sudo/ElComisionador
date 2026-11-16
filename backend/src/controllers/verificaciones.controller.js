@@ -115,12 +115,15 @@ export async function listarAdministrativas(req, res, next) {
     if (req.query.estado && !estado) return res.status(400).json({ mensaje: 'El estado solicitado no es válido' })
     const { rows } = await query(
       `SELECT v.id, v.usuario_id, u.rol, u.nombre, u.apellido, u.email,
-              CASE WHEN u.dni IS NULL THEN NULL ELSE '••••' || RIGHT(regexp_replace(u.dni, '\\D', '', 'g'), 4) END AS dni_cuenta_parcial,
+              u.dni AS dni_cuenta, u.creado_en AS usuario_creado_en,
               v.estado, v.dni_parcial, v.resultado_ocr, v.coincidencias,
+              v.controles_faciales,
               v.iniciada_en, v.actualizada_en, v.enviada_en, v.resuelta_en,
-              v.motivo_resolucion, v.resuelta_por
+              v.motivo_resolucion, v.resuelta_por,
+              CONCAT_WS(' ', admin.nombre, admin.apellido) AS administrador_resolucion
        FROM verificaciones_identidad v JOIN usuarios u ON u.id = v.usuario_id
-       WHERE ($1::text IS NULL OR v.estado = $1)
+       LEFT JOIN usuarios admin ON admin.id = v.resuelta_por
+       WHERE u.rol = 'comisionista' AND ($1::text IS NULL OR v.estado = $1)
        ORDER BY CASE WHEN v.estado = 'PENDIENTE_REVISION' THEN 0 ELSE 1 END, v.enviada_en DESC NULLS LAST, v.iniciada_en DESC`,
       [estado],
     )
@@ -133,12 +136,15 @@ export async function detalleAdministrativo(req, res, next) {
     if (!validarIdVerificacion(req.params.id)) return res.status(400).json({ mensaje: 'La solicitud indicada no es válida' })
     const { rows } = await query(
       `SELECT v.id, v.usuario_id, u.rol, u.nombre, u.apellido, u.email,
-              CASE WHEN u.dni IS NULL THEN NULL ELSE '••••' || RIGHT(regexp_replace(u.dni, '\\D', '', 'g'), 4) END AS dni_cuenta_parcial,
+              u.dni AS dni_cuenta, u.creado_en AS usuario_creado_en,
               v.estado, v.dni_parcial, v.resultado_ocr, v.coincidencias,
+              v.controles_faciales,
               v.iniciada_en, v.actualizada_en, v.enviada_en, v.resuelta_en,
-              v.motivo_resolucion, v.resuelta_por
+              v.motivo_resolucion, v.resuelta_por,
+              CONCAT_WS(' ', admin.nombre, admin.apellido) AS administrador_resolucion
        FROM verificaciones_identidad v JOIN usuarios u ON u.id = v.usuario_id
-       WHERE v.id = $1`,
+       LEFT JOIN usuarios admin ON admin.id = v.resuelta_por
+       WHERE v.id = $1 AND u.rol = 'comisionista'`,
       [req.params.id],
     )
     if (!rows[0]) return res.status(404).json({ mensaje: 'No se encontró la solicitud indicada' })
@@ -156,6 +162,10 @@ export async function resolver(req, res, next) {
       `UPDATE verificaciones_identidad SET estado = $2, motivo_resolucion = $3,
          resuelta_por = $4, resuelta_en = NOW(), actualizada_en = NOW()
        WHERE id = $1 AND estado = 'PENDIENTE_REVISION' AND usuario_id <> $4
+         AND EXISTS (
+           SELECT 1 FROM usuarios u
+           WHERE u.id = verificaciones_identidad.usuario_id AND u.rol = 'comisionista'
+         )
          AND ($2 <> 'APROBADA_MANUALMENTE' OR (
            resultado_ocr = 'legible'
            AND coincidencias->>'nombre' = 'true' AND coincidencias->>'apellido' = 'true' AND coincidencias->>'dni' = 'true'

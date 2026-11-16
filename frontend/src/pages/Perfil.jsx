@@ -187,7 +187,7 @@ export default function Perfil({ onCuentaDadaDeBaja }) {
 
   const esCliente = perfil?.rol === 'cliente'
   const tieneContacto = esCliente || esComisionista // ambos roles dejan DNI y teléfono
-  const etiquetaRol = esComisionista ? 'Comisionista' : 'Cliente'
+  const etiquetaRol = esComisionista ? 'Comisionista' : perfil?.rol === 'administrador' ? 'Administrador' : 'Cliente'
 
   // ---------- Edicion ----------
   if (editando && perfil) {
@@ -313,8 +313,17 @@ export default function Perfil({ onCuentaDadaDeBaja }) {
               <h2>{perfil.nombre} {perfil.apellido || ''}</h2>
               <p className="correo">{perfil.email}</p>
               <div className="badges">
-                <span className="badge">{etiquetaRol}</span>
-                <span className="badge punto verde">Activo</span>
+                {esComisionista ? (
+                  <>
+                    <span className="badge punto verde">Activo</span>
+                    <span className="badge azul">Comisionista</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="badge">{etiquetaRol}</span>
+                    <span className="badge punto verde">Activo</span>
+                  </>
+                )}
               </div>
               {esComisionista && (
                 <p className="perfil-presentacion">

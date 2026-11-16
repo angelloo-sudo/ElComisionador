@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { api } from '../api/client.js'
 import { Mascota } from '../components/ui.jsx'
 import Icon from '../components/Icon.jsx'
-import canguroCabecera from '../assets/canguro-cabecera.png'
 import canguroPortada from '../assets/canguro-portada.gif'
+import logoTransparente from '../assets/logo-comitrack-transparente.png'
 
 const opinionesIniciales = [
   { nombre: 'Lucía M.', rol: 'Cliente', texto: 'Pude coordinar el envío de un paquete con más claridad y seguir cada paso desde el mismo lugar.', ejemplo: true },
@@ -34,7 +34,7 @@ export default function Landing({ onIngresar }) {
     <div className="landing">
       <header className="landing-nav">
         <a className="landing-marca" href="#inicio" aria-label="ComiTrack, inicio">
-          <img className="landing-marca-mascota" src={canguroCabecera} alt="" aria-hidden="true" />
+          <img className="landing-marca-mascota" src={logoTransparente} alt="" aria-hidden="true" />
           <span>ComiTrack</span>
         </a>
         <nav className="landing-links" aria-label="Navegación principal">
@@ -99,11 +99,6 @@ export default function Landing({ onIngresar }) {
                 <p>{opinion.texto}</p>
               </article>)}
             </div>
-            <div className="landing-opinion-form">
-              <h3>Dejá tu opinión</h3>
-              <p>Para que las opiniones sean reales, solo pueden publicarlas clientes y comisionistas registrados. Ingresá a tu cuenta y vas a encontrar el formulario en el Inicio.</p>
-              <button className="landing-cta" type="button" onClick={onIngresar}>Ingresar para opinar <Icon nombre="arrow" tamano={17} /></button>
-            </div>
           </div>
         </section>
 
@@ -111,11 +106,21 @@ export default function Landing({ onIngresar }) {
       </main>
 
       <footer className="landing-footer">
-        <a className="landing-marca landing-marca-footer" href="#inicio"><img className="landing-marca-mascota" src={canguroCabecera} alt="" aria-hidden="true" /><span>ComiTrack</span></a>
+        <a className="landing-marca landing-marca-footer" href="#inicio"><img className="landing-marca-mascota" src={logoTransparente} alt="" aria-hidden="true" /><span>ComiTrack</span></a>
         <div className="landing-contacto">
-          <strong>Soporte y contacto</strong>
-          <a href="mailto:angeldanielprz26@gmail.com">angeldanielprz26@gmail.com</a>
-          <a href="tel:3518122196">351 812-2196</a>
+          <strong>¿Te podemos ayudar?</strong>
+          <a href="mailto:comitrack5@gmail.com">comitrack5@gmail.com</a>
+        </div>
+        <div className="landing-desarrolladores">
+          <strong>Desarrolladores</strong>
+          <ul>
+            <li>Bartolleli, Francisco</li>
+            <li>Jofre, Matias Javier</li>
+            <li>Mansilla, Joaquin</li>
+            <li>Pais, Angel</li>
+            <li>Rogani, Facundo</li>
+            <li>Villafañe, Fabrizio</li>
+          </ul>
         </div>
         <span>Movemos historias, conectamos caminos.</span>
         <a href="#inicio">Volver arriba ↑</a>

@@ -21,6 +21,9 @@ import Landing from './pages/Landing.jsx'
 import Notificaciones from './pages/Notificaciones.jsx'
 import VerificacionIdentidad from './pages/VerificacionIdentidad.jsx'
 import VerificacionesAdmin from './pages/VerificacionesAdmin.jsx'
+import AdminDashboard from './pages/AdminDashboard.jsx'
+import UsuariosAdmin from './pages/UsuariosAdmin.jsx'
+import ActividadAdmin from './pages/ActividadAdmin.jsx'
 import Historiales from './pages/Historiales.jsx'
 import Bienvenida from './components/Bienvenida.jsx'
 import Icon from './components/Icon.jsx'
@@ -49,6 +52,8 @@ function tituloDePagina(ruta, rol) {
   if (ruta.startsWith('/notificaciones')) return 'Notificaciones'
   if (ruta.startsWith('/verificacion')) return 'Verificación de identidad'
   if (ruta.startsWith('/admin/verificaciones')) return 'Revisión de identidad'
+  if (ruta.startsWith('/admin/usuarios')) return 'Gestión de usuarios'
+  if (ruta.startsWith('/admin/actividad')) return 'Actividad e historial'
   if (ruta.startsWith('/solicitudes')) return 'Solicitudes'
   if (ruta.endsWith('/editar')) return 'Modificar viaje'
   if (ruta.startsWith('/viajes/nuevo')) return 'Registrar viaje'
@@ -89,6 +94,8 @@ function PantallaFinal({ tipo, onVolver }) {
 export default function App() {
   const [token, setToken] = useState(() => localStorage.getItem('comitrack_token'))
   const [usuario, setUsuario] = useState(usuarioGuardado)
+  const [rolServidor, setRolServidor] = useState(null)
+  const [errorPerfil, setErrorPerfil] = useState('')
   const [pantallaFinal, setPantallaFinal] = useState(null) // null | 'cerrada' | 'baja'
   const [confirmandoSalida, setConfirmandoSalida] = useState(false)
   const [mostrarBienvenida, setMostrarBienvenida] = useState(false)
@@ -98,12 +105,36 @@ export default function App() {
   const ubicacion = useLocation()
   const navegar = useNavigate()
   const cerrarBienvenida = useCallback(() => setMostrarBienvenida(false), [])
-  const esCliente = usuario?.rol === 'cliente'
+  const rolEfectivo = rolServidor ?? (usuario?.rol === 'administrador' ? null : usuario?.rol)
+  const esCliente = rolEfectivo === 'cliente'
 
   useEffect(() => {
-    if (!token) { setFotoPerfil(''); return undefined }
+    if (!token) {
+      setFotoPerfil('')
+      setRolServidor(null)
+      setErrorPerfil('')
+      return undefined
+    }
     let vigente = true
-    api.get('/auth/perfil').then((p) => { if (vigente) setFotoPerfil(p?.foto_perfil ?? '') }).catch(() => {})
+    api.get('/auth/perfil').then((p) => {
+      if (!vigente) return
+      if (!p || typeof p.rol !== 'string') {
+        throw new Error('El perfil no devolvió un rol válido.')
+      }
+      const { foto_perfil, ...usuarioLiviano } = p
+      delete usuarioLiviano.presentacion
+      setUsuario(usuarioLiviano)
+      localStorage.setItem('comitrack_usuario', JSON.stringify(usuarioLiviano))
+      setRolServidor(p.rol)
+      setErrorPerfil('')
+      setFotoPerfil(foto_perfil ?? '')
+    }).catch((error) => {
+      if (!vigente) return
+      if (usuarioGuardado()?.rol === 'administrador') {
+        setErrorPerfil(error.message || 'No se pudo validar el rol de la cuenta.')
+      }
+      console.error('No se pudo validar la sesión:', error)
+    })
     const alActualizar = (evento) => {
       setUsuario(usuarioGuardado())
       setFotoPerfil(evento.detail?.foto_perfil ?? '')
@@ -145,6 +176,8 @@ export default function App() {
         onAuthenticated={() => {
           setToken(localStorage.getItem('comitrack_token'))
           setUsuario(usuarioGuardado())
+          setRolServidor(null)
+          setErrorPerfil('')
           setMostrarBienvenida(true)
           navegar('/')
         }}
@@ -158,6 +191,8 @@ export default function App() {
     cerrarSesion()
     setToken(null)
     setUsuario(null)
+    setRolServidor(null)
+    setErrorPerfil('')
     setConfirmandoSalida(false)
     // El cierre de sesión debe volver directamente al formulario de acceso.
     // La pantalla final se conserva para confirmar una baja de cuenta.
@@ -165,8 +200,24 @@ export default function App() {
     navegar('/')
   }
 
+  if (token && usuario?.rol === 'administrador' && rolServidor === null) {
+    if (errorPerfil) {
+      return (
+        <main className="auth-pagina">
+          <div className="auth-card auth-centro">
+            <span className="icono-caja rojo"><Icon nombre="alert" tamano={26} /></span>
+            <h1>No se pudo validar la cuenta</h1>
+            <p>{errorPerfil}</p>
+            <button type="button" className="btn btn-primario" onClick={() => salir('cerrada')}>Cerrar sesión</button>
+          </div>
+        </main>
+      )
+    }
+    return <main className="auth-pagina"><p className="campo-ayuda">Verificando los permisos de la cuenta…</p></main>
+  }
+
   // Clientes gestionan encomiendas y traslados; comisionistas revisan envíos y viajes.
-  const esComisionista = usuario?.rol === 'comisionista' || usuario?.rol === 'administrador'
+  const esComisionista = rolEfectivo === 'comisionista'
   const nombreCompleto = `${usuario?.nombre ?? ''} ${usuario?.apellido ?? ''}`.trim()
   const claseNav = ({ isActive }) => `nav-item${isActive ? ' activo' : ''}`
 
@@ -185,7 +236,7 @@ export default function App() {
             <NavLink to="/perfil" className={({ isActive }) => `topbar-usuario topbar-usuario-enlace${isActive ? ' activo' : ''}`} aria-label="Mi perfil" title="Mi perfil">
               <div>
                 <strong>{nombreCompleto || usuario?.email}</strong>
-                <span>{usuario?.rol === 'administrador' ? 'Administrador' : esComisionista ? 'Comisionista' : 'Cliente'}</span>
+                <span>{rolEfectivo === 'administrador' ? 'Administrador' : esComisionista ? 'Comisionista' : 'Cliente'}</span>
               </div>
               <Avatar foto={fotoPerfil} nombre={usuario?.nombre ?? ''} apellido={usuario?.apellido ?? ''} tamano={40} />
             </NavLink>
@@ -195,44 +246,49 @@ export default function App() {
           </div>
         </div>
         <nav className="nav-lista barra-navegacion" aria-label="Navegación principal">
-          <NavLink to="/" end className={claseNav}><Icon nombre="grid" /> {usuario?.rol === 'administrador' ? 'Resumen' : 'Inicio'}</NavLink>
+          <NavLink to="/" end className={claseNav}><Icon nombre="grid" /> {rolEfectivo === 'administrador' ? 'Resumen' : 'Inicio'}</NavLink>
           {esComisionista && <NavLink to="/viajes" className={claseNav}><Icon nombre="logo" /> Viajes</NavLink>}
           {esComisionista && <NavLink to="/solicitudes" className={claseNav}><Icon nombre="checkcircle" /> Solicitudes</NavLink>}
           {esComisionista && <NavLink to="/clientes" className={claseNav}><Icon nombre="users" /> Clientes</NavLink>}
-          {usuario?.rol === 'comisionista' && <NavLink to="/historial/viajes" className={({ isActive }) => claseNav({ isActive: isActive || ubicacion.pathname.startsWith('/historial') })}><Icon nombre="history" /> Historial</NavLink>}
-          {usuario?.rol === 'comisionista' && <NavLink to="/tarifa" className={claseNav}><Icon nombre="tag" /> Tarifa</NavLink>}
-          {usuario?.rol === 'comisionista' && <NavLink to="/ingresos" className={claseNav}><Icon nombre="wallet" /> Ingresos</NavLink>}
-          {usuario?.rol === 'comisionista' && <NavLink to="/gastos" className={claseNav}><Icon nombre="wallet" /> Gastos</NavLink>}
-          {usuario?.rol === 'comisionista' && <NavLink to="/rentabilidad" className={({ isActive }) => claseNav({ isActive: isActive || ubicacion.pathname.startsWith('/reportes-rentabilidad') })}><Icon nombre="wallet" /> Rentabilidad</NavLink>}
-          {usuario?.rol === 'cliente' && <NavLink to="/mis-traslados" className={claseNav}><Icon nombre="logo" /> Viajes</NavLink>}
-          {usuario?.rol === 'cliente' && <NavLink to="/notificaciones" className={claseNav} aria-label={`Notificaciones${notificacionesNoLeidas ? `, ${notificacionesNoLeidas} sin leer` : ''}`}><Icon nombre="bell" /> Notificaciones{notificacionesNoLeidas > 0 && <span className="notificacion-contador">{notificacionesNoLeidas}</span>}</NavLink>}
-          {usuario?.rol === 'comisionista' && <NavLink to="/verificacion" className={claseNav}><Icon nombre="idcard" /> Verificación</NavLink>}
-          {usuario?.rol === 'administrador' && <NavLink to="/admin/verificaciones" className={claseNav}><Icon nombre="idcard" /> Verificaciones</NavLink>}
+          {rolEfectivo === 'comisionista' && <NavLink to="/historial/viajes" className={({ isActive }) => claseNav({ isActive: isActive || ubicacion.pathname.startsWith('/historial') })}><Icon nombre="history" /> Historial</NavLink>}
+          {rolEfectivo === 'comisionista' && <NavLink to="/tarifa" className={claseNav}><Icon nombre="tag" /> Tarifa</NavLink>}
+          {rolEfectivo === 'comisionista' && <NavLink to="/ingresos" className={claseNav}><Icon nombre="wallet" /> Ingresos</NavLink>}
+          {rolEfectivo === 'comisionista' && <NavLink to="/gastos" className={claseNav}><Icon nombre="wallet" /> Gastos</NavLink>}
+          {rolEfectivo === 'comisionista' && <NavLink to="/rentabilidad" className={({ isActive }) => claseNav({ isActive: isActive || ubicacion.pathname.startsWith('/reportes-rentabilidad') })}><Icon nombre="wallet" /> Rentabilidad</NavLink>}
+          {rolEfectivo === 'cliente' && <NavLink to="/mis-traslados" className={claseNav}><Icon nombre="logo" /> Viajes</NavLink>}
+          {rolEfectivo === 'cliente' && <NavLink to="/notificaciones" className={claseNav} aria-label={`Notificaciones${notificacionesNoLeidas ? `, ${notificacionesNoLeidas} sin leer` : ''}`}><Icon nombre="bell" /> Notificaciones{notificacionesNoLeidas > 0 && <span className="notificacion-contador">{notificacionesNoLeidas}</span>}</NavLink>}
+          {rolEfectivo === 'comisionista' && <NavLink to="/verificacion" className={claseNav}><Icon nombre="idcard" /> Verificación</NavLink>}
+          {rolEfectivo === 'administrador' && <NavLink to="/admin/usuarios" className={claseNav}><Icon nombre="users" /> Usuarios</NavLink>}
+          {rolEfectivo === 'administrador' && <NavLink to="/admin/verificaciones" className={claseNav}><Icon nombre="idcard" /> Verificaciones</NavLink>}
+          {rolEfectivo === 'administrador' && <NavLink to="/admin/actividad" className={claseNav}><Icon nombre="history" /> Actividad e historial</NavLink>}
         </nav>
       </header>
 
       <div className="principal">
         <main className="contenido">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={rolEfectivo === 'administrador' ? <AdminDashboard /> : <Dashboard />} />
             {esComisionista && <Route path="/viajes" element={<Viajes />} />}
             {esComisionista && <Route path="/viajes/nuevo" element={<ViajeNuevo />} />}
             {esComisionista && <Route path="/viajes/:id/editar" element={<ViajeEditar />} />}
             {esComisionista && <Route path="/solicitudes" element={<Postulaciones />} />}
             {esComisionista && <Route path="/clientes" element={<Clientes />} />}
-            {usuario?.rol === 'comisionista' && <Route path="/historial/:seccion" element={<Historiales />} />}
-            {usuario?.rol === 'comisionista' && <Route path="/tarifa" element={<Tarifa />} />}
-            {usuario?.rol === 'comisionista' && <Route path="/ingresos" element={<Ingresos />} />}
-            {usuario?.rol === 'comisionista' && <Route path="/gastos" element={<Gastos />} />}
-            {usuario?.rol === 'comisionista' && <Route path="/rentabilidad" element={<ReporteRentabilidad />} />}
-            {usuario?.rol === 'comisionista' && <Route path="/reportes-rentabilidad" element={<Navigate to="/rentabilidad" replace />} />}
-            {usuario?.rol === 'comisionista' && <Route path="/reportes-rentabilidad/:id" element={<ReporteRentabilidadDetalle />} />}
-            {usuario?.rol === 'cliente' && <Route path="/mis-traslados" element={<MisTraslados />} />}
-            {usuario?.rol === 'cliente' && <Route path="/notificaciones" element={<Notificaciones />} />}
-            {usuario?.rol === 'cliente' && <Route path="/mis-traslados/solicitar/:id" element={<SolicitarViaje />} />}
-            {usuario?.rol === 'comisionista' && <Route path="/verificacion" element={<VerificacionIdentidad />} />}
-            {usuario?.rol === 'administrador' && <Route path="/admin/verificaciones" element={<VerificacionesAdmin />} />}
+            {rolEfectivo === 'comisionista' && <Route path="/historial/:seccion" element={<Historiales />} />}
+            {rolEfectivo === 'comisionista' && <Route path="/tarifa" element={<Tarifa />} />}
+            {rolEfectivo === 'comisionista' && <Route path="/ingresos" element={<Ingresos />} />}
+            {rolEfectivo === 'comisionista' && <Route path="/gastos" element={<Gastos />} />}
+            {rolEfectivo === 'comisionista' && <Route path="/rentabilidad" element={<ReporteRentabilidad />} />}
+            {rolEfectivo === 'comisionista' && <Route path="/reportes-rentabilidad" element={<Navigate to="/rentabilidad" replace />} />}
+            {rolEfectivo === 'comisionista' && <Route path="/reportes-rentabilidad/:id" element={<ReporteRentabilidadDetalle />} />}
+            {rolEfectivo === 'cliente' && <Route path="/mis-traslados" element={<MisTraslados />} />}
+            {rolEfectivo === 'cliente' && <Route path="/notificaciones" element={<Notificaciones />} />}
+            {rolEfectivo === 'cliente' && <Route path="/mis-traslados/solicitar/:id" element={<SolicitarViaje />} />}
+            {rolEfectivo === 'comisionista' && <Route path="/verificacion" element={<VerificacionIdentidad />} />}
+            {rolEfectivo === 'administrador' && <Route path="/admin/usuarios" element={<UsuariosAdmin />} />}
+            {rolEfectivo === 'administrador' && <Route path="/admin/verificaciones" element={<VerificacionesAdmin />} />}
+            {rolEfectivo === 'administrador' && <Route path="/admin/actividad" element={<ActividadAdmin />} />}
             <Route path="/perfil" element={<Perfil onCuentaDadaDeBaja={() => salir('baja')} />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
       </div>

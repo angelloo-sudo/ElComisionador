@@ -14,6 +14,7 @@ import notificacionesRoutes from './notificaciones.routes.js'
 import verificacionesRoutes from './verificaciones.routes.js'
 import historialRoutes from './historial.routes.js'
 import opinionesRoutes from './opiniones.routes.js'
+import adminRoutes from './admin.routes.js'
 
 const router = Router()
 
@@ -32,5 +33,6 @@ router.use('/notificaciones', notificacionesRoutes)
 router.use('/verificaciones', verificacionesRoutes)
 router.use('/historial', historialRoutes)
 router.use('/opiniones', opinionesRoutes)
+router.use('/admin', adminRoutes)
 
 export default router
