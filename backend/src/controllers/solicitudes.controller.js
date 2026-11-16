@@ -13,6 +13,7 @@ import { lugaresEnTramo } from '../services/capacidad-tramo.service.js'
 
 const TZ = "NOW() AT TIME ZONE 'America/Argentina/Cordoba'"
 const INICIO = "(v.fecha + COALESCE(v.hora_salida, TIME '00:00'))"
+const TAMANO_A_MINIMO = { pequeno: 'chica', mediano: 'mediana', grande: 'grande' }
 const LOCALIDAD_NORMALIZADA_SQL = (expresion) => `translate(lower(${expresion}), 'áéíóúüñ', 'aeiouun')`
 const normalizarLocalidad = (localidad) => String(localidad ?? '')
   .normalize('NFD')
@@ -176,6 +177,7 @@ const precioDePersona = (precioKm, km) => calcularMonto({ precioKm, distanciaKm:
 async function datosDeViaje(viajeId) {
   const { rows } = await query(
     `SELECT v.id, v.origen, v.destino, v.hora_salida, v.distancia_km, v.duracion_min, v.cupo_total, cm.precio_km,
+            cm.monto_minimo_encomienda_chica, cm.monto_minimo_encomienda_mediana, cm.monto_minimo_encomienda_grande,
             COALESCE((SELECT json_agg(json_build_object('localidad', p.localidad) ORDER BY p.orden)
                       FROM paradas_viaje p WHERE p.viaje_id = v.id), '[]'::json) AS paradas
      FROM viajes v LEFT JOIN comisionistas cm ON cm.usuario_id = v.usuario_id WHERE v.id = $1`,
@@ -203,7 +205,7 @@ async function tramoDeSolicitud(viaje, desde, hasta, direcciones = {}) {
 }
 
 // GET /api/solicitudes/viajes-disponibles/:viajeId/tramo?desde=Localidad&hasta=Localidad  (cliente)
-// Responde el precio por persona del tramo y la parte de la ruta para dibujarla en el mapa. No expone la tarifa ni los km.
+// Responde el precio por persona, los km recorridos y la parte de la ruta. No expone la tarifa por km.
 export async function tramoDeViaje(req, res, next) {
   try {
     const viajeId = Number(req.params.viajeId)
@@ -230,6 +232,12 @@ export async function tramoDeViaje(req, res, next) {
     res.json({
       estado: 'ok',
       precio_persona: precio,
+      distancia_km: r.distancia_km,
+      minimos_encomienda: {
+        chica: viaje.monto_minimo_encomienda_chica != null ? Number(viaje.monto_minimo_encomienda_chica) : null,
+        mediana: viaje.monto_minimo_encomienda_mediana != null ? Number(viaje.monto_minimo_encomienda_mediana) : null,
+        grande: viaje.monto_minimo_encomienda_grande != null ? Number(viaje.monto_minimo_encomienda_grande) : null,
+      },
       completo: r.tramo === null,
       desde: r.tramo?.desde ?? null,
       hasta: r.tramo?.hasta ?? null,
@@ -275,17 +283,18 @@ export async function crear(req, res, next) {
 
   // Localidad de subida/retiro y de bajada/entrega: si no se eligio otra, las del viaje (recorrido completo).
   let tarifa
+  let viajeTarifa
   try {
-    const viaje = await datosDeViaje(viajeId)
-    if (!viaje) return res.status(404).json({ mensaje: 'No se encontró el viaje solicitado' })
-    datos.origen_localidad = datos.origen_localidad ?? viaje.origen
-    datos.destino_localidad = datos.destino_localidad ?? viaje.destino
+    viajeTarifa = await datosDeViaje(viajeId)
+    if (!viajeTarifa) return res.status(404).json({ mensaje: 'No se encontró el viaje solicitado' })
+    datos.origen_localidad = datos.origen_localidad ?? viajeTarifa.origen
+    datos.destino_localidad = datos.destino_localidad ?? viajeTarifa.destino
 
     const direccionMala = await direccionesInexistentes(datos)
     if (direccionMala) return res.status(400).json({ mensaje: direccionMala })
 
     // Km del tramo y tarifa del comisionista (si el viaje no tenia ruta calculada, se completa ahora).
-    tarifa = await tramoDeSolicitud(viaje, datos.origen_localidad, datos.destino_localidad, {
+    tarifa = await tramoDeSolicitud(viajeTarifa, datos.origen_localidad, datos.destino_localidad, {
       desdeCalle: datos.origen_calle, desdeAltura: datos.origen_altura, desdeCp: datos.origen_codigo_postal,
       hastaCalle: datos.destino_calle, hastaAltura: datos.destino_altura, hastaCp: datos.destino_codigo_postal,
     })
@@ -337,10 +346,15 @@ export async function crear(req, res, next) {
       }
     }
 
-    // Monto = precio por km del comisionista x distancia (x cantidad de pasajeros). Se guarda con la
-    // tarifa vigente: si despues la cambia, esta solicitud no cambia de precio.
+    // El monto se guarda con la tarifa vigente, sin cambiar si el comisionista modifica sus precios después.
     const monto = calcularMonto({
-      precioKm: tarifa.precio_km, distanciaKm: tarifa.distancia_km, tipo: datos.tipo, cantidad: datos.cantidad_pasajeros,
+      precioKm: tarifa.precio_km,
+      distanciaKm: tarifa.distancia_km,
+      tipo: datos.tipo,
+      cantidad: datos.cantidad_pasajeros,
+      montoMinimo: datos.tipo === 'encomienda'
+        ? viajeTarifa[`monto_minimo_encomienda_${TAMANO_A_MINIMO[datos.tamano]}`] ?? 0
+        : 0,
     })
     const columnas = ['viaje_id', 'cliente_id', ...COLUMNAS_SOLICITUD, 'distancia_km', 'precio_km', 'monto']
     const valores = [viajeId, clienteId, ...COLUMNAS_SOLICITUD.map((c) => datos[c] ?? null),
@@ -348,7 +362,7 @@ export async function crear(req, res, next) {
     const marcadores = columnas.map((_, i) => `$${i + 1}`)
     const { rows } = await db.query(
       `INSERT INTO solicitudes_viaje (${columnas.join(', ')}) VALUES (${marcadores.join(', ')})
-       RETURNING id, viaje_id, tipo, estado, monto`,
+       RETURNING id, viaje_id, tipo, estado, monto, distancia_km`,
       valores,
     )
     return { status: 201, body: rows[0] }

@@ -8,7 +8,7 @@ import Icon from '../components/Icon.jsx'
 import { Campo, Alerta, formatoFecha } from '../components/ui.jsx'
 import { codigoViaje } from './ViajeNuevo.jsx'
 import MapaRuta from '../components/MapaRuta.jsx'
-import { formatoDuracion, formatoPesos } from '../utils/tarifa.js'
+import { formatoDuracion, formatoKm, formatoPesos } from '../utils/tarifa.js'
 
 const FORM_INICIAL = {
   // pasajero
@@ -32,6 +32,7 @@ const TAMANOS_PAQUETE = {
   mediano: 'Equivale a una caja chica de mudanza',
   grande: 'Equivale a un televisor de 40 pulgadas',
 }
+const TAMANO_A_MINIMO = { pequeno: 'chica', mediano: 'mediana', grande: 'grande' }
 
 const MAX_UNIDADES_EQUIPAJE = 10
 const OPCIONES_TAMANO_EQUIPAJE = [
@@ -311,7 +312,13 @@ function FormularioSolicitud({ tipo, viaje, locInicial, perfil, errorPerfil, blo
   // Total a pagar: el precio por persona lo calcula el sistema; con varios pasajeros se multiplica.
   const viajeCompleto = loc.origen === viaje.origen && loc.destino === viaje.destino
   const precioPersona = tramo?.estado === 'ok' ? tramo.precio_persona : (viajeCompleto && tramo?.estado !== 'invalido' ? viaje.precio_pasajero : null)
-  const monto = precioPersona == null ? null : Math.round(Number(precioPersona) * (esPasajero ? Math.max(cantidad, 1) : 1) * 100) / 100
+  const claveMinimo = TAMANO_A_MINIMO[form.tamano]
+  const minimoEncomienda = claveMinimo && tramo?.estado === 'ok'
+    ? Number(tramo.minimos_encomienda?.[claveMinimo] ?? 0)
+    : null
+  const monto = precioPersona == null || (!esPasajero && minimoEncomienda === null)
+    ? null
+    : Math.round((Number(precioPersona) * (esPasajero ? Math.max(cantidad, 1) : 1) + (esPasajero ? 0 : minimoEncomienda)) * 100) / 100
   const tramoInvalido = tramo?.estado === 'invalido'
   const direccionResumen = (prefijo) => {
     const calle = form[`${prefijo}_calle`].trim()
@@ -405,7 +412,13 @@ function FormularioSolicitud({ tipo, viaje, locInicial, perfil, errorPerfil, blo
               receptor_nombre: form.receptor_nombre, receptor_apellido: form.receptor_apellido, receptor_telefono: form.receptor_telefono }),
       }
       const creada = await api.post('/solicitudes', payload)
-      setEnviada({ cantidad, monto: creada?.monto ?? null, desde: direccionResumen('origen'), hasta: direccionResumen('destino') })
+      setEnviada({
+        cantidad,
+        monto: creada?.monto ?? null,
+        distanciaKm: creada?.distancia_km ?? null,
+        desde: direccionResumen('origen'),
+        hasta: direccionResumen('destino'),
+      })
       onEnviada?.()
     } catch (err) {
       setErrorGeneral({ tipo: /ya tenés|quedan|cupos|inici|programad/i.test(err.message) ? 'aviso' : 'error', titulo: 'No se pudo enviar la solicitud', texto: err.message })
@@ -435,6 +448,7 @@ function FormularioSolicitud({ tipo, viaje, locInicial, perfil, errorPerfil, blo
           <div className="exito-detalle">
             <div className="resumen-fila"><span>{esPasajero ? 'Subís en' : 'Se retira en'}</span><strong>{enviada.desde}</strong></div>
             <div className="resumen-fila"><span>{esPasajero ? 'Bajás en' : 'Se entrega en'}</span><strong>{enviada.hasta}</strong></div>
+            <div className="resumen-fila"><span>Distancia del tramo</span><strong>{formatoKm(enviada.distanciaKm)}</strong></div>
             {esPasajero && <div className="resumen-fila"><span>Pasajeros</span><strong>{enviada.cantidad}</strong></div>}
             <div className="resumen-fila"><span>Monto</span><strong>{enviada.monto == null ? 'A convenir con el comisionista' : formatoPesos(enviada.monto)}</strong></div>
             <div className="resumen-fila"><span>Estado</span><span className="badge punto ambar">Pendiente</span></div>
@@ -469,7 +483,7 @@ function FormularioSolicitud({ tipo, viaje, locInicial, perfil, errorPerfil, blo
     <div className="seccion">
       <p className="seccion-titulo">{titulo}</p>
       <div style={{ marginBottom: 16 }}>
-        <div className="localidad-fija"><Icon nombre="pin" tamano={16} /><span>Localidad</span><strong>{loc[prefijo]}</strong></div>
+        <div className="localidad-fija"><Icon nombre="pin" tamano={16} /><strong>{loc[prefijo]}</strong></div>
         {loc[prefijo] && loc[prefijo] !== (prefijo === 'origen' ? viaje.origen : viaje.destino) && (
           <p className="paradas-ayuda">Es una parada intermedia: el viaje va de {viaje.origen} a {viaje.destino}.</p>
         )}
@@ -656,6 +670,7 @@ function FormularioSolicitud({ tipo, viaje, locInicial, perfil, errorPerfil, blo
           <p className="seccion-titulo">Precio</p>
           <div className="resumen-fila"><span>{esPasajero ? 'Subís en' : 'Se retira en'}</span><strong>{direccionResumen('origen')}</strong></div>
           <div className="resumen-fila"><span>{esPasajero ? 'Bajás en' : 'Se entrega en'}</span><strong>{direccionResumen('destino')}</strong></div>
+          <div className="resumen-fila"><span>Distancia del tramo</span><strong>{formatoKm(tramo?.estado === 'ok' ? tramo.distancia_km : null)}</strong></div>
           <div className="precio-total"><span>Total a pagar</span><strong>{monto == null ? '—' : formatoPesos(monto)}</strong></div>
           {monto == null && !tramoInvalido && tramo?.estado !== 'cargando' && <p className="nota-resumen" style={{ marginTop: 12 }}>El monto se acuerda con el comisionista.</p>}
           {!tramoInvalido && !viajeCompleto && monto != null && <p className="nota-resumen" style={{ marginTop: 12 }}>Pagás solo el tramo que recorrés, no el viaje completo.</p>}

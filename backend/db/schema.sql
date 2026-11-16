@@ -50,6 +50,9 @@ CREATE TABLE IF NOT EXISTS comisionistas (
   presentacion  TEXT,
   foto_perfil   TEXT,
   precio_km     NUMERIC(10,2) CHECK (precio_km IS NULL OR precio_km > 0),
+  monto_minimo_encomienda_chica   NUMERIC(12,2) CHECK (monto_minimo_encomienda_chica IS NULL OR monto_minimo_encomienda_chica >= 0),
+  monto_minimo_encomienda_mediana NUMERIC(12,2) CHECK (monto_minimo_encomienda_mediana IS NULL OR monto_minimo_encomienda_mediana >= 0),
+  monto_minimo_encomienda_grande  NUMERIC(12,2) CHECK (monto_minimo_encomienda_grande IS NULL OR monto_minimo_encomienda_grande >= 0),
   creado_en     TIMESTAMP DEFAULT NOW()
 );
 
@@ -220,6 +223,7 @@ CREATE TABLE IF NOT EXISTS solicitudes_viaje (
   ancho_cm              NUMERIC(8,2) CHECK (ancho_cm > 0),
   largo_cm              NUMERIC(8,2) CHECK (largo_cm > 0),
   profundidad_cm        NUMERIC(8,2) CHECK (profundidad_cm > 0),
+  tamano                VARCHAR(10) CHECK (tamano IN ('pequeno', 'mediano', 'grande')),
   emisor_nombre         VARCHAR(120),
   emisor_apellido       VARCHAR(120),
   emisor_telefono       VARCHAR(40),
@@ -363,6 +367,9 @@ CREATE INDEX IF NOT EXISTS gastos_tipo_gasto_idx ON gastos (tipo_gasto_id);
 -- Columnas agregadas despues (tarifa por km y duracion automatica). En una base nueva ya vienen en
 -- los CREATE TABLE de arriba; en una base existente se agregan aca. No modifica datos.
 ALTER TABLE comisionistas     ADD COLUMN IF NOT EXISTS precio_km    NUMERIC(10,2);
+ALTER TABLE comisionistas     ADD COLUMN IF NOT EXISTS monto_minimo_encomienda_chica   NUMERIC(12,2) CHECK (monto_minimo_encomienda_chica IS NULL OR monto_minimo_encomienda_chica >= 0);
+ALTER TABLE comisionistas     ADD COLUMN IF NOT EXISTS monto_minimo_encomienda_mediana NUMERIC(12,2) CHECK (monto_minimo_encomienda_mediana IS NULL OR monto_minimo_encomienda_mediana >= 0);
+ALTER TABLE comisionistas     ADD COLUMN IF NOT EXISTS monto_minimo_encomienda_grande  NUMERIC(12,2) CHECK (monto_minimo_encomienda_grande IS NULL OR monto_minimo_encomienda_grande >= 0);
 ALTER TABLE viajes            ADD COLUMN IF NOT EXISTS distancia_km NUMERIC(8,1);
 ALTER TABLE viajes            ADD COLUMN IF NOT EXISTS duracion_min INTEGER;
 ALTER TABLE solicitudes_viaje ADD COLUMN IF NOT EXISTS distancia_km NUMERIC(8,1);

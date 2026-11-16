@@ -11,13 +11,15 @@ const redondear2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100
 
 // Monto en pesos (2 decimales) o null si falta algun dato.
 //  - pasajero: precio_km x km x cantidad de pasajeros
-//  - encomienda: precio_km x km (una sola vez)
-export function calcularMonto({ precioKm, distanciaKm, tipo = 'pasajero', cantidad = 1 }) {
+//  - encomienda: minimo por tamano + precio_km x km (una sola vez)
+export function calcularMonto({ precioKm, distanciaKm, tipo = 'pasajero', cantidad = 1, montoMinimo = 0 }) {
   const precio = Number(precioKm)
   const km = Number(distanciaKm)
   if (precioKm == null || distanciaKm == null || !Number.isFinite(precio) || !Number.isFinite(km) || precio <= 0 || km <= 0) return null
   const personas = tipo === 'pasajero' ? Math.max(1, Number(cantidad) || 1) : 1
-  return redondear2(precio * km * personas)
+  const minimo = tipo === 'encomienda' ? Number(montoMinimo ?? 0) : 0
+  if (!Number.isFinite(minimo) || minimo < 0) return null
+  return redondear2(minimo + precio * km * personas)
 }
 
 // Suma minutos a una hora "HH:MM" y devuelve la hora local de llegada, incluso si cruza medianoche.

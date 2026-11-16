@@ -20,7 +20,15 @@ const SELECT_PERFIL = `
   SELECT u.id, u.nombre, u.apellido, u.email, u.rol, u.activo, u.creado_en,
          u.dni,
          COALESCE(c.telefono, m.telefono) AS telefono,
-         m.presentacion, COALESCE(c.foto_perfil, m.foto_perfil) AS foto_perfil
+         m.presentacion, COALESCE(c.foto_perfil, m.foto_perfil) AS foto_perfil,
+         CASE WHEN EXISTS (
+           SELECT 1 FROM verificaciones_identidad v
+           WHERE v.usuario_id = u.id AND v.estado = 'APROBADA_MANUALMENTE'
+         ) THEN 'APROBADA_MANUALMENTE'
+         ELSE (
+           SELECT v.estado FROM verificaciones_identidad v
+           WHERE v.usuario_id = u.id ORDER BY v.iniciada_en DESC LIMIT 1
+         ) END AS estado_verificacion
   FROM usuarios u
   LEFT JOIN clientes c ON c.usuario_id = u.id
   LEFT JOIN comisionistas m ON m.usuario_id = u.id
@@ -109,7 +117,11 @@ function datosPerfil(fila, { conPerfilPublico = false } = {}) {
     telefono: fila.telefono,
     activo: fila.activo,
     creado_en: fila.creado_en,
-    ...(conPerfilPublico && { presentacion: fila.presentacion, foto_perfil: fila.foto_perfil }),
+    ...(conPerfilPublico && {
+      presentacion: fila.presentacion,
+      foto_perfil: fila.foto_perfil,
+      estado_verificacion: fila.estado_verificacion,
+    }),
   }
 }
 

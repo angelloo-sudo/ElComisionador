@@ -6,6 +6,14 @@ import Icon from '../components/Icon.jsx'
 import { Alerta, Campo, Toast } from '../components/ui.jsx'
 import { formatoPesos } from '../utils/tarifa.js'
 
+const TAMANOS_ENCOMIENDA = [
+  { clave: 'chica', etiqueta: 'Chica' },
+  { clave: 'mediana', etiqueta: 'Mediana' },
+  { clave: 'grande', etiqueta: 'Grande' },
+]
+const MINIMOS_VACIOS = { chica: '', mediana: '', grande: '' }
+const MAXIMO_MONTO_MINIMO = 9_999_999_999.99
+
 // "350,5" / "350.5" / "1.250,50" -> 350.5 (null si no es un numero valido)
 function aNumero(texto) {
   const limpio = String(texto).trim().replace(/\s/g, '')
@@ -18,6 +26,8 @@ function aNumero(texto) {
 export default function Tarifa() {
   const [guardado, setGuardado] = useState(undefined) // undefined = cargando, null = sin tarifa
   const [texto, setTexto] = useState('')
+  const [minimosGuardados, setMinimosGuardados] = useState(null)
+  const [minimosTexto, setMinimosTexto] = useState(MINIMOS_VACIOS)
   const [error, setError] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
   const [guardando, setGuardando] = useState(false)
@@ -25,25 +35,58 @@ export default function Tarifa() {
 
   useEffect(() => {
     api.get('/tarifa')
-      .then((t) => { setGuardado(t.precio_km); setTexto(t.precio_km ? String(t.precio_km).replace('.', ',') : '') })
-      .catch((e) => { setErrorCarga(e.message); setGuardado(null) })
+      .then((t) => {
+        const minimos = Object.fromEntries(TAMANOS_ENCOMIENDA.map(({ clave }) => [clave, t.minimos_encomienda?.[clave] ?? null]))
+        setGuardado(t.precio_km)
+        setTexto(t.precio_km != null ? String(t.precio_km).replace('.', ',') : '')
+        setMinimosGuardados(minimos)
+        setMinimosTexto(Object.fromEntries(TAMANOS_ENCOMIENDA.map(({ clave }) => [
+          clave, minimos[clave] != null ? String(minimos[clave]).replace('.', ',') : '',
+        ])))
+      })
+      .catch((e) => {
+        setErrorCarga(e.message)
+        setGuardado(null)
+        setMinimosGuardados({ chica: null, mediana: null, grande: null })
+      })
   }, [])
 
   const numero = aNumero(texto)
-  const sinCambios = (numero ?? null) === (guardado ?? null)
+  const minimosActuales = Object.fromEntries(TAMANOS_ENCOMIENDA.map(({ clave }) => [clave, aNumero(minimosTexto[clave])]))
+  const minimosSinCambios = minimosGuardados !== null && TAMANOS_ENCOMIENDA.every(({ clave }) => (
+    (minimosActuales[clave] ?? null) === minimosGuardados[clave]
+  ))
+  const sinCambios = (numero ?? null) === (guardado ?? null) && minimosSinCambios
 
   async function guardar(e) {
     e.preventDefault()
     setError(null)
-    if (numero === null) return setError('Ingresá el precio por km (por ejemplo 350 o 350,50).')
-    if (Number.isNaN(numero) || numero <= 0) return setError('El precio por km debe ser un número mayor a 0, con hasta 2 decimales.')
+    if (numero === null && guardado !== null) return setError('Ingresá el precio por km (por ejemplo 350 o 350,50).')
+    if (numero !== null && (Number.isNaN(numero) || numero <= 0)) return setError('El precio por km debe ser un número mayor a 0, con hasta 2 decimales.')
     if (numero > 1000000) return setError('Ese precio por km es demasiado alto.')
+
+    const minimos = {}
+    for (const { clave, etiqueta } of TAMANOS_ENCOMIENDA) {
+      const monto = minimosActuales[clave]
+      if (Number.isNaN(monto) || (monto !== null && (monto < 0 || monto > MAXIMO_MONTO_MINIMO))) {
+        return setError(`El monto mínimo para encomienda ${etiqueta.toLowerCase()} debe ser un número entre 0 y ${MAXIMO_MONTO_MINIMO}.`)
+      }
+      minimos[clave] = monto
+    }
+
     setGuardando(true)
     try {
-      const r = await api.put('/tarifa', { precio_km: numero })
+      const r = await api.put('/tarifa', { precio_km: numero ?? guardado, minimos_encomienda: minimos })
       setGuardado(r.precio_km)
-      setTexto(String(r.precio_km).replace('.', ','))
-      setToast({ titulo: 'Tarifa guardada', texto: `Tu precio por km ahora es ${formatoPesos(r.precio_km)}. Se aplica a las nuevas postulaciones.` })
+      setTexto(r.precio_km != null ? String(r.precio_km).replace('.', ',') : '')
+      setMinimosGuardados(r.minimos_encomienda)
+      setMinimosTexto(Object.fromEntries(TAMANOS_ENCOMIENDA.map(({ clave }) => [
+        clave, r.minimos_encomienda[clave] != null ? String(r.minimos_encomienda[clave]).replace('.', ',') : '',
+      ])))
+      const mensajePrecio = r.precio_km != null
+        ? `Tu precio por km ahora es ${formatoPesos(r.precio_km)}.`
+        : 'No configuraste un precio por km.'
+      setToast({ titulo: 'Tarifa guardada', texto: `${mensajePrecio} Se guardaron los montos mínimos por tamaño de encomienda.` })
     } catch (err) {
       setError(err.message)
     } finally {
@@ -56,7 +99,7 @@ export default function Tarifa() {
       {errorCarga && <Alerta tipo="error" titulo="No se pudo cargar tu tarifa">{errorCarga}</Alerta>}
       {guardado === null && !errorCarga && (
         <Alerta tipo="aviso" titulo="Todavía no configuraste tu precio por km">
-          Mientras no lo configures, los clientes que se postulen a tus viajes van a ver el monto como “A convenir”.
+          Podés configurar los mínimos por tamaño aunque todavía no hayas definido el precio por km.
         </Alerta>
       )}
 
@@ -64,20 +107,41 @@ export default function Tarifa() {
         <form className="card" onSubmit={guardar} noValidate>
           <div className="card-cabecera">
             <div>
-              <h2>Precio por kilómetro</h2>
-              <p>Cuando un cliente se postula a uno de tus viajes, el sistema multiplica este precio por los kilómetros del recorrido.</p>
+              <h2>Tarifa y mínimos de encomienda</h2>
+              <p>Para pasajeros se multiplica este precio por los kilómetros del tramo. Para encomiendas se suma el mínimo del tamaño al costo por kilómetro.</p>
             </div>
           </div>
           <div className="card-cuerpo">
             <div className="tarifa-entrada">
-              <Campo label="Precio por km (pesos ARS)" requerido icono="tag" error={error} ayuda="Ejemplo: 350 o 350,50">
+              <Campo label="Precio por km (pesos ARS)" icono="tag" error={error} ayuda="Ejemplo: 350 o 350,50">
                 <input inputMode="decimal" value={texto} onChange={(e) => { setTexto(e.target.value); setError(null) }} placeholder="Ej: 350" maxLength={12} aria-label="Precio por kilómetro en pesos" />
               </Campo>
             </div>
+            <div className="seccion">
+              <p className="seccion-titulo">Monto mínimo por tamaño de encomienda</p>
+              <p className="campo-ayuda">Dejá el campo vacío si no querés definir un mínimo para ese tamaño.</p>
+              <div className="grilla-3">
+                {TAMANOS_ENCOMIENDA.map(({ clave, etiqueta }) => (
+                  <Campo key={clave} className="tarifa-minimo-campo" label={`Encomienda ${etiqueta.toLowerCase()} (pesos ARS)`} ayuda="Monto mínimo opcional">
+                    <input
+                      inputMode="decimal"
+                      value={minimosTexto[clave]}
+                      onChange={(e) => {
+                        setMinimosTexto((actuales) => ({ ...actuales, [clave]: e.target.value }))
+                        setError(null)
+                      }}
+                      placeholder="Sin mínimo"
+                      maxLength={13}
+                      aria-label={`Monto mínimo para encomienda ${etiqueta.toLowerCase()}`}
+                    />
+                  </Campo>
+                ))}
+              </div>
+            </div>
           </div>
           <div className="card-pie">
-            <button type="submit" className="btn btn-primario" disabled={guardando || guardado === undefined || sinCambios}>
-              <Icon nombre="checkcircle" tamano={16} /> {guardando ? 'Guardando...' : 'Guardar tarifa'}
+            <button type="submit" className="btn btn-primario" disabled={guardando || guardado === undefined || minimosGuardados === null || Boolean(errorCarga) || sinCambios}>
+              <Icon nombre="checkcircle" tamano={16} /> {guardando ? 'Guardando...' : 'Guardar configuración'}
             </button>
           </div>
         </form>

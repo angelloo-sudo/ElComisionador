@@ -41,7 +41,9 @@ export default function Perfil({ onCuentaDadaDeBaja }) {
   const [fotoParaAjustar, setFotoParaAjustar] = useState(null) // archivo elegido, antes de acomodarlo
   const [confirmandoBaja, setConfirmandoBaja] = useState(false)
   const [entiendo, setEntiendo] = useState(false)
+  const [actualizandoEstado, setActualizandoEstado] = useState(false)
   const esComisionista = perfil?.rol === 'comisionista'
+  const cuentaComisionistaAutorizada = perfil?.estado_verificacion === 'APROBADA_MANUALMENTE'
   const cerrarToast = useCallback(() => setToast(false), [])
 
   useEffect(() => {
@@ -50,6 +52,7 @@ export default function Perfil({ onCuentaDadaDeBaja }) {
         const datos = await api.get('/auth/perfil')
         setPerfil(datos)
         setForm(aFormulario(datos))
+        window.dispatchEvent(new CustomEvent('cuenta:estado-verificacion-actualizado', { detail: datos }))
       } catch (error) {
         setErrorGeneral(mensajeDeError(error, 'No se pudo cargar tu perfil.'))
       } finally {
@@ -59,6 +62,20 @@ export default function Perfil({ onCuentaDadaDeBaja }) {
 
     cargarPerfil()
   }, [])
+
+  async function actualizarEstadoVerificacion() {
+    setActualizandoEstado(true)
+    setErrorGeneral('')
+    try {
+      const datos = await api.get('/auth/perfil')
+      setPerfil(datos)
+      window.dispatchEvent(new CustomEvent('cuenta:estado-verificacion-actualizado', { detail: datos }))
+    } catch (error) {
+      setErrorGeneral(mensajeDeError(error, 'No se pudo actualizar el estado de autorización.'))
+    } finally {
+      setActualizandoEstado(false)
+    }
+  }
 
   function handleChange(event) {
     const { name, value } = event.target
@@ -314,7 +331,9 @@ export default function Perfil({ onCuentaDadaDeBaja }) {
               <p className="correo">{perfil.email}</p>
               <div className="badges">
                 <span className="badge">{etiquetaRol}</span>
-                <span className="badge punto verde">Activo</span>
+                <span className={`badge punto ${esComisionista && !cuentaComisionistaAutorizada ? 'rojo' : 'verde'}`}>
+                  {esComisionista ? cuentaComisionistaAutorizada ? 'Autorizada' : 'No autorizada' : 'Activo'}
+                </span>
               </div>
               {esComisionista && (
                 <p className="perfil-presentacion">
@@ -333,9 +352,11 @@ export default function Perfil({ onCuentaDadaDeBaja }) {
                   <h2>Información personal</h2>
                   <p>Datos registrados en tu cuenta</p>
                 </div>
-                <button type="button" className="btn" onClick={() => setEditando(true)}>
-                  <Icon nombre="pencil" tamano={16} /> Editar perfil
-                </button>
+                {(!esComisionista || cuentaComisionistaAutorizada) && (
+                  <button type="button" className="btn" onClick={() => setEditando(true)}>
+                    <Icon nombre="pencil" tamano={16} /> Editar perfil
+                  </button>
+                )}
               </div>
               <div className="datos-grilla">
                 <div className="dato"><span><Icon nombre="user" tamano={16} /> Nombre</span><strong>{perfil.nombre}</strong></div>
@@ -352,29 +373,48 @@ export default function Perfil({ onCuentaDadaDeBaja }) {
             </div>
           </div>
 
-          {perfil.rol === 'comisionista' && (
+          {esComisionista && !cuentaComisionistaAutorizada && (
             <div className="card verif-perfil-acceso">
-              <div><h3>Verificación preliminar de identidad</h3><p>Consultá el estado de tu solicitud o comenzá una verificación para comparar tus datos.</p></div>
-              <Link className="btn btn-primario" to="/verificacion"><Icon nombre="idcard" tamano={16} /> Abrir verificación</Link>
+              <div>
+                <h3>Cuenta no autorizada</h3>
+                <p>
+                  {perfil.estado_verificacion === 'PENDIENTE_REVISION'
+                    ? 'La solicitud ya fue enviada al administrador. Hasta que la apruebe, no podrás realizar acciones como comisionista.'
+                    : perfil.estado_verificacion === 'EN_PROCESO'
+                      ? 'Completá la verificación para enviar tu solicitud al administrador. No podrás usar las funciones de comisionista hasta que la apruebe.'
+                      : ['RECHAZADA', 'REQUIERE_CORRECCION'].includes(perfil.estado_verificacion)
+                        ? 'La solicitud no fue aprobada. Revisá la observación en la verificación para corregir los datos y volver a enviarla.'
+                      : 'Completá la verificación de identidad para enviar tu solicitud al administrador. No podrás usar las funciones de comisionista hasta que la apruebe.'}
+                </p>
+              </div>
+              {perfil.estado_verificacion === 'PENDIENTE_REVISION' ? (
+                <button type="button" className="btn" onClick={actualizarEstadoVerificacion} disabled={actualizandoEstado}>
+                  {actualizandoEstado ? 'Actualizando…' : 'Actualizar estado'}
+                </button>
+              ) : (
+                <Link className="btn btn-primario" to="/verificacion"><Icon nombre="idcard" tamano={16} /> Abrir verificación</Link>
+              )}
             </div>
           )}
 
-          <div className="baja-card">
-            <div>
-              <h3>Dar de baja mi usuario</h3>
-              <p>
-                Se cerrará tu sesión y se eliminará la información histórica asociada
-                {esComisionista ? ' (viajes, ingresos y gastos)' : ' (traslados y encomiendas)'}. Esta acción no se puede deshacer.
-              </p>
+          {(!esComisionista || cuentaComisionistaAutorizada) && (
+            <div className="baja-card">
+              <div>
+                <h3>Dar de baja mi usuario</h3>
+                <p>
+                  Se cerrará tu sesión y se eliminará la información histórica asociada
+                  {esComisionista ? ' (viajes, ingresos y gastos)' : ' (traslados y encomiendas)'}. Esta acción no se puede deshacer.
+                </p>
+              </div>
+              <button type="button" className="btn btn-peligro" onClick={() => setConfirmandoBaja(true)}>
+                <Icon nombre="userx" tamano={16} /> Dar de baja
+              </button>
             </div>
-            <button type="button" className="btn btn-peligro" onClick={() => setConfirmandoBaja(true)}>
-              <Icon nombre="userx" tamano={16} /> Dar de baja
-            </button>
-          </div>
+          )}
         </>
       )}
 
-      {confirmandoBaja && (
+      {confirmandoBaja && (!esComisionista || cuentaComisionistaAutorizada) && (
         <Modal onClose={cerrarModalBaja}>
           <span className="modal-icono"><Icon nombre="userx" tamano={22} /></span>
           <h2>¿Dar de baja tu usuario?</h2>

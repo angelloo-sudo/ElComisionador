@@ -36,10 +36,12 @@ export function horaDeLlegada(horaSalida, min) {
 }
 
 // precio por km x km (x personas si viaja un pasajero). null si falta algun dato.
-export function calcularMonto({ precioKm, distanciaKm, tipo = 'pasajero', cantidad = 1 }) {
+export function calcularMonto({ precioKm, distanciaKm, tipo = 'pasajero', cantidad = 1, montoMinimo = 0 }) {
   const p = Number(precioKm)
   const km = Number(distanciaKm)
   if (precioKm == null || distanciaKm == null || !(p > 0) || !(km > 0)) return null
   const personas = tipo === 'pasajero' ? Math.max(1, Number(cantidad) || 1) : 1
-  return Math.round(p * km * personas * 100) / 100
+  const minimo = tipo === 'encomienda' ? Number(montoMinimo ?? 0) : 0
+  if (!Number.isFinite(minimo) || minimo < 0) return null
+  return Math.round((minimo + p * km * personas) * 100) / 100
 }

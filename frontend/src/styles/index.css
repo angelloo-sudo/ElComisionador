@@ -359,6 +359,7 @@ textarea.area:focus { border-color: var(--foco); }
 .grilla-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .grilla-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .grilla-2 > *, .grilla-3 > *, .campo, .input-wrap { min-width: 0; }
+.tarifa-minimo-campo > label { min-height: 2.9em; }
 .seccion-titulo { font-size: 12px; letter-spacing: .12em; font-weight: 600; color: var(--texto-3); text-transform: uppercase; margin: 6px 0 14px; }
 .seccion + .seccion { margin-top: 28px; }
 
@@ -1209,6 +1210,7 @@ textarea.area:focus { border-color: var(--foco); }
 .rentabilidad-kpis strong { display: block; margin-top: 6px; font-size: clamp(17px, 2vw, 22px); font-weight: 650; overflow-wrap: anywhere; }
 .rentabilidad-resultado { border-color: var(--borde-fuerte) !important; }
 .rentabilidad-acciones { display: flex; justify-content: flex-end; margin-top: 16px; }
+.rentabilidad-acciones .btn-primario .icono { color: #fff; }
 .rentabilidad-grafico { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin: 18px 0; padding: 20px; }
 .rentabilidad-grafico h3 { font-size: 16px; }
 .rentabilidad-grafico p { margin-top: 4px; color: var(--texto-2); font-size: 13px; }
@@ -1428,7 +1430,7 @@ textarea.area:focus { border-color: var(--foco); }
 .solicitud-enviada .exito-detalle { width: 100%; text-align: left; }
 .solicitud-pie { display: flex; justify-content: space-between; gap: 12px; margin-top: 20px; }
 .localidad-fija { display: flex; align-items: center; gap: 8px; padding: 11px 14px; border: 1px dashed var(--borde-fuerte); border-radius: 10px; background: var(--hover); color: var(--texto-2); font-size: 14px; }
-.localidad-fija strong { margin-left: auto; color: var(--texto); }
+.localidad-fija strong { color: var(--texto); }
 @media (max-width: 1100px) {
   .solicitud-columnas { grid-template-columns: 1fr; }
 }
