@@ -44,9 +44,7 @@ function fechaDeHoy() {
 }
 
 function tituloDePagina(ruta, rol) {
-  if (ruta.startsWith('/historial/viajes')) return 'Historial de viajes'
-  if (ruta.startsWith('/historial/encomiendas')) return 'Historial de encomiendas'
-  if (ruta.startsWith('/historial/pasajeros')) return 'Historial de pasajeros'
+  if (ruta.startsWith('/historial')) return 'Historial de viajes'
   if (ruta.startsWith('/mis-traslados/solicitar')) return 'Solicitar viaje'
   if (ruta.startsWith('/mis-traslados')) return 'Viajes'
   if (ruta.startsWith('/notificaciones')) return 'Notificaciones'

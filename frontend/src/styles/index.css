@@ -523,6 +523,25 @@ textarea.area:focus { border-color: var(--foco); }
 .historial-item p { color: var(--texto-2); margin: 5px 0; }
 .historial-item small { color: var(--texto-3); }
 .historial-item-acciones { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.historial-viaje { padding: 20px; display: grid; gap: 16px; }
+.historial-viaje-cabecera, .historial-viaje-pie { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.historial-viaje-cabecera small { color: var(--texto-3); }
+.historial-viaje-cabecera h3 { margin: 4px 0; font-size: 17px; }
+.historial-viaje-cabecera p { margin: 0; color: var(--texto-2); }
+.historial-contadores { display: flex; flex-wrap: wrap; gap: 9px; }
+.historial-contador { display: inline-flex; align-items: center; gap: 7px; padding: 9px 12px; border: 1px solid var(--borde); border-radius: 10px; background: var(--activo); color: var(--texto); cursor: pointer; }
+.historial-contador:hover { border-color: var(--primario); }
+.historial-relacion-lista { display: grid; gap: 10px; }
+.historial-relacion { padding: 12px 14px; border: 1px solid var(--borde); border-radius: 12px; }
+.historial-relacion-toggle { width: 100%; display: flex; align-items: center; gap: 12px; padding: 0; border: 0; background: transparent; color: var(--texto); text-align: left; cursor: pointer; }
+.historial-relacion-toggle > span:first-child { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.historial-relacion-toggle small { color: var(--texto-2); overflow-wrap: anywhere; }
+.historial-relacion-toggle > svg { transition: transform .18s ease; flex-shrink: 0; }
+.historial-relacion-toggle[aria-expanded="true"] > svg { transform: rotate(180deg); }
+.historial-relacion-detalle { padding-top: 6px; }
+.historial-estados { margin-top: 12px; color: var(--texto-2); }
+.historial-estados ol { padding-left: 22px; }
+.historial-estados li { padding: 3px 0; }
 .historial-vacio { padding: 26px; color: var(--texto-2); text-align: center; }
 .historial-detalle { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 22px; margin: 20px 0; }
 .historial-detalle > div { padding: 11px 0; border-bottom: 1px solid var(--divisor); }
@@ -535,7 +554,9 @@ textarea.area:focus { border-color: var(--foco); }
 @media (max-width: 600px) {
   .historial-item { align-items: flex-start; flex-direction: column; }
   .historial-item-acciones { width: 100%; justify-content: space-between; }
+  .historial-viaje-cabecera, .historial-viaje-pie { align-items: flex-start; flex-direction: column; }
   .historial-detalle { grid-template-columns: 1fr; }
+  .historial-relacion-toggle { flex-wrap: wrap; }
 }
 .tabla { width: 100%; border-collapse: collapse; }
 .tabla th { text-align: left; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--texto-3); font-weight: 600; padding: 14px 12px; border-bottom: 1px solid var(--divisor); white-space: nowrap; }

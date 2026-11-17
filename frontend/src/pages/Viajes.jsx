@@ -34,7 +34,6 @@ export default function Viajes() {
   const [filtros, setFiltros] = useState(FILTROS_VACIOS)
   const [filtrosAplicados, setFiltrosAplicados] = useState(FILTROS_VACIOS)
   const [ahora, setAhora] = useState(() => new Date())
-  const [pestana, setPestana] = useState('proximos') // 'proximos' | 'historial'
 
   const hayFiltrosActivos = Object.values(filtrosAplicados).some(Boolean)
 
@@ -118,21 +117,17 @@ export default function Viajes() {
     setFiltrosAplicados(FILTROS_VACIOS)
   }
 
-  // Próximos: programados desde hoy en adelante y los que están en curso. Historial: el resto
-  // (ya pasaron, finalizados o cancelados), con lo más reciente arriba.
+  // Próximos: programados desde hoy en adelante y los que están en curso.
   const hoy = hoyEnCordoba(ahora)
   const esProximo = (v) => v.estado === 'en_curso' || (v.estado === 'programado' && String(v.fecha).slice(0, 10) >= hoy)
-  const orden = (a, b) => String(b.fecha).localeCompare(String(a.fecha)) || String(b.hora_salida ?? '').localeCompare(String(a.hora_salida ?? '')) || b.id - a.id
-  const proximos = viajes.filter(esProximo).sort((a, b) => orden(b, a)) // el más cercano a hoy primero
-  const historial = viajes.filter((v) => !esProximo(v)).sort(orden)
-  const visibles = pestana === 'proximos' ? proximos : historial
+  const proximos = viajes.filter(esProximo).sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)) || String(a.hora_salida ?? '').localeCompare(String(b.hora_salida ?? '')) || a.id - b.id)
 
   return (
     <section>
       <div className="barra-pagina">
         <div>
           <h2>Mis viajes</h2>
-          <p>Consultá y filtrá tus viajes. Los que ya pasaron están en la pestaña Historial.</p>
+          <p>Consultá y filtrá tus viajes próximos y en curso.</p>
         </div>
         <button type="button" className="btn btn-primario" onClick={() => navegar('/viajes/nuevo')}>
           <Icon nombre="plus" tamano={16} /> Registrar viaje
@@ -166,26 +161,11 @@ export default function Viajes() {
 
       {error && <Alerta tipo="error" titulo="No se pudieron cargar los viajes">{error}</Alerta>}
 
-      <div className="pestanas" role="tablist" aria-label="Mis viajes">
-        <button type="button" role="tab" aria-selected={pestana === 'proximos'} className={pestana === 'proximos' ? 'activo' : ''} onClick={() => setPestana('proximos')}>
-          Próximos <span className="pestana-contador">{proximos.length}</span>
-        </button>
-        <button type="button" role="tab" aria-selected={pestana === 'historial'} className={pestana === 'historial' ? 'activo' : ''} onClick={() => setPestana('historial')}>
-          Historial <span className="pestana-contador">{historial.length}</span>
-        </button>
-      </div>
-
       <div className="card tabla-wrap">
         {cargando ? (
           <p className="vacio">Cargando viajes...</p>
-        ) : visibles.length === 0 ? (
-          <p className="vacio">
-            {hayFiltrosActivos
-              ? 'No se encontraron viajes con esos filtros.'
-              : pestana === 'proximos'
-                ? (historial.length > 0 ? 'No tenés viajes próximos. Los anteriores están en Historial.' : 'Todavía no tenés viajes cargados.')
-                : 'Todavía no tenés viajes en el historial.'}
-          </p>
+        ) : proximos.length === 0 ? (
+          <p className="vacio">{hayFiltrosActivos ? 'No se encontraron viajes próximos o en curso con esos filtros.' : 'Todavía no tenés viajes próximos o en curso.'}</p>
         ) : (
           <table className="tabla">
             <thead>
@@ -202,7 +182,7 @@ export default function Viajes() {
               </tr>
             </thead>
             <tbody>
-              {visibles.map((viaje) => (
+              {proximos.map((viaje) => (
                 <tr key={viaje.id}>
                   <td className="codigo">{codigoViaje(viaje.id)}</td>
                   <td className="col-recorrido">

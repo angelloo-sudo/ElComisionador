@@ -40,6 +40,8 @@ it('envía la misma plantilla responsive a clientes y comisionistas con su enlac
     assert.ok(correo.html.includes(`href="${enlace}"`))
     assert.match(correo.html, /Verificar correo/)
     assert.match(correo.html, /style="[^"]*padding:16px 36px/)
+    assert.match(correo.html, /<img src="https:\/\/app\.comitrack\.test\/logo-comitrack-transparente\.png" alt="ComiTrack" width="180"/)
+    assert.ok(correo.html.indexOf('logo-comitrack-transparente.png') < correo.html.indexOf('Recibimos tu solicitud de registro en ComiTrack'))
     assert.match(correo.html, /@media only screen and \(max-width: 600px\)/)
     assert.match(correo.html, /Si no solicitaste crear una cuenta en ComiTrack, podés ignorar este correo/)
     assert.match(correo.html, /¡Gracias por sumarte a ComiTrack!/)

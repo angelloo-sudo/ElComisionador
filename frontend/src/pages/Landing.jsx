@@ -3,7 +3,8 @@ import { api } from '../api/client.js'
 import { Mascota } from '../components/ui.jsx'
 import Icon from '../components/Icon.jsx'
 import canguroPortada from '../assets/canguro-portada.gif'
-import logoTransparente from '../assets/logo-comitrack-transparente.png'
+
+const logoTransparente = '/logo-comitrack-transparente.png'
 
 const opinionesIniciales = [
   { nombre: 'Lucía M.', rol: 'Cliente', texto: 'Pude coordinar el envío de un paquete con más claridad y seguir cada paso desde el mismo lugar.', ejemplo: true },

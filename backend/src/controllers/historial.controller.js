@@ -13,6 +13,11 @@ function idValido(raw) {
   return Number.isSafeInteger(id) && id > 0 ? id : null
 }
 
+const CANTIDAD_ENCOMIENDAS = `((SELECT COUNT(*) FROM encomiendas e WHERE e.viaje_id = v.id)
+  + (SELECT COUNT(*) FROM solicitudes_viaje s WHERE s.viaje_id = v.id AND s.tipo = 'encomienda'))`
+const CANTIDAD_PASAJEROS = `COALESCE((SELECT SUM(s.cantidad_pasajeros)::int
+  FROM solicitudes_viaje s WHERE s.viaje_id = v.id AND s.tipo = 'pasajero'), 0)`
+
 export async function listarViajes(req, res, next) {
   try {
     const params = [req.usuario.id]
@@ -21,9 +26,23 @@ export async function listarViajes(req, res, next) {
     const origen = textoFiltro(req.query.origen, 'origen')
     const destino = textoFiltro(req.query.destino, 'destino')
     if (origen.error || destino.error) return res.status(400).json({ mensaje: origen.error ?? destino.error })
-    const condiciones = [...fechas.clauses]
+    const condiciones = [...fechas.clauses, `v.estado IN ('finalizado', 'cancelado')`]
     if (origen.valor) { params.push(`%${origen.valor}%`); condiciones.push(`v.origen ILIKE $${params.length}`) }
     if (destino.valor) { params.push(`%${destino.valor}%`); condiciones.push(`v.destino ILIKE $${params.length}`) }
+    const estado = textoFiltro(req.query.estado, 'estado', 20)
+    if (estado.error) return res.status(400).json({ mensaje: estado.error })
+    if (estado.valor) {
+      if (!['finalizado', 'cancelado'].includes(estado.valor)) return res.status(400).json({ mensaje: 'El estado no es válido' })
+      params.push(estado.valor)
+      condiciones.push(`v.estado = $${params.length}`)
+    }
+    const contenido = textoFiltro(req.query.contenido, 'contenido', 20)
+    if (contenido.error) return res.status(400).json({ mensaje: contenido.error })
+    if (contenido.valor) {
+      if (!['encomiendas', 'pasajeros', 'ambos'].includes(contenido.valor)) return res.status(400).json({ mensaje: 'El filtro de contenido no es válido' })
+      if (['encomiendas', 'ambos'].includes(contenido.valor)) condiciones.push(`${CANTIDAD_ENCOMIENDAS} > 0`)
+      if (['pasajeros', 'ambos'].includes(contenido.valor)) condiciones.push(`${CANTIDAD_PASAJEROS} > 0`)
+    }
     const cliente = textoFiltro(req.query.cliente, 'cliente')
     if (cliente.error) return res.status(400).json({ mensaje: cliente.error })
     if (cliente.valor) {
@@ -37,10 +56,12 @@ export async function listarViajes(req, res, next) {
     const { rows } = await query(
       `SELECT v.id, v.origen, v.destino, v.fecha::text AS fecha, v.hora_salida, v.hora_llegada,
               v.distancia_km, v.duracion_min, v.cupo_total, v.estado, v.iniciado_en, v.finalizado_en,
+              ${CANTIDAD_ENCOMIENDAS}::int AS cantidad_encomiendas,
+              ${CANTIDAD_PASAJEROS} AS cantidad_pasajeros,
               COALESCE((SELECT json_agg(json_build_object('id', p.id, 'orden', p.orden, 'localidad', p.localidad,
                 'hora_estimada', to_char(p.hora_estimada, 'HH24:MI')) ORDER BY p.orden)
                 FROM paradas_viaje p WHERE p.viaje_id = v.id), '[]'::json) AS paradas
-       FROM viajes v WHERE v.usuario_id = $1 ${condiciones.length ? `AND ${condiciones.join(' AND ')}` : ''}
+       FROM viajes v WHERE v.usuario_id = $1 AND ${condiciones.join(' AND ')}
        ORDER BY v.fecha DESC, v.hora_salida DESC NULLS LAST, v.id DESC`, params)
     res.json({
       viajes: rows.map((viaje) => ({
@@ -64,12 +85,61 @@ export async function obtenerViaje(req, res, next) {
                 FROM paradas_viaje p WHERE p.viaje_id = v.id), '[]'::json) AS paradas
        FROM viajes v WHERE v.id = $1 AND v.usuario_id = $2`, [id, req.usuario.id])
     if (!rows[0]) return res.status(404).json({ mensaje: 'No se encontró el viaje' })
-       res.json({
-         viaje: {
-           ...rows[0],
-           estado: obtenerEstadoViaje(rows[0].estado, rows[0].fecha),
-         },
-       })
+    const [encomiendasLegadas, solicitudesEncomienda, pasajeros] = await Promise.all([
+      query(
+        `SELECT e.id, 'encomienda'::varchar AS origen_registro,
+                COALESCE(NULLIF(concat_ws(' ', u.nombre, u.apellido), ''), e.remitente_nombre) AS cliente,
+                e.remitente_nombre, e.remitente_telefono, e.direccion_retiro,
+                e.destinatario_nombre, e.destinatario_telefono, e.destinatario_direccion,
+                e.tipo_contenido, e.peso_kg, e.dimensiones, e.tamano, e.fragil, e.descripcion,
+                e.fecha_solicitud, e.estado, e.estado_pago, e.retirado_en, e.viaje_id,
+                COALESCE((SELECT json_agg(json_build_object('id', h.id, 'estado', h.estado, 'fecha_hora', h.fecha_hora)
+                  ORDER BY h.fecha_hora, h.id) FROM historial_encomiendas h WHERE h.encomienda_id = e.id), '[]'::json) AS historial
+         FROM encomiendas e JOIN viajes v ON v.id = e.viaje_id AND v.usuario_id = $2
+         LEFT JOIN clientes c ON c.id = e.cliente_remitente_id
+         LEFT JOIN usuarios u ON u.id = c.usuario_id
+         WHERE e.viaje_id = $1 ORDER BY e.id`, [id, req.usuario.id]),
+      query(
+        `SELECT s.id, 'solicitud'::varchar AS origen_registro,
+                concat_ws(' ', u.nombre, u.apellido) AS cliente,
+                concat_ws(' ', s.emisor_nombre, s.emisor_apellido) AS remitente_nombre,
+                s.emisor_telefono AS remitente_telefono,
+                concat_ws(' ', s.origen_calle, s.origen_altura, s.origen_codigo_postal) AS direccion_retiro,
+                concat_ws(' ', s.receptor_nombre, s.receptor_apellido) AS destinatario_nombre,
+                s.receptor_telefono AS destinatario_telefono,
+                concat_ws(' ', s.destino_calle, s.destino_altura, s.destino_codigo_postal) AS destinatario_direccion,
+                s.tipo_contenido, s.peso_kg, s.ancho_cm, s.largo_cm, s.profundidad_cm, s.fragil,
+                s.contenido_descripcion AS descripcion, s.creado_en AS fecha_solicitud,
+                s.estado, s.forma_pago, s.retirada_en AS retirado_en, s.entregada_en,
+                s.viaje_id, s.origen_localidad, s.destino_localidad,
+                COALESCE((SELECT json_agg(json_build_object('id', h.id, 'estado', h.estado, 'fecha_hora', h.fecha_hora)
+                  ORDER BY h.fecha_hora, h.id) FROM historial_solicitudes_encomienda h WHERE h.solicitud_id = s.id), '[]'::json) AS historial
+         FROM solicitudes_viaje s JOIN viajes v ON v.id = s.viaje_id AND v.usuario_id = $2
+         JOIN clientes c ON c.id = s.cliente_id
+         JOIN usuarios u ON u.id = c.usuario_id
+         WHERE s.viaje_id = $1 AND s.tipo = 'encomienda' ORDER BY s.id`, [id, req.usuario.id]),
+      query(
+        `SELECT s.id AS solicitud_id, s.nombre, s.apellido, s.telefono,
+                COALESCE(s.origen_localidad, v.origen) AS origen_localidad,
+                COALESCE(s.destino_localidad, v.destino) AS destino_localidad,
+                s.estado AS estado_reserva, s.estado_pasajero, s.cantidad_pasajeros,
+                s.lleva_equipaje, s.equipaje_detalle, s.forma_pago, s.monto,
+                s.creado_en, s.resuelto_en, s.subio_en, s.llego_en, s.viaje_id
+         FROM solicitudes_viaje s JOIN viajes v ON v.id = s.viaje_id AND v.usuario_id = $2
+         WHERE s.viaje_id = $1 AND s.tipo = 'pasajero' ORDER BY s.id`, [id, req.usuario.id]),
+    ])
+    const encomiendas = [...encomiendasLegadas.rows, ...solicitudesEncomienda.rows]
+    const detalle = rows[0]
+    res.json({
+      viaje: {
+        ...detalle,
+        estado: obtenerEstadoViaje(detalle.estado, detalle.fecha),
+        cantidad_encomiendas: encomiendas.length,
+        cantidad_pasajeros: pasajeros.rows.reduce((total, pasajero) => total + Number(pasajero.cantidad_pasajeros || 0), 0),
+        encomiendas,
+        pasajeros: pasajeros.rows,
+      },
+    })
   } catch (e) { next(e) }
 }
 
