@@ -1,4 +1,4 @@
-// US35 / US37 / US38 / US39: ingresos automaticos (pasajero en destino, encomienda retirada), detalle, modificacion y anulacion.
+// US35 / US37 / US38 / US39: ingresos automaticos (pasajero en destino, encomienda entregada), detalle, modificacion y anulacion.
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { after, afterEach, describe, it } from 'node:test'
@@ -26,6 +26,14 @@ async function registrar(rol) {
   assert.equal(r.status, 201, JSON.stringify(r.body))
   await query('UPDATE usuarios SET email_verificado = true WHERE email = $1', [email])
   const login = await api.post('/api/auth/login').send({ email, password })
+  assert.equal(login.status, 200, JSON.stringify(login.body))
+  if (rol === 'comisionista') {
+    await query(
+      `INSERT INTO verificaciones_identidad (usuario_id, estado, consentimiento_en, resuelta_en, resuelta_por)
+       VALUES ($1, 'APROBADA_MANUALMENTE', NOW(), NOW(), $1)`,
+      [login.body.usuario.id],
+    )
+  }
   return login.body
 }
 const auth = (u) => ({ Authorization: `Bearer ${u.token}` })
@@ -73,20 +81,46 @@ describe('Ingresos', () => {
     assert.equal(lista.body.ingresos[0].tipo_servicio, 'pasajero')
   })
 
-  it('registra el ingreso de la encomienda al retirarla; sin monto no genera ingreso', async () => {
+  it('lista desde el detalle solo las encomiendas aceptadas del viaje propio', async () => {
+    const com = await registrar('comisionista'); const otro = await registrar('comisionista'); const cli = await registrar('cliente')
+    const v = await viaje(com.usuario.id)
+    const otroViaje = await viaje(otro.usuario.id)
+    const propia = await solicitud(v, cli.usuario.id, { tipo: 'encomienda' })
+    await solicitud(otroViaje, cli.usuario.id, { tipo: 'encomienda' })
+    await query('UPDATE solicitudes_viaje SET retirada_en = NOW() WHERE id = $1', [propia])
+
+    const lista = await api.get(`/api/viajes/${v}/encomiendas`).set(auth(com))
+    assert.equal(lista.status, 200, JSON.stringify(lista.body))
+    assert.equal(lista.body.encomiendas.length, 1)
+    assert.equal(lista.body.encomiendas[0].id, propia)
+    assert.ok(lista.body.encomiendas[0].retirada_en)
+    assert.equal((await api.get(`/api/viajes/${v}/encomiendas`).set(auth(otro))).status, 404)
+    assert.equal((await api.get('/api/viajes/invalido/encomiendas').set(auth(com))).status, 400)
+  })
+
+  it('registra el ingreso de la encomienda al entregarla, nunca al retirarla', async () => {
     const com = await registrar('comisionista'); const cli = await registrar('cliente')
     const v = await viaje(com.usuario.id)
     const a = await solicitud(v, cli.usuario.id, { tipo: 'encomienda', monto: 800 })
     const b = await solicitud(v, cli.usuario.id, { tipo: 'encomienda', monto: null })
+    await api.patch(`/api/viajes/${v}/iniciar`).set(auth(com)).send({})
 
     const ra = await api.patch(`/api/solicitudes/${a}/retirar`).set(auth(com)).send({})
     assert.equal(ra.status, 200, JSON.stringify(ra.body))
-    assert.equal(ra.body.ingreso.monto, '800.00')
+    assert.equal(ra.body.ingreso, null)
+    assert.equal((await api.get('/api/finanzas/ingresos').set(auth(com))).body.ingresos.length, 0)
     const rb = await api.patch(`/api/solicitudes/${b}/retirar`).set(auth(com)).send({})
     assert.equal(rb.status, 200)
     assert.equal(rb.body.ingreso, null)
 
-    const det = await api.get(`/api/finanzas/ingresos/${ra.body.ingreso.id}`).set(auth(com))
+    const entrega = await api.patch(`/api/solicitudes/${a}/entregar`).set(auth(com)).send({})
+    assert.equal(entrega.status, 200, JSON.stringify(entrega.body))
+    assert.equal(entrega.body.ingreso.monto, '800.00')
+    const sinMonto = await api.patch(`/api/solicitudes/${b}/entregar`).set(auth(com)).send({})
+    assert.equal(sinMonto.status, 200, JSON.stringify(sinMonto.body))
+    assert.equal(sinMonto.body.ingreso, null)
+
+    const det = await api.get(`/api/finanzas/ingresos/${entrega.body.ingreso.id}`).set(auth(com))
     assert.equal(det.status, 200)
     assert.equal(det.body.tipo_servicio, 'encomienda')
     assert.equal(det.body.cliente, 'Luis Gomez')
@@ -98,9 +132,9 @@ describe('Ingresos', () => {
     const v = await viaje(com.usuario.id)
     const encomienda = await solicitud(v, cli.usuario.id, { tipo: 'encomienda', monto: 800 })
     const pasajero = await solicitud(v, cli.usuario.id, { tipo: 'pasajero', monto: 1500 })
-    const ingresoEncomienda = (await api.patch(`/api/solicitudes/${encomienda}/retirar`).set(auth(com)).send({})).body.ingreso
-
     await api.patch(`/api/viajes/${v}/iniciar`).set(auth(com)).send({})
+    await api.patch(`/api/solicitudes/${encomienda}/retirar`).set(auth(com)).send({})
+    const ingresoEncomienda = (await api.patch(`/api/solicitudes/${encomienda}/entregar`).set(auth(com)).send({})).body.ingreso
     await api.patch(`/api/solicitudes/${pasajero}/pasajero`).set(auth(com)).send({ estado: 'a_bordo' })
     const ingresoPasajero = (await api.patch(`/api/solicitudes/${pasajero}/pasajero`).set(auth(com)).send({ estado: 'en_destino' })).body.ingreso
     const ayer = new Date(`${hoyEnCordoba()}T12:00:00Z`)
@@ -133,7 +167,9 @@ describe('Ingresos', () => {
     const com = await registrar('comisionista'); const cli = await registrar('cliente')
     const v = await viaje(com.usuario.id)
     const id = await solicitud(v, cli.usuario.id, { tipo: 'encomienda', monto: 800 })
-    const { body } = await api.patch(`/api/solicitudes/${id}/retirar`).set(auth(com)).send({})
+    await api.patch(`/api/viajes/${v}/iniciar`).set(auth(com)).send({})
+    await api.patch(`/api/solicitudes/${id}/retirar`).set(auth(com)).send({})
+    const { body } = await api.patch(`/api/solicitudes/${id}/entregar`).set(auth(com)).send({})
     const url = `/api/finanzas/ingresos/${body.ingreso.id}`
     const ok = { monto: '950.50', fecha: hoyEnCordoba(), forma_pago: 'efectivo' }
 
@@ -151,7 +187,9 @@ describe('Ingresos', () => {
     const com = await registrar('comisionista'); const otro = await registrar('comisionista'); const cli = await registrar('cliente')
     const v = await viaje(com.usuario.id)
     const id = await solicitud(v, cli.usuario.id, { tipo: 'encomienda', monto: 800 })
-    const ing = (await api.patch(`/api/solicitudes/${id}/retirar`).set(auth(com)).send({})).body.ingreso
+    await api.patch(`/api/viajes/${v}/iniciar`).set(auth(com)).send({})
+    await api.patch(`/api/solicitudes/${id}/retirar`).set(auth(com)).send({})
+    const ing = (await api.patch(`/api/solicitudes/${id}/entregar`).set(auth(com)).send({})).body.ingreso
     const url = `/api/finanzas/ingresos/${ing.id}`
 
     assert.equal((await api.patch(`${url}/anular`).set(auth(otro)).send({})).status, 404)

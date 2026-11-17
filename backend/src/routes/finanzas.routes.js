@@ -14,7 +14,7 @@ const router = Router()
 const soloComisionista = [autenticar, permitirRoles('comisionista')]
 
 // Epica 6 - Ingresos. El cobro (US35) lo registra el sistema solo al llegar el pasajero a destino
-// o al retirarse la encomienda; aca se consulta (US37), modifica (US38) y anula (US39).
+// o al entregarse la encomienda; aca se consulta (US37), modifica (US38) y anula (US39).
 router.get('/ingresos', soloComisionista, ingresos.listar)
 router.get('/ingresos/:id', soloComisionista, ingresos.obtener)                              // US37
 router.put('/ingresos/:id', soloComisionista, ingresos.modificar)                            // US38

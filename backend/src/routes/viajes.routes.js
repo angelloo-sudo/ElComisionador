@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import * as viajes from '../controllers/viajes.controller.js'
 import { listarPasajeros } from '../controllers/pasajeros-viaje.controller.js'
+import { listarEncomiendas } from '../controllers/encomiendas-viaje.controller.js'
 import { paradasDelComisionista } from '../controllers/paradas.controller.js'
 import { validarViaje } from '../validators/viaje.validador.js'
 import { validarEdicionViaje } from '../validators/edicion-viaje.validador.js'
@@ -17,6 +18,7 @@ router.get('/:id/recordatorio', viajes.obtenerRecordatorio) // US26
 router.put('/:id/recordatorio', viajes.guardarRecordatorio) // US26
 router.delete('/:id/recordatorio', viajes.eliminarRecordatorio) // US26 (opt-out)
 router.get('/:id/pasajeros', listarPasajeros) // US22/24/25: pasajeros aceptados y su estado
+router.get('/:id/encomiendas', listarEncomiendas)
 router.get('/:id', viajes.obtener)            // Consultar un viaje
 router.post('/', validarViaje, viajes.crear)  // Registrar viaje
 router.patch('/:id/cancelar', viajes.cancelar) // US16: registrar cancelacion de viaje

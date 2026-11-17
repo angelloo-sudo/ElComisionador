@@ -15,12 +15,15 @@ const pinParada = (clase) => L.divIcon({
 })
 
 // Parada de otro pasajero o encomienda: sube/retira (verde) o baja/entrega (vino); mas clara si todavia esta pendiente.
-const pinOtraParada = (accion, estado, numero) => L.divIcon({
-  className: 'mapa-pin-contenedor',
-  html: `<span class="mapa-pin parada otra ${['sube', 'retira'].includes(accion) ? 'sube' : 'baja'} ${estado === 'pendiente' ? 'pendiente' : ''}">${numero ?? ''}</span>`,
-  iconSize: [22, 22],
-  iconAnchor: [11, 11],
-})
+const pinOtraParada = (accion, estado, numero) => {
+  const estadoClase = ['pendiente', 'pendiente_respuesta'].includes(estado) ? 'pendiente' : estado === 'completada' ? 'completada' : ''
+  return L.divIcon({
+    className: 'mapa-pin-contenedor',
+    html: `<span class="mapa-pin parada otra ${['sube', 'retira'].includes(accion) ? 'sube' : 'baja'} ${estadoClase}">${numero ?? ''}</span>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+  })
+}
 
 const pin = (clase, letra) => L.divIcon({
   className: 'mapa-pin-contenedor',

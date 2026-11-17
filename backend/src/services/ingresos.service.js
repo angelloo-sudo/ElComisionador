@@ -1,4 +1,4 @@
-// US35 - Registro automatico del cobro de un servicio (pasajero que llega a destino / encomienda retirada).
+// US35 - Registro automatico del cobro de un servicio (pasajero en destino / encomienda entregada).
 // Se llama dentro de la misma transaccion que cambia el estado de la solicitud.
 // Devuelve el ingreso creado, o null si no se puede cobrar (monto "a convenir") o ya estaba cobrado.
 import { hoyEnCordoba } from './estado-viaje.js'

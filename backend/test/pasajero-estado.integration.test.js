@@ -30,6 +30,13 @@ async function registrar(rol) {
   await query('UPDATE usuarios SET email_verificado = true WHERE email = $1', [email])
   const login = await api.post('/api/auth/login').send({ email, password })
   assert.equal(login.status, 200, JSON.stringify(login.body))
+  if (rol === 'comisionista') {
+    await query(
+      `INSERT INTO verificaciones_identidad (usuario_id, estado, consentimiento_en, resuelta_en, resuelta_por)
+       VALUES ($1, 'APROBADA_MANUALMENTE', NOW(), NOW(), $1)`,
+      [login.body.usuario.id],
+    )
+  }
   return login.body
 }
 
@@ -98,6 +105,12 @@ describe('Estado del pasajero', () => {
     const mias = await api.get('/api/solicitudes/mias').set(auth(cli))
     assert.equal(mias.body[0].estado_pasajero, 'en_destino')
     assert.equal(mias.body[0].puede_cancelar, false)
+
+    const historial = await api.get(`/api/historial/viajes/${viaje}`).set(auth(com))
+    assert.equal(historial.status, 200, JSON.stringify(historial.body))
+    const pasajeroHistorial = historial.body.viaje.pasajeros.find((item) => item.solicitud_id === id)
+    assert.equal(pasajeroHistorial.estado_pasajero, 'en_destino')
+    assert.ok(pasajeroHistorial.llego_en)
   })
 
   it('un pasajero que sube solo puede llegar o volver a pendiente; en destino no se puede saltar', async () => {

@@ -5,6 +5,7 @@ import { api } from '../../api/client.js'
 import { Modal, Alerta, BadgeEstado, formatoFecha, textoRepeticion } from '../ui.jsx'
 import MapaRuta from '../MapaRuta.jsx'
 import PasajerosViaje from './PasajerosViaje.jsx'
+import EncomiendasViaje from './EncomiendasViaje.jsx'
 import ParadasViaje, { pinesDeParadas } from './ParadasViaje.jsx'
 import { codigoViaje } from '../../pages/ViajeNuevo.jsx'
 import { estadoVisibleViaje, puedeIniciarViaje } from '../../utils/estadoViaje.js'
@@ -20,11 +21,22 @@ export default function ViajeDetalleModal({ viajeId, onClose, onCancelar, onModi
   const [error, setError] = useState(null)
   const [cargando, setCargando] = useState(true)
   const [paradas, setParadas] = useState(null) // { paradas, sugerencia }
+  const [errorParadas, setErrorParadas] = useState(null)
+  const [cargandoParadas, setCargandoParadas] = useState(true)
   const [verSugerida, setVerSugerida] = useState(false)
+
+  const cargarParadas = () => {
+    setCargandoParadas(true)
+    setErrorParadas(null)
+    return api.get(`/viajes/${viajeId}/paradas`)
+      .then((datos) => { setParadas(datos); setErrorParadas(null) })
+      .catch((err) => { setParadas(null); setErrorParadas(err.message) })
+      .finally(() => setCargandoParadas(false))
+  }
 
   const recargar = () => {
     api.get(`/viajes/${viajeId}`).then(setViaje).catch(() => {})
-    api.get(`/viajes/${viajeId}/paradas`).then(setParadas).catch(() => {})
+    cargarParadas()
   }
 
   useEffect(() => {
@@ -35,7 +47,7 @@ export default function ViajeDetalleModal({ viajeId, onClose, onCancelar, onModi
       .catch((err) => setError(err.message))
       .finally(() => setCargando(false))
     setParadas(null); setVerSugerida(false)
-    api.get(`/viajes/${viajeId}/paradas`).then(setParadas).catch(() => setParadas(null)) // si falla, el detalle se ve igual
+    cargarParadas()
   }, [viajeId])
 
   const pines = useMemo(() => pinesDeParadas(paradas, verSugerida), [paradas, verSugerida])
@@ -67,11 +79,20 @@ export default function ViajeDetalleModal({ viajeId, onClose, onCancelar, onModi
             {viaje.iniciado_en && <div className="resumen-fila"><span>Iniciado</span><strong>{formatoFechaHora(viaje.iniciado_en)}</strong></div>}
             {viaje.finalizado_en && <div className="resumen-fila"><span>Finalizado</span><strong>{formatoFechaHora(viaje.finalizado_en)}</strong></div>}
             <div className="resumen-fila"><span>Creado</span><strong>{formatoFecha(viaje.creado_en)}</strong></div>
-            <ParadasViaje datos={paradas} verSugerida={verSugerida} onVerSugerida={setVerSugerida} />
+            {cargandoParadas && <p className="campo-ayuda">Cargando recorrido...</p>}
+            {errorParadas && <Alerta tipo="error" titulo="No se pudo cargar el recorrido">{errorParadas}</Alerta>}
+            {paradas && <ParadasViaje
+              datos={paradas}
+              verSugerida={verSugerida}
+              onVerSugerida={setVerSugerida}
+              origen={viaje.origen}
+              destino={viaje.destino}
+            />}
             {viaje.paradas?.length > 0 && <div className="seccion">
               <p className="seccion-titulo">Itinerario publicado</p>
               <ol>{viaje.paradas.map((p) => <li key={p.orden}>{p.localidad} · {p.hora_estimada}</li>)}</ol>
             </div>}
+            <EncomiendasViaje viajeId={viaje.id} onCambio={recargar} />
             <PasajerosViaje viajeId={viaje.id} estadoViaje={viaje.estado} onCambio={recargar} />
           </div>
           <div className="detalle-mapa">

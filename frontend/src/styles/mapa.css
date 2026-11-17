@@ -65,6 +65,7 @@
 /* Paradas de otras solicitudes y ruta sugerida */
 .mapa-pin.parada.otra { width: 22px; height: 22px; font-size: .72rem; font-weight: 700; color: #3b2a22; display: flex; align-items: center; justify-content: center; }
 .mapa-pin.parada.otra.pendiente { opacity: .6; border-style: dashed; }
+.mapa-pin.parada.otra.completada { opacity: .55; }
 .leyenda-sugerida { display: inline-block; width: 22px; height: 0; border-top: 4px dashed #3f7d58; vertical-align: middle; margin: 0 6px 0 2px; }
 .paradas-lista { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
 .paradas-lista li { display: flex; gap: 10px; align-items: flex-start; font-size: .92rem; }
@@ -75,5 +76,28 @@
 .sugerencia-ruta { margin-top: 14px; padding: 12px 14px; border-radius: 10px; border: 1px solid #cfe0d3; background: #f1f7f2; }
 .sugerencia-ruta h4 { margin: 0 0 4px; }
 .sugerencia-ruta p { margin: 4px 0 0; font-size: .9rem; }
+.recorrido-trayecto { margin: 4px 0 10px; color: var(--texto-2, inherit); }
+.recorrido-trayecto span { padding: 0 4px; }
+.recorrido-aviso { margin: 8px 0; padding: 9px 11px; border-radius: 8px; background: #fff7e8; color: #704e17; font-size: .86rem; }
+.recorrido-linea { list-style: none; margin: 12px 0 0; padding: 0; }
+.recorrido-parada { position: relative; display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; padding: 0 0 14px; }
+.recorrido-parada:not(:last-child)::before { content: ''; position: absolute; top: 28px; bottom: -1px; left: 13px; border-left: 2px solid #d8c9bf; }
+.recorrido-marcador { position: relative; z-index: 1; display: grid; place-items: center; width: 28px; height: 28px; border: 2px solid #7a2a3a; border-radius: 50%; background: #fff; color: #7a2a3a; font-size: .75rem; font-weight: 700; }
+.recorrido-parada-origen .recorrido-marcador { border-color: #3f7d58; color: #3f7d58; }
+.recorrido-parada-destino .recorrido-marcador { border-color: #7a2a3a; color: #7a2a3a; }
+.recorrido-contenido { min-width: 0; padding: 10px 12px; border: 1px solid var(--borde, #e5d9d2); border-radius: 10px; background: #fff; }
+.recorrido-localidad { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; margin-bottom: 5px; }
+.recorrido-localidad > span { color: var(--texto-2, inherit); font-size: .78rem; }
+.recorrido-actividad { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; padding: 8px 0; border-top: 1px solid #eee6e1; font-size: .88rem; }
+.recorrido-actividad small { display: block; margin-top: 2px; color: var(--texto-2, inherit); overflow-wrap: anywhere; }
+.recorrido-estado { flex: none; padding: 3px 7px; border-radius: 999px; background: #fff3d9; color: #785711; font-size: .72rem; white-space: nowrap; }
+.recorrido-estado-completada { background: #e8f4eb; color: #2f7047; }
+.recorrido-estado-esperando { background: #f0edf8; color: #59477e; }
+.recorrido-estado-cancelada { background: #f2eeee; color: #766b6b; }
+.recorrido-actividad-completada { opacity: .8; }
+@media (max-width: 560px) {
+  .recorrido-actividad { flex-direction: column; gap: 5px; }
+  .recorrido-localidad { align-items: flex-start; flex-direction: column; gap: 2px; }
+}
 .paradas-cliente { margin: 12px 0 0; padding: 10px 14px; border-radius: 10px; background: #f7f1ee; font-size: .9rem; }
 .paradas-cliente ul { margin: 6px 0 0; padding-left: 20px; }

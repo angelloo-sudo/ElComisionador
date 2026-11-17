@@ -9,7 +9,10 @@ import useLocalidades from '../hooks/useLocalidades.js'
 const FILTROS_VACIOS = { desde: '', hasta: '', origen: '', destino: '', estado: '', contenido: '' }
 const hora = (valor) => valor ? String(valor).slice(0, 5) : '—'
 const nombre = (valor) => [valor?.nombre, valor?.apellido].filter(Boolean).join(' ') || 'Sin nombre registrado'
-const estadoTexto = (valor) => String(valor ?? 'Sin estado').replaceAll('_', ' ')
+const estadoTexto = (valor) => ({
+  retirada: 'Retirada',
+  entregada: 'Entregada',
+})[valor] ?? String(valor ?? 'Sin estado').replaceAll('_', ' ')
 const fechaHora = (valor) => valor ? new Date(valor).toLocaleString('es-AR') : '—'
 const mostrar = (valor) => valor == null || valor === '' ? '—' : typeof valor === 'boolean' ? valor ? 'Sí' : 'No' : valor
 const pluralizar = (cantidad, singular, plural) => Number(cantidad) === 1 ? singular : plural

@@ -251,23 +251,38 @@ CREATE INDEX IF NOT EXISTS solicitudes_viaje_viaje_idx ON solicitudes_viaje (via
 CREATE INDEX IF NOT EXISTS solicitudes_viaje_cliente_idx ON solicitudes_viaje (cliente_id);
 
 -- US55: historial de estados para las encomiendas que se gestionan como solicitudes.
--- No se reconstruyen eventos pasados: solo se registra el alta y cada cambio futuro de estado.
+-- Tambien registra retiro y entrega; no se reconstruyen eventos pasados.
 CREATE TABLE IF NOT EXISTS historial_solicitudes_encomienda (
   id             SERIAL PRIMARY KEY,
   solicitud_id   INTEGER NOT NULL REFERENCES solicitudes_viaje(id) ON DELETE CASCADE,
   estado         VARCHAR(12) NOT NULL
-                 CHECK (estado IN ('pendiente', 'aceptada', 'rechazada', 'cancelada')),
+                 CHECK (estado IN ('pendiente', 'aceptada', 'rechazada', 'cancelada', 'retirada', 'entregada')),
   fecha_hora     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE historial_solicitudes_encomienda
+  DROP CONSTRAINT IF EXISTS historial_solicitudes_encomienda_estado_check;
+ALTER TABLE historial_solicitudes_encomienda
+  ADD CONSTRAINT historial_solicitudes_encomienda_estado_check
+  CHECK (estado IN ('pendiente', 'aceptada', 'rechazada', 'cancelada', 'retirada', 'entregada'));
 CREATE INDEX IF NOT EXISTS historial_solicitudes_encomienda_fecha_idx
   ON historial_solicitudes_encomienda (solicitud_id, fecha_hora, id);
 
 CREATE OR REPLACE FUNCTION registrar_historial_estado_solicitud_encomienda()
 RETURNS TRIGGER AS $$
 BEGIN
-  IF NEW.tipo = 'encomienda' AND (TG_OP = 'INSERT' OR OLD.estado IS DISTINCT FROM NEW.estado) THEN
-    INSERT INTO historial_solicitudes_encomienda (solicitud_id, estado)
-    VALUES (NEW.id, NEW.estado);
+  IF NEW.tipo = 'encomienda' THEN
+    IF TG_OP = 'INSERT' OR OLD.estado IS DISTINCT FROM NEW.estado THEN
+      INSERT INTO historial_solicitudes_encomienda (solicitud_id, estado)
+      VALUES (NEW.id, NEW.estado);
+    END IF;
+    IF TG_OP = 'UPDATE' AND NEW.retirada_en IS NOT NULL AND OLD.retirada_en IS DISTINCT FROM NEW.retirada_en THEN
+      INSERT INTO historial_solicitudes_encomienda (solicitud_id, estado)
+      VALUES (NEW.id, 'retirada');
+    END IF;
+    IF TG_OP = 'UPDATE' AND NEW.entregada_en IS NOT NULL AND OLD.entregada_en IS DISTINCT FROM NEW.entregada_en THEN
+      INSERT INTO historial_solicitudes_encomienda (solicitud_id, estado)
+      VALUES (NEW.id, 'entregada');
+    END IF;
   END IF;
   RETURN NEW;
 END;
@@ -389,7 +404,7 @@ ALTER TABLE solicitudes_viaje ADD COLUMN IF NOT EXISTS llego_en TIMESTAMPTZ;
 
 -- US35 / US37 / US38 / US39: ingresos por cobro de pasajeros y encomiendas. Se amplia la tabla
 -- "ingresos" existente (no se pierden datos). Un cobro por solicitud: lo registra el sistema solo
--- cuando el pasajero llega a destino o cuando se retira la encomienda.
+-- cuando el pasajero llega a destino o cuando se entrega la encomienda.
 ALTER TABLE ingresos ADD COLUMN IF NOT EXISTS usuario_id       INTEGER REFERENCES usuarios(id) ON DELETE CASCADE;
 ALTER TABLE ingresos ADD COLUMN IF NOT EXISTS solicitud_id     INTEGER REFERENCES solicitudes_viaje(id) ON DELETE SET NULL;
 ALTER TABLE ingresos ADD COLUMN IF NOT EXISTS tipo_servicio    VARCHAR(12) CHECK (tipo_servicio IN ('pasajero', 'encomienda'));

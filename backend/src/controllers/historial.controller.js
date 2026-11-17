@@ -13,6 +13,20 @@ function idValido(raw) {
   return Number.isSafeInteger(id) && id > 0 ? id : null
 }
 
+function agregarEventosOperativosEncomienda(encomienda) {
+  const historial = Array.isArray(encomienda.historial) ? [...encomienda.historial] : []
+  for (const [estado, fecha] of [
+    ['retirada', encomienda.retirado_en],
+    ['entregada', encomienda.entregada_en],
+  ]) {
+    if (fecha && !historial.some((evento) => evento.estado === estado)) {
+      historial.push({ id: `operativo-${estado}`, estado, fecha_hora: fecha })
+    }
+  }
+  historial.sort((a, b) => new Date(a.fecha_hora) - new Date(b.fecha_hora) || String(a.id).localeCompare(String(b.id)))
+  return { ...encomienda, historial }
+}
+
 const CANTIDAD_ENCOMIENDAS = `((SELECT COUNT(*) FROM encomiendas e WHERE e.viaje_id = v.id)
   + (SELECT COUNT(*) FROM solicitudes_viaje s WHERE s.viaje_id = v.id AND s.tipo = 'encomienda'))`
 const CANTIDAD_PASAJEROS = `COALESCE((SELECT SUM(s.cantidad_pasajeros)::int
@@ -128,7 +142,10 @@ export async function obtenerViaje(req, res, next) {
          FROM solicitudes_viaje s JOIN viajes v ON v.id = s.viaje_id AND v.usuario_id = $2
          WHERE s.viaje_id = $1 AND s.tipo = 'pasajero' ORDER BY s.id`, [id, req.usuario.id]),
     ])
-    const encomiendas = [...encomiendasLegadas.rows, ...solicitudesEncomienda.rows]
+    const encomiendas = [
+      ...encomiendasLegadas.rows,
+      ...solicitudesEncomienda.rows.map(agregarEventosOperativosEncomienda),
+    ]
     const detalle = rows[0]
     res.json({
       viaje: {
@@ -271,6 +288,7 @@ export async function obtenerEncomienda(req, res, next) {
                 concat_ws(' ', s.destino_calle, s.destino_altura, s.destino_codigo_postal) AS destinatario_direccion,
                 s.tipo_contenido, s.peso_kg, s.fragil, s.contenido_descripcion AS descripcion,
                 s.origen_localidad, s.destino_localidad, s.creado_en AS fecha_solicitud, s.estado,
+                s.retirada_en AS retirado_en, s.entregada_en,
                 s.viaje_id, v.origen AS viaje_origen, v.destino AS viaje_destino, v.fecha::text AS fecha_viaje,
                 v.hora_salida, v.hora_llegada, v.estado AS estado_viaje,
                 COALESCE((SELECT json_agg(json_build_object('id', h.id, 'estado', h.estado, 'fecha_hora', h.fecha_hora)
@@ -279,7 +297,7 @@ export async function obtenerEncomienda(req, res, next) {
          JOIN clientes c ON c.id=s.cliente_id JOIN usuarios u ON u.id=c.usuario_id
          WHERE s.id=$1 AND s.tipo='encomienda'`, [id, req.usuario.id])
       if (!rows[0]) return res.status(404).json({ mensaje: 'No se encontró la encomienda' })
-      return res.json({ encomienda: rows[0], recorrido_particular_disponible: true, historial_disponible: true })
+      return res.json({ encomienda: agregarEventosOperativosEncomienda(rows[0]), recorrido_particular_disponible: true, historial_disponible: true })
     }
     const { rows } = await query(
       `SELECT e.id, 'encomienda'::varchar AS origen_registro, e.cliente_remitente_id AS cliente_id, COALESCE(NULLIF(concat_ws(' ', u.nombre, u.apellido), ''), e.remitente_nombre) AS cliente,

@@ -61,11 +61,12 @@ test('normalizarGasto informa todos los errores a la vez', () => {
   assert.match(errores.join('|'), /fecha/i)
 })
 
-test('normalizarGasto valida la asociación opcional con un viaje', () => {
-  const normalizado = normalizarGasto({ ...gastoValido, viaje_id: '12' }, { hoy: HOY })
-  assert.equal(normalizado.errores.length, 0)
-  assert.equal(normalizado.datos.viaje_id, 12)
-  assert.match(normalizarGasto({ ...gastoValido, viaje_id: 'no-valido' }, { hoy: HOY }).errores.join('|'), /viaje asociado/i)
+test('normalizarGasto ignora el viaje y registra los gastos como generales', () => {
+  for (const viaje_id of [undefined, null, '', '12', 'no-valido']) {
+    const normalizado = normalizarGasto({ ...gastoValido, viaje_id }, { hoy: HOY })
+    assert.equal(normalizado.errores.length, 0)
+    assert.equal(normalizado.datos.viaje_id, null)
+  }
 })
 
 test('normalizarGasto valida fecha futura/antigua/inexistente y descripción larga', () => {

@@ -555,9 +555,7 @@ export async function retirar(req, res, next) {
     if (s.estado_viaje !== 'en_curso') return abortar(409, 'Solo se puede registrar el retiro cuando el viaje asociado está en curso')
     const { rows: r } = await db.query(
       `UPDATE solicitudes_viaje SET retirada_en = NOW() WHERE id = $1 RETURNING retirada_en`, [id])
-    // US35: al retirar la encomienda se registra el cobro del servicio.
-    const ingreso = await registrarIngresoDeSolicitud(db, id)
-    return { status: 200, body: { id, retirada_en: r[0].retirada_en, ingreso, mensaje: 'Retiro registrado' } }
+    return { status: 200, body: { id, retirada_en: r[0].retirada_en, ingreso: null, mensaje: 'Retiro registrado' } }
   })
 }
 
@@ -580,6 +578,7 @@ export async function entregar(req, res, next) {
     if (s.estado_viaje === 'cancelado') return abortar(409, 'El viaje fue cancelado')
     const { rows: r } = await db.query(
       `UPDATE solicitudes_viaje SET entregada_en = NOW() WHERE id = $1 RETURNING entregada_en`, [id])
-    return { status: 200, body: { id, entregada_en: r[0].entregada_en, mensaje: 'Entrega registrada' } }
+    const ingreso = await registrarIngresoDeSolicitud(db, id)
+    return { status: 200, body: { id, entregada_en: r[0].entregada_en, ingreso, mensaje: 'Entrega registrada' } }
   })
 }

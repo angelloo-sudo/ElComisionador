@@ -68,15 +68,7 @@ export function validarMonto(valor) {
 // hoy: fecha "YYYY-MM-DD" de referencia (se inyecta para poder probarlo).
 export function normalizarGasto(body = {}, { hoy = hoyEnCordoba() } = {}) {
   const errores = []
-  const datos = {}
-
-  if (body.viaje_id === undefined || body.viaje_id === null || body.viaje_id === '') {
-    datos.viaje_id = null
-  } else {
-    const viajeId = parsearId(body.viaje_id)
-    if (viajeId === null) errores.push('El viaje asociado no es válido')
-    else datos.viaje_id = viajeId
-  }
+  const datos = { viaje_id: null }
 
   const tipo = validarTipoGastoId(body.tipo_gasto_id)
   if (tipo.error) errores.push(tipo.error)

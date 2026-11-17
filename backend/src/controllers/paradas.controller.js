@@ -2,7 +2,7 @@
 //  - Comisionista: ve las paradas de sus solicitudes aceptadas y pendientes (con nombre y direccion) y la ruta sugerida.
 //  - Cliente: ve solo las localidades de las paradas ya confirmadas, sin datos de otras personas.
 import { query } from '../config/db.js'
-import { paradasDeViaje, paradasPublicas, rutaSugerida } from '../services/paradas.service.js'
+import { agruparRecorrido, paradasDeViaje, paradasPublicas, rutaSugerida } from '../services/paradas.service.js'
 
 const idValido = (v) => (Number.isSafeInteger(Number(v)) && Number(v) >= 1 ? Number(v) : null)
 
@@ -14,11 +14,20 @@ export async function paradasDelComisionista(req, res, next) {
     const { rows } = await query('SELECT id, origen, destino, estado FROM viajes WHERE id = $1 AND usuario_id = $2', [id, req.usuario.id])
     const viaje = rows[0]
     if (!viaje) return res.status(404).json({ mensaje: 'No se encontró el viaje' })
-    const todas = await paradasDeViaje(viaje, { estados: ['aceptada', 'pendiente'], detalle: true })
-    const aceptadas = todas.filter((p) => p.estado === 'aceptada')
+    const todas = await paradasDeViaje(viaje, {
+      estados: ['aceptada', 'pendiente'],
+      detalle: true,
+      incluirExtremos: true,
+      incluirLegadas: true,
+    })
+    const aceptadas = todas.filter((p) => p.estado === 'aceptada' && p.es_intermedia && p.estado_actividad === 'pendiente')
     // La ruta sugerida se calcula solo con las confirmadas y mientras el viaje siga programado.
-    const sugerencia = viaje.estado === 'programado' ? await rutaSugerida(viaje, aceptadas) : { estado: 'sin_paradas' }
-    res.json({ paradas: todas, sugerencia })
+    const faltanCoordenadas = aceptadas.some((parada) => parada.lat == null || parada.lon == null)
+    const sugerencia = viaje.estado !== 'programado'
+      ? { estado: 'sin_paradas' }
+      : faltanCoordenadas ? { estado: 'no_disponible' } : await rutaSugerida(viaje, aceptadas)
+    const recorrido = agruparRecorrido(viaje, todas, sugerencia)
+    res.json({ paradas: todas, sugerencia, recorrido })
   } catch (e) { next(e) }
 }
 

@@ -40,6 +40,13 @@ const TEXTOS = {
 const fecha = (f) => formatoFecha(`${f}T12:00:00`)
 const direccion = (s, p) => `${s[`${p}_calle`]} ${s[`${p}_altura`]}, ${s[`${p}_codigo_postal`] ? `CP ${s[`${p}_codigo_postal`]}` : s[`${p}_barrio`]} (${s[`${p}_localidad`] ?? s[p]})`
 
+function accionPasajero(s) {
+  if (s.tipo !== 'pasajero' || s.estado !== 'aceptada' || s.estado_viaje !== 'en_curso') return null
+  if (s.estado_pasajero == null) return { estado: 'a_bordo', texto: 'Marcar a bordo' }
+  if (s.estado_pasajero === 'a_bordo') return { estado: 'en_destino', texto: 'Marcar en destino' }
+  return null
+}
+
 // Mapa del tramo de una solicitud: ruta completa del viaje con las paradas de subida y bajada marcadas.
 function MapaSolicitud({ s }) {
   const [tramo, setTramo] = useState(undefined) // undefined = cargando, null = sin tramo (viaje completo / no disponible)
@@ -104,16 +111,6 @@ function DetalleSolicitud({ s }) {
   )
 }
 
-// US28: una encomienda aceptada, sin retirar y de un viaje que todavia admite retiros.
-function puedeRetirar(s) {
-  return s.tipo === 'encomienda' && s.estado === 'aceptada' && !s.retirada_en && s.estado_viaje === 'en_curso'
-}
-
-// US33: encomienda retirada, todavia sin entregar y de un viaje no cancelado.
-function puedeEntregar(s) {
-  return s.tipo === 'encomienda' && s.estado === 'aceptada' && Boolean(s.retirada_en) && !s.entregada_en && s.estado_viaje !== 'cancelado'
-}
-
 export default function Postulaciones() {
   const [tipoFijo, setTipoFijo] = useState('encomienda')
   const textos = TEXTOS[tipoFijo]
@@ -128,6 +125,7 @@ export default function Postulaciones() {
   const [motivo, setMotivo] = useState('')
   const [procesando, setProcesando] = useState(null)
   const [toast, setToast] = useState(null)
+  const bloquearAccion = useRef(false)
   const cerrarToast = useCallback(() => setToast(null), [])
 
   const cargar = useCallback(async (e) => {
@@ -147,18 +145,21 @@ export default function Postulaciones() {
 
   useEffect(() => { cargar(estado) }, [cargar, estado])
 
-  async function resolver(s, accion) {
+  async function resolver(s, accion, estadoPasajero = null) {
+    if (bloquearAccion.current) return
+    bloquearAccion.current = true
     setProcesando(s.id)
     setErrorAccion('')
     try {
-      const r = await api.patch(`/solicitudes/${s.id}/${accion}`, accion === 'rechazar' ? { motivo: motivo.trim() } : {})
+      const cuerpo = accion === 'pasajero'
+        ? { estado: estadoPasajero }
+        : accion === 'rechazar' ? { motivo: motivo.trim() } : {}
+      const r = await api.patch(`/solicitudes/${s.id}/${accion}`, cuerpo)
       setARechazar(null)
       setMotivo('')
       setDetalle(null)
-      setToast(accion === 'entregar'
-        ? { titulo: 'Entrega registrada', texto: 'La encomienda quedó como entregada.' }
-        : accion === 'retirar'
-        ? { titulo: 'Retiro registrado', texto: `Recibiste la encomienda de ${s.emisor_nombre} ${s.emisor_apellido}.${r.ingreso ? ` Se registró el cobro de $${Number(r.ingreso.monto).toLocaleString('es-AR')}.` : ''}` }
+      setToast(accion === 'pasajero'
+        ? { titulo: estadoPasajero === 'a_bordo' ? 'Pasajero a bordo' : 'Pasajero en destino', texto: `Se actualizó el estado de ${s.nombre} ${s.apellido}.${r.ingreso ? ` Se registró el cobro de $${Number(r.ingreso.monto).toLocaleString('es-AR')}.` : ''}` }
         : accion === 'aceptar'
         ? { titulo: 'Solicitud aceptada', texto: s.tipo === 'pasajero' ? `Cupo del viaje ${codigoViaje(s.viaje_id)}: ${r.ocupados} / ${r.cupo_total}.` : `Aceptaste la encomienda de ${s.emisor_nombre} ${s.emisor_apellido}.` }
         : { titulo: 'Solicitud rechazada', texto: motivo.trim() ? 'El cliente va a ver tu motivo.' : 'El cliente va a ver la solicitud como rechazada.' })
@@ -167,8 +168,9 @@ export default function Postulaciones() {
       setARechazar(null)
       setDetalle(null)
     } finally {
-      setProcesando(null)
       await cargar(estado)
+      bloquearAccion.current = false
+      setProcesando(null)
     }
   }
 
@@ -231,6 +233,7 @@ export default function Postulaciones() {
               {lista.map((s) => {
                 const libres = Math.max(s.cupo_total - s.ocupados, 0)
                 const sinCupo = s.tipo === 'pasajero' && s.cantidad_pasajeros > libres
+                const accionPasajeroDisponible = accionPasajero(s)
                 return (
                   <tr key={s.id}>
                     <td><strong>{quien(s)}</strong><div className="campo-ayuda">{s.tipo === 'pasajero' ? s.telefono : s.emisor_telefono}</div></td>
@@ -245,20 +248,18 @@ export default function Postulaciones() {
                     <td>
                       <div className="acciones-fila">
                         <button type="button" className="btn btn-chico" onClick={() => setDetalle(s)}>Ver detalle</button>
-                        {puedeRetirar(s) && (
-                          <button type="button" className="btn btn-chico btn-primario" disabled={procesando === s.id}
-                            onClick={() => resolver(s, 'retirar')}><Icon nombre="check" tamano={13} /> Registrar retiro</button>
-                        )}
-                        {puedeEntregar(s) && (
-                          <button type="button" className="btn btn-chico btn-primario" disabled={procesando === s.id}
-                            onClick={() => resolver(s, 'entregar')}><Icon nombre="check" tamano={13} /> Registrar entrega</button>
+                        {accionPasajeroDisponible && (
+                          <button type="button" className="btn btn-chico btn-primario" disabled={Boolean(procesando)}
+                            onClick={() => resolver(s, 'pasajero', accionPasajeroDisponible.estado)}>
+                            <Icon nombre="check" tamano={13} /> {accionPasajeroDisponible.texto}
+                          </button>
                         )}
                         {s.estado === 'pendiente' && (
                           <>
-                            <button type="button" className="btn btn-chico btn-primario" disabled={procesando === s.id || sinCupo}
+                            <button type="button" className="btn btn-chico btn-primario" disabled={Boolean(procesando) || sinCupo}
                               title={sinCupo ? `Quedan ${libres} lugares y piden ${s.cantidad_pasajeros}` : undefined}
                               onClick={() => resolver(s, 'aceptar')}><Icon nombre="check" tamano={13} /> Aceptar</button>
-                            <button type="button" className="btn btn-chico btn-peligro" disabled={procesando === s.id} onClick={() => { setMotivo(''); setARechazar(s) }}><Icon nombre="x" tamano={13} /> Rechazar</button>
+                            <button type="button" className="btn btn-chico btn-peligro" disabled={Boolean(procesando)} onClick={() => { setMotivo(''); setARechazar(s) }}><Icon nombre="x" tamano={13} /> Rechazar</button>
                           </>
                         )}
                       </div>
@@ -279,16 +280,10 @@ export default function Postulaciones() {
             <div className="detalle-mapa"><MapaSolicitud s={detalle} /></div>
           </div>
           <div className="modal-acciones">
-            {puedeEntregar(detalle) && (
-              <button type="button" className="btn btn-primario" disabled={procesando === detalle.id} onClick={() => resolver(detalle, 'entregar')}>Registrar entrega</button>
-            )}
-            {puedeRetirar(detalle) && (
-              <button type="button" className="btn btn-primario" disabled={procesando === detalle.id} onClick={() => resolver(detalle, 'retirar')}>Registrar retiro</button>
-            )}
             {detalle.estado === 'pendiente' && (
               <>
                 <button type="button" className="btn btn-peligro" onClick={() => { setMotivo(''); setARechazar(detalle); setDetalle(null) }}>Rechazar</button>
-                <button type="button" className="btn btn-primario" disabled={procesando === detalle.id || (detalle.tipo === 'pasajero' && detalle.cantidad_pasajeros > Math.max(detalle.cupo_total - detalle.ocupados, 0))} onClick={() => resolver(detalle, 'aceptar')}>Aceptar</button>
+                <button type="button" className="btn btn-primario" disabled={Boolean(procesando) || (detalle.tipo === 'pasajero' && detalle.cantidad_pasajeros > Math.max(detalle.cupo_total - detalle.ocupados, 0))} onClick={() => resolver(detalle, 'aceptar')}>Aceptar</button>
               </>
             )}
             <button type="button" className="btn" onClick={() => setDetalle(null)}>Cerrar</button>

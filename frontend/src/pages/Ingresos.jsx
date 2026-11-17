@@ -1,5 +1,5 @@
 // Epica 6: US36 (historial) y US37 (detalle).
-// Los cobros se registran solos: al llegar el pasajero a destino y al retirarse la encomienda (US35).
+// Los cobros se registran solos: al llegar el pasajero a destino y al entregarse la encomienda (US35).
 // Se muestran solo los ingresos vigentes; ya no se modifican ni se anulan desde la pantalla.
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client.js'

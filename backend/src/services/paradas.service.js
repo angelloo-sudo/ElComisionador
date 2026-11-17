@@ -1,7 +1,6 @@
 // Paradas de un viaje: las que salen de las solicitudes de los clientes (donde suben/bajan o donde se
 // retira/entrega una encomienda) y una "ruta sugerida" para el comisionista.
 //
-// Una parada solo existe si es intermedia: subir en el origen del viaje o bajar en su destino no es parada.
 // La ruta sugerida es solo informativa: reordena las paradas para recorrer menos km. No cambia ningun precio
 // (cada solicitud guarda el suyo) ni se guarda nada.
 import { query } from '../config/db.js'
@@ -30,12 +29,41 @@ function quienEs(s, lado) {
   return completo(s.nombre, s.apellido) || 'Sin nombre'
 }
 
-// Solicitudes del viaje con sus paradas intermedias. detalle=true agrega nombre, direccion y coordenadas exactas.
-export async function paradasDeViaje(viaje, { estados = ['aceptada'], detalle = false } = {}) {
+function estadoActividad(solicitud, lado) {
+  if (solicitud.estado !== 'aceptada') return 'pendiente_respuesta'
+  if (solicitud.tipo === 'encomienda') {
+    return lado === 'origen'
+      ? solicitud.retirada_en ? 'completada' : 'pendiente'
+      : solicitud.entregada_en ? 'completada' : 'pendiente'
+  }
+  if (solicitud.estado_pasajero === 'en_destino' || (lado === 'origen' && solicitud.estado_pasajero === 'a_bordo')) return 'completada'
+  return 'pendiente'
+}
+
+function direccionSolicitud(solicitud, lado) {
+  const calle = solicitud[`${lado}_calle`]
+  const altura = solicitud[`${lado}_altura`]
+  const barrio = solicitud[`${lado}_barrio`]
+  const codigoPostal = solicitud[`${lado}_codigo_postal`]
+  const direccion = [
+    [calle, altura].filter(Boolean).join(' '),
+    barrio,
+    codigoPostal ? `CP ${codigoPostal}` : null,
+  ].filter(Boolean).join(', ')
+  return direccion || null
+}
+
+// Solicitudes del viaje; detalle=true agrega persona, direccion y coordenadas para el comisionista.
+export async function paradasDeViaje(viaje, {
+  estados = ['aceptada'], detalle = false, incluirExtremos = false, incluirLegadas = false,
+} = {}) {
   const { rows } = await query(
     `SELECT id, tipo, estado, nombre, apellido, cantidad_pasajeros,
             emisor_nombre, emisor_apellido, receptor_nombre, receptor_apellido,
-            origen_localidad, destino_localidad, origen_calle, origen_altura, origen_codigo_postal, destino_calle, destino_altura, destino_codigo_postal
+            origen_localidad, destino_localidad,
+            origen_calle, origen_altura, origen_barrio, origen_codigo_postal,
+            destino_calle, destino_altura, destino_barrio, destino_codigo_postal,
+            estado_pasajero, retirada_en, entregada_en
      FROM solicitudes_viaje WHERE viaje_id = $1 AND estado = ANY($2)
        AND COALESCE(estado_pasajero, '') NOT IN ('ausente', 'cancelado_comisionista') ORDER BY id`,
     [viaje.id, estados],
@@ -44,13 +72,14 @@ export async function paradasDeViaje(viaje, { estados = ['aceptada'], detalle = 
   for (const s of rows) {
     for (const lado of ['origen', 'destino']) {
       const localidad = s[`${lado}_localidad`] ?? viaje[lado]
-      if (localidad === viaje[lado]) continue // sube en el origen / baja en el destino: no es una parada intermedia
+      const esIntermedia = claveNormalizada(localidad) !== claveNormalizada(viaje[lado])
+      if (!incluirExtremos && !esIntermedia) continue
       const calle = s[`${lado}_calle`]
       const altura = s[`${lado}_altura`]
       let lat = null
       let lon = null
       let exacta = false
-      if (detalle && calle && altura) {
+      if (detalle && esIntermedia && calle && altura) {
         try {
           const r = await validarDireccion({ calle, altura, localidad, codigoPostal: s[`${lado}_codigo_postal`] }, { conCodigoPostal: false })
           if (r.estado === 'ok') { lat = r.lat; lon = r.lon; exacta = true }
@@ -60,22 +89,188 @@ export async function paradasDeViaje(viaje, { estados = ['aceptada'], detalle = 
         try {
           const c = await centroLocalidad(localidad)
           lat = c.lat; lon = c.lon
-        } catch { continue } // sin coordenadas no se puede dibujar
+        } catch {
+          if (!detalle) continue
+        }
       }
+      if (lat == null && !detalle) continue
       paradas.push({
         solicitud_id: s.id,
         tipo: s.tipo,
         estado: s.estado,
+        estado_pasajero: s.estado_pasajero,
         accion: VERBOS[s.tipo][lado],
         lado,
         localidad,
         lat,
         lon,
-        ...(detalle ? { persona: quienEs(s, lado), direccion: `${calle} ${altura}`.trim(), exacta, cantidad: s.tipo === 'pasajero' ? s.cantidad_pasajeros : 1 } : {}),
+        es_intermedia: esIntermedia,
+        estado_actividad: estadoActividad(s, lado),
+        ...(detalle ? {
+          persona: quienEs(s, lado),
+          direccion: direccionSolicitud(s, lado),
+          codigo_seguimiento: null,
+          exacta,
+          cantidad: s.tipo === 'pasajero' ? s.cantidad_pasajeros : 1,
+        } : {}),
       })
     }
   }
+  if (detalle && incluirExtremos && incluirLegadas) {
+    const [{ rows: encomiendas }, { rows: pasajeros }] = await Promise.all([
+      query(
+        `SELECT id, remitente_nombre, direccion_retiro, destinatario_nombre, destinatario_direccion, estado, retirado_en
+         FROM encomiendas WHERE viaje_id = $1 AND estado <> 'cancelada' ORDER BY id`,
+        [viaje.id],
+      ),
+      query(
+        `SELECT vp.pasajero_id, p.nombre, vp.punto_ascenso, vp.punto_descenso
+         FROM viaje_pasajero vp JOIN pasajeros p ON p.id = vp.pasajero_id
+         WHERE vp.viaje_id = $1 AND vp.estado = 'activo' ORDER BY vp.pasajero_id`,
+        [viaje.id],
+      ),
+    ])
+    for (const encomienda of encomiendas) {
+      for (const lado of ['origen', 'destino']) {
+        const esRetiro = lado === 'origen'
+        const estadoActividad = esRetiro
+          ? encomienda.retirado_en || ['retirado', 'recibido', 'en_viaje', 'entregado'].includes(encomienda.estado)
+            ? 'completada' : 'pendiente'
+          : ['recibido', 'entregado'].includes(encomienda.estado) ? 'completada' : 'pendiente'
+        paradas.push(actividadLegada(viaje, {
+          id: encomienda.id,
+          tipo: 'encomienda',
+          lado,
+          localidad: null,
+          direccion: esRetiro ? encomienda.direccion_retiro : encomienda.destinatario_direccion,
+          persona: esRetiro ? encomienda.remitente_nombre : encomienda.destinatario_nombre,
+          estado: encomienda.estado,
+          estadoActividad,
+        }))
+      }
+    }
+    for (const pasajero of pasajeros) {
+      for (const lado of ['origen', 'destino']) {
+        paradas.push(actividadLegada(viaje, {
+          id: pasajero.pasajero_id,
+          tipo: 'pasajero',
+          lado,
+          localidad: lado === 'origen' ? pasajero.punto_ascenso : pasajero.punto_descenso,
+          direccion: null,
+          persona: pasajero.nombre,
+          estado: 'activo',
+          estadoActividad: 'sin_estado',
+        }))
+      }
+    }
+  }
   return paradas
+}
+
+function actividadLegada(viaje, { id, tipo, lado, localidad, direccion, persona, estado, estadoActividad }) {
+  const localidadRegistrada = typeof localidad === 'string' && localidad.trim() ? localidad.trim() : null
+  const ubicacion = localidadRegistrada ?? 'Localidad no informada'
+  const esIntermedia = !localidadRegistrada
+    || (claveNormalizada(ubicacion) !== claveNormalizada(viaje.origen)
+      && claveNormalizada(ubicacion) !== claveNormalizada(viaje.destino))
+  return {
+    actividad_id: `legada-${tipo}-${id}-${lado}`,
+    encomienda_id: tipo === 'encomienda' ? id : null,
+    pasajero_id: tipo === 'pasajero' ? id : null,
+    tipo,
+    estado,
+    estado_actividad: estadoActividad,
+    accion: VERBOS[tipo][lado],
+    lado,
+    localidad: ubicacion,
+    localidad_desconocida: !localidadRegistrada,
+    direccion: direccion?.trim() || null,
+    persona: persona?.trim() || 'Sin nombre',
+    codigo_seguimiento: null,
+    cantidad: 1,
+    lat: null,
+    lon: null,
+    es_intermedia: esIntermedia,
+  }
+}
+
+function claveNormalizada(valor) {
+  return String(valor ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('es')
+}
+
+function claveActividad(solicitudId, lado) {
+  return `${solicitudId}:${lado}`
+}
+
+export function agruparRecorrido(viaje, actividades, sugerencia = null) {
+  const claveOrigen = claveNormalizada(viaje.origen)
+  const claveDestino = claveNormalizada(viaje.destino)
+  const origen = { tipo: 'origen', localidad: viaje.origen, actividades: [] }
+  const destino = { tipo: 'destino', localidad: viaje.destino, actividades: [] }
+  const intermedias = []
+
+  for (const actividad of actividades) {
+    const localidad = claveNormalizada(actividad.localidad)
+    if (localidad === claveOrigen && (claveOrigen !== claveDestino || actividad.lado === 'origen')) {
+      origen.actividades.push(actividad)
+      continue
+    }
+    if (localidad === claveDestino) {
+      destino.actividades.push(actividad)
+      continue
+    }
+
+    const localidadActividad = claveNormalizada(actividad.localidad)
+    const direccionActividad = claveNormalizada(actividad.direccion)
+    let parada = intermedias.find((actual) =>
+      (!actividad.localidad_desconocida && !actual.localidad_desconocida
+        && claveNormalizada(actual.localidad) === localidadActividad)
+      || (direccionActividad && actual.direcciones.has(direccionActividad)))
+    if (!parada) {
+      parada = {
+        tipo: 'intermedia',
+        localidad: actividad.localidad,
+        localidad_desconocida: Boolean(actividad.localidad_desconocida),
+        actividades: [],
+        direcciones: new Set(),
+      }
+      intermedias.push(parada)
+    }
+    parada.actividades.push(actividad)
+    if (direccionActividad) parada.direcciones.add(direccionActividad)
+  }
+
+  const rangos = new Map((sugerencia?.estado === 'ok' ? sugerencia.orden : []).map((p, index) => [
+    claveActividad(p.solicitud_id, p.lado),
+    index,
+  ]))
+  const hayPendientesDeConfirmar = actividades.some((actividad) => actividad.estado === 'pendiente')
+  const ubicacionIncompleta = intermedias.some((parada) =>
+    parada.localidad_desconocida || parada.actividades.some((actividad) => actividad.lat == null || actividad.lon == null))
+  const ordenConfirmado = !ubicacionIncompleta && (intermedias.length <= 1
+    || (sugerencia?.estado === 'ok' && !hayPendientesDeConfirmar))
+  if (sugerencia?.estado === 'ok') {
+    intermedias.sort((a, b) => {
+      const rango = (parada) => Math.min(...parada.actividades
+        .map((actividad) => rangos.get(claveActividad(actividad.solicitud_id, actividad.lado)) ?? Infinity))
+      return rango(a) - rango(b)
+    })
+  }
+
+  destino.actividades.push({
+    tipo: 'viaje',
+    accion: 'finalizar',
+    estado_actividad: viaje.estado === 'cancelado' ? 'cancelada' : viaje.estado === 'finalizado' ? 'completada' : 'pendiente',
+    estado_viaje: viaje.estado,
+    persona: null,
+    direccion: null,
+    codigo_seguimiento: null,
+  })
+
+  return {
+    paradas: [origen, ...intermedias.map(({ direcciones, ...parada }) => parada), destino],
+    orden_confirmado: ordenConfirmado,
+  }
 }
 
 // Lo que ve un cliente que mira el viaje: solo localidades (nunca nombres ni calles), de las solicitudes aceptadas.

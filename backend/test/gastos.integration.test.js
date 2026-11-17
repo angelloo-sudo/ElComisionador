@@ -30,6 +30,13 @@ async function registrarYLoguear(ruta, rol, dni) {
   await query('UPDATE usuarios SET email_verificado = true WHERE email = $1', [email])
   const login = await api.post('/api/auth/login').send({ email, password })
   assert.equal(login.status, 200, JSON.stringify(login.body))
+  if (rol === 'comisionista') {
+    await query(
+      `INSERT INTO verificaciones_identidad (usuario_id, estado, consentimiento_en, resuelta_en, resuelta_por)
+       VALUES ($1, 'APROBADA_MANUALMENTE', NOW(), NOW(), $1)`,
+      [login.body.usuario.id],
+    )
+  }
   return login.body
 }
 
@@ -233,6 +240,39 @@ describe('Épica 7: gastos y tipos de gasto (ABMC)', () => {
       for (const id of [ajeno.id, 2147483647]) {
         assert.equal((await como(yo).post('/api/finanzas/gastos', { tipo_gasto_id: id, monto: 1, fecha: HOY })).status, 400)
       }
+    })
+
+    it('crea gastos generales aunque reciba un viaje y preserva las asociaciones históricas al editarlos', async () => {
+      const yo = await comisionista()
+      const tipo = await crearTipo(yo, 'Combustible')
+      const { rows: [viaje] } = await query(
+        `INSERT INTO viajes (usuario_id, origen, destino, fecha, estado)
+         VALUES ($1, 'Córdoba', 'Villa María', $2, 'finalizado') RETURNING id`,
+        [yo.usuario.id, HOY],
+      )
+
+      const nuevo = await crearGasto(yo, tipo, { monto: 1000, viaje_id: viaje.id })
+      const asociadoNuevo = await query('SELECT viaje_id FROM gastos WHERE id = $1', [nuevo.id])
+      assert.equal(asociadoNuevo.rows[0].viaje_id, null)
+      const lista = await como(yo).get('/api/finanzas/gastos')
+      assert.deepEqual(lista.body.resumen, { cantidad: 1, total: '1000.00' })
+      assert.ok(lista.body.gastos.some((gasto) => gasto.id === nuevo.id))
+
+      const generales = await como(yo).get(`/api/finanzas/graficos-rentabilidad/viajes?desde=${HOY}&hasta=${HOY}`)
+      assert.equal(generales.status, 200, JSON.stringify(generales.body))
+      assert.equal(generales.body.movimientos_generales.total_gastos, '1000.00')
+
+      const { rows: [historico] } = await query(
+        `INSERT INTO gastos (usuario_id, tipo_gasto_id, viaje_id, monto, fecha)
+         VALUES ($1, $2, $3, 250, $4) RETURNING id`,
+        [yo.usuario.id, tipo.id, viaje.id, HOY],
+      )
+      const actualizado = await como(yo).put(`/api/finanzas/gastos/${historico.id}`, {
+        tipo_gasto_id: tipo.id, monto: 300, fecha: HOY, descripcion: 'Dato histórico actualizado',
+      })
+      assert.equal(actualizado.status, 200, JSON.stringify(actualizado.body))
+      const relacionHistorica = await query('SELECT viaje_id FROM gastos WHERE id = $1', [historico.id])
+      assert.equal(relacionHistorica.rows[0].viaje_id, viaje.id)
     })
   })
 

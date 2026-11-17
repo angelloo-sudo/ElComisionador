@@ -41,6 +41,13 @@ async function registrar(rol) {
   await query('UPDATE usuarios SET email_verificado = true WHERE email = $1', [email])
   const login = await api.post('/api/auth/login').send({ email, password })
   assert.equal(login.status, 200, JSON.stringify(login.body))
+  if (rol === 'comisionista') {
+    await query(
+      `INSERT INTO verificaciones_identidad (usuario_id, estado, consentimiento_en, resuelta_en, resuelta_por)
+       VALUES ($1, 'APROBADA_MANUALMENTE', NOW(), NOW(), $1)`,
+      [login.body.usuario.id],
+    )
+  }
   return login.body
 }
 
@@ -131,5 +138,10 @@ describe('US28: registrar retiro de encomienda (solicitudes)', () => {
     const mias = await api.get('/api/solicitudes/mias').set(auth(cli))
     assert.ok(mias.body[0].entregada_en)
     assert.equal((await api.patch(`/api/solicitudes/${id}/entregar`).set(auth(cli)).send({})).status, 403)
+
+    const historial = await api.get(`/api/historial/viajes/${viaje}`).set(auth(com))
+    assert.equal(historial.status, 200, JSON.stringify(historial.body))
+    const encomienda = historial.body.viaje.encomiendas.find((item) => item.origen_registro === 'solicitud' && item.id === id)
+    assert.deepEqual(encomienda.historial.map((evento) => evento.estado), ['aceptada', 'retirada', 'entregada'])
   })
 })
