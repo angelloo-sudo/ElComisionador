@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { afterEach, it, mock } from 'node:test'
 import nodemailer from 'nodemailer'
 import { enviarEmailVerificacion } from '../src/services/email.service.js'
@@ -40,8 +41,13 @@ it('envía la misma plantilla responsive a clientes y comisionistas con su enlac
     assert.ok(correo.html.includes(`href="${enlace}"`))
     assert.match(correo.html, /Verificar correo/)
     assert.match(correo.html, /style="[^"]*padding:16px 36px/)
-    assert.match(correo.html, /<img src="https:\/\/app\.comitrack\.test\/logo-comitrack-transparente\.png" alt="ComiTrack" width="180"/)
-    assert.ok(correo.html.indexOf('logo-comitrack-transparente.png') < correo.html.indexOf('Recibimos tu solicitud de registro en ComiTrack'))
+    assert.match(correo.html, /<img src="cid:comitrack-logo" alt="ComiTrack" width="180"/)
+    assert.ok(correo.html.indexOf('cid:comitrack-logo') < correo.html.indexOf('Recibimos tu solicitud de registro en ComiTrack'))
+    assert.equal(correo.attachments.length, 1)
+    assert.equal(correo.attachments[0].filename, 'logo-comitrack-transparente.png')
+    assert.equal(correo.attachments[0].contentType, 'image/png')
+    assert.equal(correo.attachments[0].cid, 'comitrack-logo')
+    assert.deepEqual(correo.attachments[0].content, await readFile(new URL('../../frontend/public/logo-comitrack-transparente.png', import.meta.url)))
     assert.match(correo.html, /@media only screen and \(max-width: 600px\)/)
     assert.match(correo.html, /Si no solicitaste crear una cuenta en ComiTrack, podés ignorar este correo/)
     assert.match(correo.html, /¡Gracias por sumarte a ComiTrack!/)

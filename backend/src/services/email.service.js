@@ -1,12 +1,16 @@
+import { readFile } from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
 import nodemailer from 'nodemailer'
+
+const LOGO_PATH = fileURLToPath(new URL('../../../frontend/public/logo-comitrack-transparente.png', import.meta.url))
+const LOGO_CID = 'comitrack-logo'
 
 function escaparAtributoHtml(valor) {
   return valor.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-function crearContenidoVerificacion(enlace, baseUrl) {
+function crearContenidoVerificacion(enlace) {
   const enlaceHtml = escaparAtributoHtml(enlace)
-  const logoUrl = escaparAtributoHtml(`${baseUrl}/logo-comitrack-transparente.png`)
   const introduccion = 'Recibimos tu solicitud de registro en ComiTrack. Para activar y verificar tu cuenta, necesitamos confirmar tu dirección de correo electrónico.'
   const vencimiento = 'Este enlace de verificación vence en una hora. Si no solicitaste crear una cuenta en ComiTrack, podés ignorar este correo.'
   const texto = `${introduccion}\n\nVerificar correo: ${enlace}\n\n${vencimiento}\n\n¡Gracias por sumarte a ComiTrack!\nEl equipo de ComiTrack`
@@ -29,7 +33,7 @@ function crearContenidoVerificacion(enlace, baseUrl) {
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%; max-width:560px; background-color:#ffffff; border:1px solid #e2e8f0; border-radius:16px;">
             <tr>
               <td class="email-card-content" align="center" style="padding:40px 44px;">
-                <img src="${logoUrl}" alt="ComiTrack" width="180" style="display:block; width:180px; max-width:100%; height:auto; margin:0 auto 24px; border:0;">
+                <img src="cid:${LOGO_CID}" alt="ComiTrack" width="180" style="display:block; width:180px; max-width:100%; height:auto; margin:0 auto 24px; border:0;">
                 <h1 style="margin:0 0 16px; color:#0f172a; font-size:25px; line-height:1.3; font-weight:700;">Confirmá tu correo electrónico</h1>
                 <p style="margin:0 0 28px; color:#475569; font-size:16px; line-height:1.6;">${introduccion}</p>
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 26px;">
@@ -69,13 +73,19 @@ export async function enviarEmailVerificacion({ email, token }) {
     secure: SMTP_SECURE === 'true' || Number(SMTP_PORT) === 465,
     ...(SMTP_USER || password ? { auth: { user: SMTP_USER, pass: password } } : {}),
   })
-  const contenido = crearContenidoVerificacion(enlace, baseUrl)
+  const contenido = crearContenidoVerificacion(enlace)
 
   await transporte.sendMail({
     from: SMTP_FROM || SMTP_USER,
     to: email,
     subject: 'Verificá tu correo de ComiTrack',
     ...contenido,
+    attachments: [{
+      filename: 'logo-comitrack-transparente.png',
+      content: await readFile(LOGO_PATH),
+      contentType: 'image/png',
+      cid: LOGO_CID,
+    }],
   })
 }
 export async function enviarEmailRecordatorioViaje({ email, origen, destino, fecha, hora, minutosAnticipacion }) {
