@@ -330,24 +330,11 @@ export default function Perfil({ onCuentaDadaDeBaja }) {
               <h2>{perfil.nombre} {perfil.apellido || ''}</h2>
               <p className="correo">{perfil.email}</p>
               <div className="badges">
-<<<<<<< HEAD
-                {esComisionista ? (
-                  <>
-                    <span className="badge punto verde">Activo</span>
-                    <span className="badge azul">Comisionista</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="badge">{etiquetaRol}</span>
-                    <span className="badge punto verde">Activo</span>
-                  </>
-                )}
-=======
                 <span className="badge">{etiquetaRol}</span>
+                <span className="badge punto verde">Activo</span>
                 <span className={`badge punto ${esComisionista && !cuentaComisionistaAutorizada ? 'rojo' : 'verde'}`}>
                   {esComisionista ? cuentaComisionistaAutorizada ? 'Autorizada' : 'No autorizada' : 'Activo'}
                 </span>
->>>>>>> dde8d1a47de9e53a5552a35c51e0647a0064a2b4
               </div>
               {esComisionista && (
                 <p className="perfil-presentacion">

@@ -213,7 +213,6 @@ a { color: inherit; text-decoration: none; }
 .landing-cierre p { margin-top: 12px; color: #f1d9c6; font-size: 13px; }
 .landing-cta-claro { background: #fff7f2; color: #3a2318; box-shadow: none; position: relative; z-index: 2; }
 .landing-cta-claro:hover { box-shadow: 0 12px 30px rgba(26,10,14,.2); }
-.landing-cierre-mascota { position: absolute; right: 275px; bottom: -30px; opacity: .13; transform: rotate(-12deg); }
 /* Pie: colores de la versión de Matías (banda oscura de borde a borde); contenido igual. */
 .landing-footer { width: 100%; min-height: 82px; margin: 0; padding: 14px max(56px, calc((100vw - 1208px) / 2)); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px; border-top: 1px solid rgba(255,255,255,.12); background: #2b1a12; color: #d8c5b8; font-size: 10px; }
 .landing-marca-footer { color: #fff7f2; font-size: 15px; }
@@ -222,7 +221,7 @@ a { color: inherit; text-decoration: none; }
 .landing-contacto strong { color: #fff7f2; font-size: 12px; }
 .landing-contacto a { color: #fff7f2; }
 .landing-desarrolladores { flex: 0 1 330px; display: flex; flex-direction: column; gap: 6px; font-size: 11px; }
-.landing-desarrolladores strong { color: #fff7f2; font-size: 12px; }
+.landing-desarrolladores strong { width: 100%; color: #fff7f2; font-size: 12px; text-align: center; }
 .landing-desarrolladores ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 16px; margin: 0; padding: 0; list-style: none; }
 .landing-desarrolladores li { line-height: 1.35; }
 .landing-footer a:hover { color: #e8b993; }
@@ -274,7 +273,6 @@ a { color: inherit; text-decoration: none; }
   .landing-opiniones-lista { grid-template-columns: 1fr; }
   .landing-cierre { margin: 0 16px 45px; padding: 34px 25px; align-items: flex-start; flex-direction: column; }
   .landing-cierre h2 { font-size: 42px; }
-  .landing-cierre-mascota { right: 4px; bottom: -32px; }
   .landing-footer { padding: 16px 20px; flex-wrap: wrap; gap: 12px; }
   .landing-contacto { order: 3; width: 100%; }
   .landing-desarrolladores { order: 4; flex: 1 0 100%; }
@@ -456,6 +454,12 @@ textarea.area:focus { border-color: var(--foco); }
 .auth-centro > p { color: var(--texto-2); font-size: 15px; }
 .auth-centro .btn { margin-top: 26px; }
 .auth-nota { color: var(--texto-3); font-size: 13px; margin-top: 18px; }
+.verificacion-email-card { max-width: 620px; padding: 32px clamp(20px, 6vw, 56px); }
+.auth-centro .verificacion-email-intro { max-width: 470px; margin: 0 auto 18px; line-height: 1.6; }
+.auth-centro .verificacion-email-cuenta { max-width: 470px; margin: 0 auto; line-height: 1.6; }
+.auth-centro .verificacion-email-accion { width: min(100%, 380px); min-height: 58px; height: auto; margin: 24px auto 0; padding: 14px 22px; border-radius: 14px; font-size: clamp(16px, 2.5vw, 18px); box-shadow: 0 8px 20px color-mix(in srgb, var(--primario) 24%, transparent); }
+.auth-centro .verificacion-email-instrucciones { max-width: 470px; margin: 22px auto 0; line-height: 1.6; }
+.auth-centro .verificacion-email-nota { max-width: 470px; margin: 12px auto 0; color: var(--texto-3); font-size: 13px; line-height: 1.5; }
 
 /* ---------- Perfil ---------- */
 .perfil-grilla { display: grid; grid-template-columns: 340px 1fr; gap: 20px; align-items: start; }
@@ -890,6 +894,11 @@ textarea.area:focus { border-color: var(--foco); }
 }
 :root[data-tema='cafe-tinto'] { scrollbar-width: thin; scrollbar-color: #b08968 transparent; }
 :root[data-tema='cafe-tinto'] :focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+:root[data-tema='cafe-tinto'] .input-wrap input:focus-visible,
+:root[data-tema='cafe-tinto'] .input-wrap textarea.area:focus-visible { outline: 0; outline-offset: 0; }
+:root[data-tema='cafe-tinto'] .input-wrap.tiene-error:focus-within { border-color: var(--rojo); box-shadow: 0 0 0 3px color-mix(in srgb, var(--rojo) 18%, transparent); }
+:root[data-tema='cafe-tinto'] .input-wrap:has(> textarea.area):focus-within { box-shadow: none; }
+:root[data-tema='cafe-tinto'] .input-wrap.tiene-error > textarea.area:focus { border-color: var(--rojo); }
 
 /* Barra lateral: degradado cafe con brillo tinto, rayas que se deslizan y opcion activa que brilla */
 :root[data-tema='cafe-tinto'] .sidebar {
@@ -1079,15 +1088,13 @@ textarea.area:focus { border-color: var(--foco); }
 .sidebar .mascota { filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .3)); }
 .marca:hover .m-canguro, .marca:hover .m-sombra, .marca:hover .m-viento { animation-duration: .95s; }
 
-.bienvenida-overlay { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; overflow: hidden; padding: 24px; color: var(--texto); background: var(--bg); animation: bienvenida-fondo .45s ease both; }
+.bienvenida-overlay { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; overflow: hidden; padding: 24px; color: var(--texto); background: var(--bg); cursor: pointer; touch-action: manipulation; user-select: none; -webkit-tap-highlight-color: transparent; animation: bienvenida-fondo .45s ease both; }
 .bienvenida-overlay::before { content: none; }
-.bienvenida-contenido { position: relative; z-index: 1; width: min(100%, 560px); text-align: center; animation: bienvenida-entrar .65s cubic-bezier(.2, .85, .25, 1.2) both; }
-.bienvenida-mascota-wrap { position: relative; display: grid; place-items: center; width: min(82vw, 400px); min-height: min(62vw, 300px); margin: 0 auto 18px; background: transparent; }
+.bienvenida-contenido { position: relative; z-index: 1; width: min(100%, 560px); text-align: center; animation: bienvenida-entrar .65s cubic-bezier(.22, 1, .36, 1) both; }
+.bienvenida-mascota-wrap { position: relative; display: grid; place-items: center; width: min(100%, 560px); min-height: min(62vw, 300px); margin: 0 auto 18px; background: transparent; }
 .bienvenida-mascota-wrap::after { content: none; }
 .bienvenida-video-fuente { position: fixed; left: -10000px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-.bienvenida-mascota-fallback { position: absolute; z-index: 1; inset: 0; display: grid; place-items: center; transition: opacity .2s ease; }
-.bienvenida-mascota-fallback.oculta { visibility: hidden; opacity: 0; }
-.bienvenida-canguro { position: relative; z-index: 2; display: block; width: min(80vw, 380px); height: auto; max-height: min(62vh, 300px); overflow: visible; opacity: 0; transition: opacity .2s ease; }
+.bienvenida-canguro { position: relative; z-index: 2; display: block; width: min(100%, 520px); height: auto; max-height: min(62vh, 420px); object-fit: contain; overflow: visible; opacity: 0; transition: opacity .2s ease; }
 .bienvenida-canguro.visible { opacity: 1; }
 .bienvenida-etiqueta { display: inline-block; color: var(--primario); font-size: 11px; font-weight: 900; letter-spacing: .22em; }
 .bienvenida-contenido h2 { margin: 10px 0 7px; color: var(--texto); font-size: clamp(32px, 7vw, 54px); letter-spacing: -.045em; }
@@ -1157,13 +1164,10 @@ textarea.area:focus { border-color: var(--foco); }
   .auth-trafico .trafico-once { animation-delay: -5s !important; }
   .auth-trafico .trafico-doce { animation-delay: -2.5s !important; }
 
-  /* Bienvenida: entrada, canguro de respaldo saltando y aparición suave del video. */
+  /* Bienvenida: entrada y aparición suave del video. */
   .bienvenida-overlay { animation: bienvenida-fondo .45s ease both !important; }
   .bienvenida-contenido { animation: bienvenida-entrar .65s cubic-bezier(.2, .85, .25, 1.2) both !important; }
-  .bienvenida-mascota-fallback, .bienvenida-canguro { transition: opacity .2s ease !important; }
-  .bienvenida-mascota-fallback .m-canguro { animation: salto-m 1.9s linear infinite, pies-m 1.9s steps(1, end) infinite !important; }
-  .bienvenida-mascota-fallback .m-sombra { animation: sombra-m 1.9s linear infinite !important; }
-  .bienvenida-mascota-fallback .m-viento { animation: viento-m 1.9s linear infinite !important; }
+  .bienvenida-canguro { transition: opacity .2s ease !important; }
 }
 
 /* ---------- Epica 7: gastos y tipos de gasto ---------- */

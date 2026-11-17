@@ -102,7 +102,7 @@ export default function Landing({ onIngresar }) {
           </div>
         </section>
 
-        <section className="landing-cierre"><div><span className="landing-eyebrow">EL PRÓXIMO VIAJE EMPIEZA ACÁ</span><h2>¿A dónde vamos?</h2><p>Organizá tu actividad o encontrá el viaje que necesitás.</p></div><button type="button" className="landing-cta landing-cta-claro" onClick={onIngresar}>Ingresar a ComiTrack <Icon nombre="arrow" tamano={18} /></button><div className="landing-cierre-mascota"><Mascota ancho={100} /></div></section>
+        <section className="landing-cierre"><div><span className="landing-eyebrow">EL PRÓXIMO VIAJE EMPIEZA ACÁ</span><h2>¿A dónde vamos?</h2><p>Organizá tu actividad o encontrá el viaje que necesitás.</p></div><button type="button" className="landing-cta landing-cta-claro" onClick={onIngresar}>Ingresar a ComiTrack <Icon nombre="arrow" tamano={18} /></button></section>
       </main>
 
       <footer className="landing-footer">

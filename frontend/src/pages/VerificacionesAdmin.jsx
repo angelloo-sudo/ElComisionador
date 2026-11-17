@@ -9,12 +9,11 @@ const FILTROS = [
   ['EN_PROCESO', 'Pendiente de completar'],
   ['APROBADA_MANUALMENTE', 'Aceptadas'],
   ['RECHAZADA', 'Rechazadas'],
-  ['REQUIERE_CORRECCION', 'Requieren corrección'],
 ]
 
 function claseEstado(estado) {
   if (estado === 'APROBADA_MANUALMENTE') return 'exito'
-  if (['PENDIENTE_REVISION', 'EN_PROCESO', 'REQUIERE_CORRECCION'].includes(estado)) return 'pendiente'
+  if (['PENDIENTE_REVISION', 'EN_PROCESO'].includes(estado)) return 'pendiente'
   return 'atencion'
 }
 
@@ -132,14 +131,14 @@ export default function VerificacionesAdmin() {
             {s.estado === 'PENDIENTE_REVISION' && <div className="verif-admin-acciones">
               {accion?.id === s.id ? (
                 <div className="verif-resolver">
-                  <div><strong>{accion.decision === 'APROBADA_MANUALMENTE' ? 'Aprobar solicitud de identidad' : accion.decision === 'RECHAZADA' ? 'Rechazar solicitud' : 'Solicitar corrección'}</strong>
-                    {accion.decision !== 'APROBADA_MANUALMENTE' && <label className="verif-motivo">Explicación para el usuario<textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} maxLength={500} rows={3} placeholder="Describí qué debe corregir o por qué se rechaza (3 a 500 caracteres)." /></label>}
+                  <div><strong>{accion.decision === 'APROBADA_MANUALMENTE' ? 'Aprobar solicitud de identidad' : 'Rechazar solicitud'}</strong>
+                    {accion.decision !== 'APROBADA_MANUALMENTE' && <label className="verif-motivo">Explicación para el usuario<textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} maxLength={500} rows={3} placeholder="Describí por qué se rechaza la solicitud (3 a 500 caracteres)." /></label>}
                     <label className="check-linea"><input type="checkbox" checked={confirmar} onChange={(e) => setConfirmar(e.target.checked)} /><span>{accion.decision === 'APROBADA_MANUALMENTE' ? 'Confirmo que revisé los resultados y entiendo que la aprobación no certifica oficialmente la identidad.' : 'Confirmo que revisé la solicitud y que el motivo informado será visible para el comisionista.'}</span></label>
                   </div>
                   <div className="verif-botones"><button className="btn" type="button" onClick={() => setAccion(null)} disabled={guardando}>Cancelar</button><button className="btn btn-primario" type="button" onClick={resolver} disabled={guardando || !confirmar}>{guardando ? 'Guardando…' : 'Confirmar decisión'}</button></div>
                 </div>
               ) : (
-                <div className="verif-botones"><button className="btn" type="button" onClick={() => prepararAccion(s.id, 'REQUIERE_CORRECCION')}>Solicitar corrección</button><button className="btn" type="button" onClick={() => prepararAccion(s.id, 'RECHAZADA')}>Rechazar</button><button className="btn btn-primario" type="button" onClick={() => prepararAccion(s.id, 'APROBADA_MANUALMENTE')}>Aceptar solicitud de identidad</button></div>
+                <div className="verif-botones"><button className="btn" type="button" onClick={() => prepararAccion(s.id, 'RECHAZADA')}>Rechazar</button><button className="btn btn-primario" type="button" onClick={() => prepararAccion(s.id, 'APROBADA_MANUALMENTE')}>Aceptar solicitud de identidad</button></div>
               )}
             </div>}
           </article>

@@ -246,25 +246,32 @@ function cambiarModo(nuevo) {
   if (registroExitoso) {
     return (
       <main className="auth-pagina">
-        <div className="auth-card auth-centro">
+        <div className="auth-card auth-centro verificacion-email-card">
           <span className={`icono-caja ${registroExitoso.verificacionEnviada ? '' : 'rojo'}`}><Icon nombre={registroExitoso.verificacionEnviada ? 'checkcircle' : 'alert'} tamano={26} /></span>
           <p className="auth-kicker">ComiTrack</p>
           <h1>{registroExitoso.identidadPendiente ? 'Cuenta creada · revisión pendiente' : registroExitoso.verificacionEnviada ? 'Revisa tu correo' : 'Cuenta creada, falta verificarla'}</h1>
-          <p>
-            Tu cuenta de {registroExitoso.rol === 'comisionista' ? 'comisionista' : 'cliente'} fue creada para {registroExitoso.email}.
-            {registroExitoso.identidadPendiente && ' La verificación de identidad quedó pendiente de revisión administrativa; no fue aprobada automáticamente.'}
-            {!registroExitoso.identidadPendiente && (registroExitoso.rol === 'comisionista'
-              ? ' Tu cuenta está creada. Abrí el enlace del correo para continuar directamente con la verificación de identidad.'
-              : ' Tu cuenta está creada. Abrí el enlace del correo para confirmarlo y después iniciá sesión.')}
-            {registroExitoso.verificacionEnviada
-              ? ' Abrí el enlace que te enviamos para verificar el correo; vence en una hora.'
-              : ' No pudimos enviar el enlace. Revisá la configuración de correo o solicitá uno nuevo.'}
+          <p className="verificacion-email-intro">
+            Necesitamos verificar tu correo electrónico para confirmar tu cuenta y que puedas continuar con el registro en ComiTrack.
           </p>
+          <p className="verificacion-email-cuenta">
+            Tu cuenta de {registroExitoso.rol === 'comisionista' ? 'comisionista' : 'cliente'} fue creada para <strong>{registroExitoso.email}</strong>.
+            {registroExitoso.identidadPendiente && ' La verificación de identidad quedó pendiente de revisión administrativa; no fue aprobada automáticamente.'}
+          </p>
+          <button type="button" className="btn btn-primario verificacion-email-accion" onClick={reenviarVerificacion} disabled={cargandoReenvio}>
+            {cargandoReenvio ? 'Enviando...' : 'Verificar correo electrónico'}
+          </button>
           {mensajeReenvio && <Alerta tipo="exito">{mensajeReenvio}</Alerta>}
           {errorReenvio && <Alerta tipo="error">{errorReenvio}</Alerta>}
-          <button type="button" className="btn btn-bloque" onClick={reenviarVerificacion} disabled={cargandoReenvio}>
-            {cargandoReenvio ? 'Enviando...' : 'Reenviar enlace de verificación'}
-          </button>
+          <p className="verificacion-email-instrucciones">
+            Presioná el botón para enviarte el enlace de verificación. Después revisá tu bandeja de entrada y, si no encontrás el correo, también la carpeta de spam.
+            {!registroExitoso.identidadPendiente && registroExitoso.rol === 'comisionista' && ' Al abrir el enlace podrás continuar con la verificación de identidad.'}
+            {!registroExitoso.identidadPendiente && registroExitoso.rol === 'cliente' && ' Al abrir el enlace, confirmá tu correo para poder iniciar sesión.'}
+          </p>
+          <p className="verificacion-email-nota">
+            {registroExitoso.verificacionEnviada
+              ? 'El enlace enviado vence en una hora.'
+              : 'No pudimos enviar el enlace. Revisá la configuración de correo o solicitá uno nuevo.'}
+          </p>
         </div>
       </main>
     )
