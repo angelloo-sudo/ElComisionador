@@ -36,6 +36,7 @@
     "test:verificaciones": "node --test test/verificacion.validador.test.js test/verificaciones.integration.test.js",
     "test:historiales": "node --test test/historial-filtros.test.js test/historial-auth.test.js",
     "test:historiales:integration": "node --test test/historial.integration.test.js",
+    "test:bdd-fallas": "node --test test/bdd-fallas.integration.test.js",
     "test:auth:10": "node test/run-auth-10.mjs",
     "test:busqueda-viajes-ia": "node --test test/busqueda-viajes-ia.test.js"
   },

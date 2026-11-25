@@ -51,14 +51,15 @@ const ACTIVIDAD_SQL = `
 
     UNION ALL
 
-    SELECT e.fecha_solicitud AS fecha, 'encomienda_registrada'::text AS tipo,
-           e.id AS referencia_id,
-           COALESCE(CONCAT_WS(' ', u.nombre, u.apellido), 'Cliente') AS sujeto,
-           u.email, CONCAT('Encomienda #', e.id)::text AS detalle,
+    SELECT s.creado_en::timestamptz AS fecha, 'encomienda_registrada'::text AS tipo,
+           s.id AS referencia_id,
+           COALESCE(NULLIF(CONCAT_WS(' ', u.nombre, u.apellido), ''), 'Cliente') AS sujeto,
+           u.email, CONCAT('Encomienda #', s.id)::text AS detalle,
            NULL::text AS administrador, NULL::text AS motivo
-    FROM encomiendas e
-    LEFT JOIN clientes c ON c.id = e.cliente_remitente_id
+    FROM solicitudes_viaje s
+    LEFT JOIN clientes c ON c.id = s.cliente_id
     LEFT JOIN usuarios u ON u.id = c.usuario_id
+    WHERE s.tipo = 'encomienda'
   ) actividad
   ORDER BY fecha DESC NULLS LAST, referencia_id DESC
   LIMIT $2
@@ -88,9 +89,10 @@ export async function resumen(req, res, next) {
            (SELECT COUNT(*)::int FROM viajes WHERE estado = 'programado') AS viajes_programados,
            (SELECT COUNT(*)::int FROM viajes WHERE estado = 'en_curso') AS viajes_en_curso,
            (SELECT COUNT(*)::int FROM viajes WHERE estado = 'finalizado') AS viajes_finalizados,
-           (SELECT COUNT(*)::int FROM encomiendas) AS encomiendas_total,
-           (SELECT COUNT(*)::int FROM encomiendas WHERE estado = 'pendiente') AS encomiendas_pendientes,
-           (SELECT COUNT(*)::int FROM encomiendas WHERE estado = 'entregado') AS encomiendas_entregadas`,
+           -- Encomiendas reales: las que piden los clientes como solicitudes de tipo encomienda.
+           (SELECT COUNT(*)::int FROM solicitudes_viaje WHERE tipo = 'encomienda') AS encomiendas_total,
+           (SELECT COUNT(*)::int FROM solicitudes_viaje WHERE tipo = 'encomienda' AND estado = 'pendiente') AS encomiendas_pendientes,
+           (SELECT COUNT(*)::int FROM solicitudes_viaje WHERE tipo = 'encomienda' AND entregada_en IS NOT NULL) AS encomiendas_entregadas`,
       ),
       query(
         `WITH meses AS (

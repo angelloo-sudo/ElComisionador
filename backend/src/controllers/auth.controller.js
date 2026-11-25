@@ -349,11 +349,37 @@ export async function actualizarMiPerfil(req, res, next) {
 // borra en cascada automaticamente (FK ON DELETE CASCADE), y con ella se sigue la
 // cascada hacia lo que dependa de esa tabla. Los viajes del comisionista tambien
 // se borran en cascada (FK ON DELETE CASCADE en la tabla viajes).
+// Antes de borrar se verifica que no haya solicitudes activas de otras personas (409 si las hay).
 export async function darDeBajaMiCuenta(req, res, next) {
   let client
   try {
     client = await pool.connect()
     await client.query('BEGIN')
+
+    // La baja no puede llevarse datos de otras personas: si el usuario tiene solicitudes
+    // pendientes o aceptadas en viajes que todavia no terminaron (como cliente, o en sus
+    // propios viajes como comisionista), se rechaza la baja hasta que se resuelvan.
+    // Las solicitudes de viajes finalizados o cancelados no bloquean.
+    const { rows: [activas] } = await client.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE c.usuario_id = $1)::int AS como_cliente,
+         COUNT(*) FILTER (WHERE v.usuario_id = $1)::int AS como_comisionista
+       FROM solicitudes_viaje s
+       JOIN viajes v ON v.id = s.viaje_id
+       JOIN clientes c ON c.id = s.cliente_id
+       WHERE s.estado IN ('pendiente', 'aceptada')
+         AND v.estado IN ('programado', 'en_curso')
+         AND (c.usuario_id = $1 OR v.usuario_id = $1)`,
+      [req.usuario.id],
+    )
+    if (activas.como_cliente > 0 || activas.como_comisionista > 0) {
+      await client.query('ROLLBACK')
+      const mensaje = activas.como_comisionista > 0
+        ? 'No podés dar de baja tu cuenta mientras tus viajes tengan solicitudes pendientes o aceptadas. Resolvelas o cancelá esos viajes y volvé a intentarlo.'
+        : 'No podés dar de baja tu cuenta mientras tengas solicitudes pendientes o aceptadas en viajes que todavía no terminaron. Cancelalas y volvé a intentarlo.'
+      return res.status(409).json({ mensaje })
+    }
+
     await client.query(
       `DELETE FROM encomiendas
        WHERE viaje_id IN (SELECT id FROM viajes WHERE usuario_id = $1)

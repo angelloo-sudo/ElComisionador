@@ -460,10 +460,18 @@ CREATE TABLE IF NOT EXISTS verificaciones_identidad (
   resuelta_en         TIMESTAMPTZ,
   resuelta_por        INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
   motivo_resolucion   VARCHAR(500),
-  CHECK (
+  CONSTRAINT verificaciones_identidad_check CHECK (
     (estado IN ('NO_INICIADA', 'EN_PROCESO', 'PENDIENTE_REVISION') AND resuelta_en IS NULL AND resuelta_por IS NULL)
-    OR (estado IN ('APROBADA_MANUALMENTE', 'RECHAZADA', 'REQUIERE_CORRECCION') AND resuelta_en IS NOT NULL AND resuelta_por IS NOT NULL)
+    OR (estado IN ('APROBADA_MANUALMENTE', 'RECHAZADA', 'REQUIERE_CORRECCION') AND resuelta_en IS NOT NULL)
   )
+);
+-- Una verificación resuelta exige la fecha de resolución, pero no quién la resolvió:
+-- si el administrador se da de baja, resuelta_por queda en NULL (ON DELETE SET NULL)
+-- y la verificación conserva su estado y su fecha. Exigir resuelta_por bloqueaba esa baja.
+ALTER TABLE verificaciones_identidad DROP CONSTRAINT IF EXISTS verificaciones_identidad_check;
+ALTER TABLE verificaciones_identidad ADD CONSTRAINT verificaciones_identidad_check CHECK (
+  (estado IN ('NO_INICIADA', 'EN_PROCESO', 'PENDIENTE_REVISION') AND resuelta_en IS NULL AND resuelta_por IS NULL)
+  OR (estado IN ('APROBADA_MANUALMENTE', 'RECHAZADA', 'REQUIERE_CORRECCION') AND resuelta_en IS NOT NULL)
 );
 CREATE INDEX IF NOT EXISTS verificaciones_identidad_usuario_fecha_idx ON verificaciones_identidad (usuario_id, iniciada_en DESC);
 CREATE INDEX IF NOT EXISTS verificaciones_identidad_pendientes_idx ON verificaciones_identidad (enviada_en DESC) WHERE estado = 'PENDIENTE_REVISION';
